@@ -113,6 +113,8 @@ Remove the `claude-move` row from the profile's bundles and restart `dsh`. Impor
 
 - [COMPLIANCE.md](COMPLIANCE.md) — clause-by-clause audit against the official plugin constraints (deepseek-harness repo & docs, [deepseek.com/harness](https://www.deepseek.com/harness/), the [developer docs](https://deepseek-harness.github.io/deepseek-harness/develop/basic/), [Cordis](https://github.com/cordiverse/cordis), and the [Cordis paper](https://github.com/cordiverse/paper)).
 - [OPTIMIZATION.md](OPTIMIZATION.md) — measured baselines and ranked optimization candidates (parallel scan/import, gitBranch reuse, streaming import, incremental sync mode…).
+- [ARCHITECTURE.md](ARCHITECTURE.md) — architecture diagram and the full data-mapping table.
+- [RELEASE.md](RELEASE.md) — release checklist with acceptance evidence.
 
 ## Attribution (MIT ecosystem)
 

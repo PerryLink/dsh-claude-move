@@ -111,6 +111,8 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
 
 - [COMPLIANCE.md](COMPLIANCE.md) — 对照官方插件约束的逐条审计（deepseek-harness 仓库与文档、[deepseek.com/harness](https://www.deepseek.com/harness/)、[开发者文档](https://deepseek-harness.github.io/deepseek-harness/develop/basic/)、[Cordis](https://github.com/cordiverse/cordis) 与 [Cordis 论文](https://github.com/cordiverse/paper)）。
 - [OPTIMIZATION.md](OPTIMIZATION.md) — 实测基线 + 分优先级的优化候选（并行扫描/导入、gitBranch 复用、流式导入、增量同步模式等）。
+- [ARCHITECTURE.md](ARCHITECTURE.md) — 架构图与完整数据映射表。
+- [RELEASE.md](RELEASE.md) — 发布清单与验收证据。
 
 ## 复用与出处（MIT 生态）
 

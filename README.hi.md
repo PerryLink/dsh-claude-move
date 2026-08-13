@@ -113,6 +113,8 @@ import_claude { path: "...", force: true }          # पुराना आय�
 
 - [COMPLIANCE.md](COMPLIANCE.md) — आधिकारिक प्लगइन प्रतिबंधों के विरुद्ध खंड-दर-खंड ऑडिट (deepseek-harness रेपो व दस्तावेज़, [deepseek.com/harness](https://www.deepseek.com/harness/), [डेवलपर दस्तावेज़](https://deepseek-harness.github.io/deepseek-harness/develop/basic/), [Cordis](https://github.com/cordiverse/cordis) और [Cordis पेपर](https://github.com/cordiverse/paper))।
 - [OPTIMIZATION.md](OPTIMIZATION.md) — मापी गई आधार-रेखाएँ और प्राथमिकता-क्रम में अनुकूलन उम्मीदवार (समानांतर स्कैन/आयात, gitBranch पुनर्उपयोग, स्ट्रीमिंग आयात, वृद्धिशील सिंक मोड…)।
+- [ARCHITECTURE.md](ARCHITECTURE.md) — आर्किटेक्चर आरेख और पूर्ण डेटा-मैपिंग तालिका।
+- [RELEASE.md](RELEASE.md) — स्वीकृति प्रमाण सहित रिलीज़ चेकलिस्ट।
 
 ## स्रोत-श्रेय (MIT पारिस्थितिकी)
 

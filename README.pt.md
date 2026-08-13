@@ -113,6 +113,8 @@ Remova a linha `claude-move` dos bundles do perfil e reinicie o `dsh`. As sessõ
 
 - [COMPLIANCE.md](COMPLIANCE.md) — auditoria cláusula a cláusula contra as restrições oficiais de plugins (repositório e docs do deepseek-harness, [deepseek.com/harness](https://www.deepseek.com/harness/), [documentação para desenvolvedores](https://deepseek-harness.github.io/deepseek-harness/develop/basic/), [Cordis](https://github.com/cordiverse/cordis) e o [artigo do Cordis](https://github.com/cordiverse/paper)).
 - [OPTIMIZATION.md](OPTIMIZATION.md) — linhas de base medidas e candidatos de otimização priorizados (varredura/importação em paralelo, reutilização do gitBranch, importação por streaming, modo de sincronização incremental…).
+- [ARCHITECTURE.md](ARCHITECTURE.md) — diagrama de arquitetura e tabela completa de mapeamento de dados.
+- [RELEASE.md](RELEASE.md) — lista de verificação de publicação com evidências de aceitação.
 
 ## Atribuição (ecossistema MIT)
 

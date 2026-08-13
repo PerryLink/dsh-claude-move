@@ -2,3 +2,4 @@ node_modules/
 dev/
 .rc6-check/
 *.tgz
+.playwright-mcp/
