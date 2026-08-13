@@ -11,15 +11,22 @@ index.mjs            插件入口（唯一 host 面文件）：注册 claude_sca
 lib/convert.mjs      转换核心（vendored + 扩展，零 DSH 依赖，可独立单测）
 lib/discovery.mjs    自动发现：定位/流式扫描/索引/增量缓存（零 DSH 依赖）
 lib/frontmatter.mjs  Claude Markdown frontmatter 解析（零依赖）
+lib/context.mjs      同步注入核心：memory 渲染与文件缓存（零依赖）
+lib/skills-provider.mjs  Claude 技能 SkillProvider（零依赖）
+lib/settings.mjs     settings.json 翻译（零依赖）
+lib/report.mjs       导入报告：密钥扫描/权限统计（零依赖）
 cordis.patch.yml     bundle 声明（insert claude-move）
 package.json         npm 元数据；files 白名单 = 发布内容
-README.md / PLAN.md  对外契约与实施方案，行为变更必须同步
+README.md            英文主介绍（GitHub 默认页）
+README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链）
+PLAN.md / COMPLIANCE.md / OPTIMIZATION.md   方案与审计（行为变更必须同步）
 LICENSE / THIRD_PARTY_NOTICES.md   MIT + 复用出处标注
 test/                单测 + mock ctx 集成测试（进 GitHub，不进 npm 包）
 dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——永不提交
 ```
 
 - 新增被 `index.mjs` import 的模块必须同步加进 `package.json` 的 `files`。
+- **行为变更需同步五语 README**：以 README.md（英文）为源，其余四语同 commit 更新。
 - **永不提交**：`dev/`、`node_modules/`、真实用户 transcript（含敏感内容）、任何凭据/密钥。
 
 ## 命令

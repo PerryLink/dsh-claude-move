@@ -15,6 +15,10 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
+    "README.zh.md",
+    "README.es.md",
+    "README.pt.md",
+    "README.hi.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
