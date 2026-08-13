@@ -94,6 +94,8 @@ test('memoryDirsSync：按 projects 目录 mtime 缓存、新项目即时可见'
   assert.equal(dirs.length, 1)
   assert.equal(memoryDirsSync(state), dirs, 'mtime 未变复用同一数组')
 
+  // 目录列表缓存按父目录 mtime+ctime 失效；同 tick 连建目录需等时间戳前进（与文件缓存同一契约）。
+  await new Promise((resolve) => setTimeout(resolve, 25))
   await mkdir(path.join(home, 'projects', 'p2', 'memory'), { recursive: true })
   const dirs2 = memoryDirsSync(state)
   assert.equal(dirs2.length, 2, '新增项目目录立即可见')
