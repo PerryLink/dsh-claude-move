@@ -40,7 +40,7 @@ dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
 /claude-import-all      # scan → copy every Claude session → report
 ```
 
-3. Refresh the already-open Web page once (the panel has a 「刷新会话列表」 button) and click any imported session to continue. **No DSH restart is needed** — see [After importing](#after-importing).
+3. Refresh the already-open Web page once (the panel has a 「刷新会话列表」 button) and click any imported session to continue. **No DSH restart is needed** — see [After importing](#-after-importing).
 
 Prefer fine-grained control?
 

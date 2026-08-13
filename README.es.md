@@ -40,7 +40,7 @@ dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
 /claude-import-all      # escanear → copiar todas las sesiones de Claude → informe
 ```
 
-3. Refresca una vez la página web ya abierta (el panel tiene el botón «Refrescar lista de sesiones») y pulsa cualquier sesión importada para continuar. **No hace falta reiniciar DSH** — ver [Después de importar](#después-de-importar).
+3. Refresca una vez la página web ya abierta (el panel tiene el botón «Refrescar lista de sesiones») y pulsa cualquier sesión importada para continuar. **No hace falta reiniciar DSH** — ver [Después de importar](#-después-de-importar).
 
 ¿Prefieres control fino?
 

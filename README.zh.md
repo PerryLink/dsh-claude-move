@@ -40,7 +40,7 @@ dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
 /claude-import-all      # 扫描 → 复制全部 Claude 会话 → 报告
 ```
 
-3. 把已打开的 Web 页面刷新一次（面板自带「刷新会话列表」按钮），点开任意已导入会话即可继续。**全程无需重启 DSH**——见[导入之后](#导入之后)。
+3. 把已打开的 Web 页面刷新一次（面板自带「刷新会话列表」按钮），点开任意已导入会话即可继续。**全程无需重启 DSH**——见[导入之后](#-导入之后)。
 
 想要精细控制？
 
