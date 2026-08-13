@@ -1,0 +1,256 @@
+// import.test.mjs — 导入集成测试：mock ctx（fs / sessionPersistence / workspaceRegistry），
+// 走真实 apply → register → execute 路径，校验幂等、批量、force 重建、行号报错、
+// 密钥告警、大小防护与输出 schema。
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { apply, resolveImportTarget, mintForceSessionId } from '../index.mjs'
+import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
+
+function claudeLine(type, extra = {}) {
+  return JSON.stringify({
+    type,
+    timestamp: '2026-08-01T10:00:00.000Z',
+    sessionId: 'sess-1',
+    cwd: 'D:\\demo\\proj',
+    message: { model: 'claude-sonnet-4-5' },
+    ...extra,
+  })
+}
+
+const simple = [
+  claudeLine('user', { message: { content: '问题一' } }),
+  claudeLine('assistant', { message: { content: [{ type: 'text', text: '回答' }] } }),
+].join('\n') + '\n'
+
+const withSecrets = claudeLine('user', { message: { content: 'key: ghp_abcdefghijklmnopqrstuvwxyz0123456789AB' } }) + '\n'
+
+// 内存态会话库：create/append/list，模拟 sessionPersistence。
+function makePersistence() {
+  const sessions = new Map()
+  return {
+    sessions,
+    async list() { return [...sessions.values()].map((s) => s.meta) },
+    async create(meta) {
+      if (sessions.has(meta.id)) throw new Error('duplicate session ' + meta.id)
+      sessions.set(meta.id, { meta, events: [] })
+    },
+    async append(id, events) {
+      const s = sessions.get(id)
+      if (!s) throw new Error('unknown session ' + id)
+      s.events.push(...events)
+    },
+  }
+}
+
+function makeCtx(tree, overrides = {}) {
+  const persistence = makePersistence()
+  const attached = []
+  const archived = []
+  const workspaces = new Map()
+  const registered = []
+  const entriesCache = new Map()
+
+  const fs = {
+    async resolve(p) { return { targetKey: p, displayPath: p } },
+    async stat(target) {
+      const v = tree[target.targetKey]
+      if (v === undefined) return undefined
+      return v === 'dir'
+        ? { type: 'directory', version: 1 }
+        : { type: 'file', version: 1, size: Buffer.byteLength(v, 'utf8') }
+    },
+    async readText(target) {
+      const v = tree[target.targetKey]
+      if (v === undefined || v === 'dir') throw new Error('FS_NOT_FOUND ' + target.targetKey)
+      return v
+    },
+    async listDir(target) {
+      if (!entriesCache.has(target.targetKey)) {
+        const entries = []
+        const prefix = target.targetKey.endsWith('\\') ? target.targetKey : target.targetKey + '\\'
+        for (const [p, v] of Object.entries(tree)) {
+          if (p.startsWith(prefix) && p !== prefix) {
+            const rest = p.slice(prefix.length)
+            if (!rest.includes('\\')) {
+              entries.push({
+                name: rest,
+                type: v === 'dir' ? 'directory' : 'file',
+                target: { targetKey: p, displayPath: p },
+                version: 1,
+              })
+            }
+          }
+        }
+        entriesCache.set(target.targetKey, entries.sort((a, b) => a.name.localeCompare(b.name)))
+      }
+      return entriesCache.get(target.targetKey)
+    },
+    processPath(target) { return target.targetKey },
+  }
+
+  const workspaceRegistry = {
+    async resolveByPath(p) { return workspaces.get(p) ?? null },
+    async create(p) {
+      const ws = { path: p, attachSession: async (id) => attached.push({ ws: p, id }) }
+      workspaces.set(p, ws)
+      return ws
+    },
+    async archiveSession(id) { archived.push(id) },
+  }
+
+  const ctx = {
+    fs,
+    sessionPersistence: persistence,
+    get(service) {
+      if (service === 'workspaceRegistry') return workspaceRegistry
+      return undefined
+    },
+    tools: {
+      register(def) { registered.push(def); return () => {} },
+    },
+    ...overrides,
+  }
+  return { ctx, persistence, attached, archived, registered }
+}
+
+async function withTempDshHome(t) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-migrate-import-'))
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = dir
+  t.after(async () => {
+    if (prev === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prev
+    await rm(dir, { recursive: true, force: true })
+  })
+  return dir
+}
+
+test('apply 注册 claude_scan 与 import_claude', () => {
+  const { ctx, registered } = makeCtx({})
+  apply(ctx)
+  assert.deepEqual(registered.map((d) => d.name), ['claude_scan', 'import_claude'])
+})
+
+test('resolveImportTarget：all 映射到 projects 目录', () => {
+  const home = path.join('C:', 'Users', 'u', '.claude')
+  assert.equal(resolveImportTarget('all', home), path.join(home, 'projects'))
+  assert.throws(() => resolveImportTarget('', home), /path 必填/)
+})
+
+test('mintForceSessionId：取现有后缀最大值 +1', () => {
+  const persisted = new Set(['import-sess-1', 'import-sess-1-1', 'import-sess-1-2', 'other'])
+  assert.equal(mintForceSessionId(persisted, 'import-sess-1'), 'import-sess-1-3')
+  assert.equal(mintForceSessionId(new Set(), 'import-sess-1'), 'import-sess-1-1')
+})
+
+test('单文件导入：落盘、归组、来源映射、输出 schema 校验', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence, attached, registered } = makeCtx({ 'D:\\demo\\proj\\sess-1.jsonl': simple })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const value = await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl' })
+
+  assert.equal(value.mode, 'single')
+  assert.equal(value.status, 'imported')
+  assert.equal(value.sessionId, 'import-sess-1')
+  assert.equal(value.turns, 1)
+  assert.equal(value.alreadyImported, undefined)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, value), [])
+
+  const saved = persistence.sessions.get('import-sess-1')
+  assert.ok(saved)
+  assert.equal(saved.meta.cwd, 'D:\\demo\\proj')
+  assert.equal(saved.events.at(-1).type, 'turn/end')
+  assert.ok(saved.events.every((e, i) => e.seq === i))
+  assert.deepEqual(attached, [{ ws: 'D:\\demo\\proj', id: 'import-sess-1' }])
+})
+
+test('幂等：重复导入 already-imported 且不重复落盘（F7）', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence, registered } = makeCtx({ 'D:\\demo\\proj\\sess-1.jsonl': simple })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const first = await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl' })
+  const second = await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl' })
+  assert.equal(first.status, 'imported')
+  assert.equal(second.status, 'already-imported')
+  assert.equal(second.alreadyImported, true)
+  assert.equal(persistence.sessions.size, 1)
+})
+
+test('force 重建：归档旧导入并以 import-<src>-1 新 id 落盘（F7）', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence, archived, registered } = makeCtx({ 'D:\\demo\\proj\\sess-1.jsonl': simple })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl' })
+  const forced = await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl', force: true })
+
+  assert.equal(forced.status, 'imported')
+  assert.deepEqual(archived, ['import-sess-1'])
+  assert.equal(forced.sessionId, 'import-sess-1-1')
+  assert.deepEqual(forced.forceImported, { previous: 'import-sess-1', current: 'import-sess-1-1', archived: true })
+  assert.ok(persistence.sessions.has('import-sess-1-1'))
+})
+
+test('畸形行行号上报 + 密钥只报位置（F10/S4）', async (t) => {
+  await withTempDshHome(t)
+  const raw = [
+    claudeLine('user', { message: { content: 'q1' } }),
+    '{ broken',
+    claudeLine('assistant', { message: { content: [{ type: 'text', text: 'a1' }] } }),
+  ].join('\n') + '\n' + withSecrets
+  const { ctx, registered } = makeCtx({ 'D:\\demo\\proj\\sess-1.jsonl': raw })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const value = await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl' })
+
+  assert.equal(value.skipped, 1)
+  assert.equal(value.skippedLines[0].line, 2)
+  assert.equal(value.secrets.total, 1)
+  assert.equal(value.secrets.hits[0].kind, 'github-token')
+  assert.equal(JSON.stringify(value).includes('ghp_abcdefghijklmnopqrstuvwxyz0123456789AB'), false, '不展示凭据内容')
+})
+
+test('批量导入：目录 + already-imported + skipped + 失败，逐文件汇总（F8）', async (t) => {
+  await withTempDshHome(t)
+  const tree = {
+    'D:\\claude\\projects': 'dir',
+    'D:\\claude\\projects\\demo-a': 'dir',
+    'D:\\claude\\projects\\demo-a\\a1.jsonl': simple,
+    'D:\\claude\\projects\\demo-a\\a2.jsonl': claudeLine('user', { sessionId: 'sess-2', message: { content: '第二个' } }) + '\n',
+    'D:\\claude\\projects\\demo-a\\empty.jsonl': '{ no user turns\n',
+    'D:\\claude\\projects\\demo-a\\unreadable.jsonl': undefined,
+  }
+  const { ctx, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const first = await def.execute({ path: 'D:\\claude\\projects', recursive: true })
+  assert.equal(first.mode, 'batch')
+  assert.equal(first.total, 4)
+  assert.equal(first.imported, 2)
+  assert.equal(first.skipped, 1, '无用户轮次的文件跳过')
+  assert.equal(first.failed, 1)
+  const failedResult = first.results.find((r) => r.status === 'failed')
+  assert.ok(failedResult.error)
+  assert.deepEqual(validateJsonSchemaValue(def.output.schema, first), [])
+
+  const second = await def.execute({ path: 'D:\\claude\\projects' })
+  assert.equal(second.imported, 0)
+  assert.equal(second.alreadyImported, 2)
+})
+
+test('大小防护：超过 maxTranscriptBytes 响亮失败（S2）', async (t) => {
+  await withTempDshHome(t)
+  const big = claudeLine('user', { message: { content: 'x'.repeat(5000) } }) + '\n'
+  const { ctx, registered } = makeCtx({ 'D:\\demo\\proj\\big.jsonl': big })
+  apply(ctx, { maxTranscriptBytes: 100 })
+  const def = registered.find((d) => d.name === 'import_claude')
+  await assert.rejects(
+    () => def.execute({ path: 'D:\\demo\\proj\\big.jsonl' }),
+    /transcript 过大/,
+  )
+})

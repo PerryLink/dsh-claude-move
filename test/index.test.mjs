@@ -47,7 +47,7 @@ function makeCtx(persistedIds) {
 test('apply 注册 claude_scan 工具且输出 schema 为结构化索引', () => {
   const ctx = makeCtx([])
   apply(ctx)
-  assert.equal(ctx.registered.length, 1)
+  assert.deepEqual(ctx.registered.map((d) => d.name), ['claude_scan', 'import_claude'])
   const def = ctx.registered[0]
   assert.equal(def.name, 'claude_scan')
   assert.ok(def.output.schema.properties.projects)
