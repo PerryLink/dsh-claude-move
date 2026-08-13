@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # dsh-claude-move bundle patch: mount the Claude migration host plugin.
 - insert:
     - id: claude-move

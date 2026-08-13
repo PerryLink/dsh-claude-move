@@ -1,4 +1,6 @@
-// convert.test.mjs — 纯转换逻辑单元测试（无宿主依赖）
+// SPDX-License-Identifier: Apache-2.0 AND MIT
+// convert.test.mjs — 纯转换逻辑单元测试（无宿主依赖）。
+// Vendored from Nwflower/dsh-chat-import (MIT, see THIRD_PARTY_NOTICES.md) and extended.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'

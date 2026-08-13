@@ -152,3 +152,23 @@ test('runScan：claudeHome 不存在时标记 claudeHomeExists=false 而不抛�
   assert.equal(value.claudeHomeExists, false)
   assert.deepEqual(value.projects, [])
 })
+
+test('runScan：exec.signal 中止时抛出 signal.reason（不再继续扫描）', async (t) => {
+  const home = await makeTempDir(t)
+  const dshHome = await makeTempDir(t)
+  const prevDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prevDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevDshHome })
+
+  const projects = path.join(home, 'projects')
+  await mkdir(path.join(projects, 'demo-a'), { recursive: true })
+  await writeFile(path.join(projects, 'demo-a', 'sess-1.jsonl'), claudeLine('user', { sessionId: 'sess-1', message: { content: 'q' } }) + '\n', 'utf8')
+
+  const ctx = makeCtx([])
+  const controller = new AbortController()
+  controller.abort(new Error('scan aborted by test'))
+  await assert.rejects(
+    () => runScan(ctx, { claudeHome: home }, {}, controller.signal),
+    /scan aborted by test/,
+  )
+})

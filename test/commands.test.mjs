@@ -139,6 +139,8 @@ test('claude-import-all：批量导入 + 注入报告（F15）', async (t) => {
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('全量迁移完成'))
   assert.ok(result.text.includes('新增 1'))
+  assert.ok(result.text.includes('无需重启 dsh'), '明确告知导入即时生效、无需重启')
+  assert.ok(result.text.includes('刷新'), '明确告知已打开的 Web 页面刷新一次会话列表')
   assert.equal(persistence.sessions.size, 1)
   assert.equal(injected.length, 1)
   assert.equal(injected[0].source.kind, 'plugin')

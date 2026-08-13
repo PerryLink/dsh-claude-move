@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // client/client.js — dsh-claude-move 浏览器迁移面板（F16）。
 //
 // 零依赖 vanilla 面板：host 端 dsh.client 扫描把本文件作为 classic script
@@ -196,10 +197,10 @@ function installPanel() {
         const job = await json('/api/claude-move/progress?job=' + encodeURIComponent(jobId))
         const total = job.total ?? 0
         if (total > 0) setBar(((job.imported + job.alreadyImported + job.skipped + job.failed) / total) * 100)
-        status.textContent = `导入中：${job.imported}/${total} 新增，${job.failed} 失败`
+        status.textContent = `导入中：${job.imported}/${total} 新增，${job.appended ?? 0} 追加，${job.failed} 失败`
         if (job.status === 'done' || job.status === 'error') {
           status.textContent = job.status === 'done'
-            ? `导入完成：新增 ${job.imported}、已存在 ${job.alreadyImported}、跳过 ${job.skipped}、失败 ${job.failed}`
+            ? `导入完成：新增 ${job.imported}、已存在 ${job.alreadyImported}、追加 ${job.appended ?? 0}、跳过 ${job.skipped}、失败 ${job.failed}。无需重启 dsh：刷新页面或点击会话详情中的「刷新会话列表」后，即可在会话列表中打开续聊。`
             : '导入失败：' + (job.error ?? '未知错误')
           if (job.status === 'done') setBar(100)
           refresh()

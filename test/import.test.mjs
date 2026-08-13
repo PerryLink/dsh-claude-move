@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, resolveImportTarget, mintForceSessionId } from '../index.mjs'
+import { apply, resolveImportTarget, mintForceSessionId, importDirectory } from '../index.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 function claudeLine(type, extra = {}) {
@@ -183,7 +183,7 @@ test('无 cwd 的 transcript：正常导入但不挂接工作区（F9）', async
   const def = registered.find((d) => d.name === 'import_claude')
   const value = await def.execute({ path: 'D:\\demo\\proj\\nocwd.jsonl' })
   assert.equal(value.status, 'imported')
-  assert.deepEqual(value.workspace, { attached: false })
+  assert.deepEqual(value.workspace, { attached: false, reason: 'no-cwd' })
 })
 
 test('幂等：重复导入 already-imported 且不重复落盘（F7）', async (t) => {
@@ -199,7 +199,7 @@ test('幂等：重复导入 already-imported 且不重复落盘（F7）', async 
   assert.equal(persistence.sessions.size, 1)
 })
 
-test('force 重建：归档旧导入并以 import-<src>-1 新 id 落盘（F7）', async (t) => {
+test('force 副本：旧导入原样保留，以 import-<src>-1 新 id 另存一份完整副本（复制式）', async (t) => {
   await withTempDshHome(t)
   const { ctx, persistence, archived, registered } = makeCtx({ 'D:\\demo\\proj\\sess-1.jsonl': simple })
   apply(ctx)
@@ -208,10 +208,115 @@ test('force 重建：归档旧导入并以 import-<src>-1 新 id 落盘（F7）'
   const forced = await def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl', force: true })
 
   assert.equal(forced.status, 'imported')
-  assert.deepEqual(archived, ['import-sess-1'])
+  assert.deepEqual(archived, [], '绝不归档任何会话（复制式迁移）')
   assert.equal(forced.sessionId, 'import-sess-1-1')
-  assert.deepEqual(forced.forceImported, { previous: 'import-sess-1', current: 'import-sess-1-1', archived: true })
-  assert.ok(persistence.sessions.has('import-sess-1-1'))
+  assert.deepEqual(forced.forceImported, { previous: 'import-sess-1', current: 'import-sess-1-1', archived: false })
+  assert.ok(persistence.sessions.has('import-sess-1'), '旧副本保留')
+  assert.ok(persistence.sessions.has('import-sess-1-1'), '新副本落盘')
+  assert.equal(persistence.sessions.size, 2)
+})
+
+test('增量续写：源文件新增轮次后重导，同一会话只 append 新事件', async (t) => {
+  await withTempDshHome(t)
+  const file = 'D:\\demo\\proj\\sess-1.jsonl'
+  const tree = { [file]: simple }
+  const { ctx, persistence, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const first = await def.execute({ path: file })
+  assert.equal(first.status, 'imported')
+  assert.equal(first.turns, 1)
+  const savedFirst = [...persistence.sessions.get('import-sess-1').events]
+  assert.equal(savedFirst.length, 6)
+
+  // Claude 侧继续追加第二轮（同一源文件增长）。
+  tree[file] = simple.trimEnd() + '\n' + [
+    claudeLine('user', { message: { content: '问题二' } }),
+    claudeLine('assistant', { message: { content: [{ type: 'text', text: '回答二' }] } }),
+  ].join('\n') + '\n'
+  const second = await def.execute({ path: file })
+  assert.equal(second.status, 'appended')
+  assert.equal(second.sessionId, 'import-sess-1', '续写到同一 DSH 会话')
+  assert.equal(second.appendedTurns, 1)
+  assert.equal(second.turns, 2)
+  const saved = persistence.sessions.get('import-sess-1')
+  assert.equal(saved.events.length, 12)
+  assert.ok(saved.events.every((e, i) => e.seq === i), 'seq 连续')
+  assert.deepEqual(saved.events.slice(0, 6), savedFirst, '旧事件一个字节不动')
+  assert.equal(saved.events[6].type, 'turn/start')
+  assert.equal(saved.events[6].data.turn, 2, '新轮次从第 2 轮开始')
+
+  // 未变化时幂等跳过。
+  const third = await def.execute({ path: file })
+  assert.equal(third.status, 'already-imported')
+  assert.equal(persistence.sessions.get('import-sess-1').events.length, 12)
+})
+
+test('轮次内变化：保留已导入快照（changedInPlace），新轮完成后自动续写', async (t) => {
+  await withTempDshHome(t)
+  const file = 'D:\\demo\\proj\\sess-1.jsonl'
+  const tree = { [file]: claudeLine('user', { message: { content: '问题一' } }) + '\n' }
+  const { ctx, persistence, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+
+  // 首次导入：该轮只有提问、尚无回答。
+  const first = await def.execute({ path: file })
+  assert.equal(first.status, 'imported')
+  assert.equal(first.turns, 1)
+  assert.equal(persistence.sessions.get('import-sess-1').events.length, 3)
+
+  // 同一轮内补上回答：不能改写已落盘轮次，保守保留快照。
+  tree[file] += claudeLine('assistant', { message: { content: [{ type: 'text', text: '回答一' }] } }) + '\n'
+  const mid = await def.execute({ path: file })
+  assert.equal(mid.status, 'already-imported')
+  assert.equal(mid.changedInPlace, true)
+  assert.equal(persistence.sessions.get('import-sess-1').events.length, 3, '不动已导入日志')
+
+  // 新的一轮完成后：整轮续写。
+  tree[file] += claudeLine('user', { message: { content: '问题二' } }) + '\n'
+    + claudeLine('assistant', { message: { content: [{ type: 'text', text: '回答二' }] } }) + '\n'
+  const next = await def.execute({ path: file })
+  assert.equal(next.status, 'appended')
+  assert.equal(next.appendedTurns, 1)
+  const saved = persistence.sessions.get('import-sess-1')
+  assert.equal(saved.events.length, 9)
+  assert.ok(saved.events.every((e, i) => e.seq === i), 'seq 连续')
+  assert.equal(saved.events[3].type, 'turn/start')
+  assert.equal(saved.events[3].data.turn, 2)
+})
+
+test('复制式迁移：导入前后源文件内容不变（绝不删除/改写 Claude 数据）', async (t) => {
+  await withTempDshHome(t)
+  const file = 'D:\\demo\\proj\\sess-1.jsonl'
+  const tree = { [file]: simple }
+  const { ctx, registered } = makeCtx(tree)
+  apply(ctx)
+  const before = tree[file]
+  const def = registered.find((d) => d.name === 'import_claude')
+  await def.execute({ path: file })
+  assert.equal(tree[file], before, '源文件字节不变')
+  await def.execute({ path: file, force: true })
+  assert.equal(tree[file], before, 'force 也不动源文件')
+})
+
+test('工作区镜像：不同 cwd 的会话各自挂接到对应工作区（参考 Claude 项目布局）', async (t) => {
+  await withTempDshHome(t)
+  const tree = {
+    'D:\\claude\\projects': 'dir',
+    'D:\\claude\\projects\\p1': 'dir',
+    'D:\\claude\\projects\\p1\\a.jsonl': claudeLine('user', { sessionId: 'sess-a', cwd: 'D:\\repo\\one', message: { content: 'q1' } }) + '\n',
+    'D:\\claude\\projects\\p2': 'dir',
+    'D:\\claude\\projects\\p2\\b.jsonl': claudeLine('user', { sessionId: 'sess-b', cwd: 'D:\\repo\\two', message: { content: 'q2' } }) + '\n',
+  }
+  const { ctx, attached, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const batch = await def.execute({ path: 'D:\\claude\\projects', recursive: true })
+  assert.equal(batch.imported, 2)
+  assert.equal(batch.failed, 0)
+  assert.ok(attached.some((a) => a.ws === 'D:\\repo\\one' && a.id === 'import-sess-a'), '会话 A 挂到 cwd 对应工作区')
+  assert.ok(attached.some((a) => a.ws === 'D:\\repo\\two' && a.id === 'import-sess-b'), '会话 B 挂到 cwd 对应工作区')
 })
 
 test('畸形行行号上报 + 密钥只报位置（F10/S4）', async (t) => {
@@ -318,4 +423,75 @@ test('大小防护：超过 maxTranscriptBytes 响亮失败（S2）', async (t) 
     () => def.execute({ path: 'D:\\demo\\proj\\big.jsonl' }),
     /transcript 过大/,
   )
+})
+
+test('exec.signal 已中止：导入立即拒绝且不落盘（工具契约）', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence, registered } = makeCtx({ 'D:\\demo\\proj\\sess-1.jsonl': simple })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const controller = new AbortController()
+  controller.abort(new Error('cancelled by test'))
+  await assert.rejects(
+    () => def.execute({ path: 'D:\\demo\\proj\\sess-1.jsonl' }, { signal: controller.signal }),
+    /cancelled by test/,
+  )
+  assert.equal(persistence.sessions.size, 0, '中止时不落盘')
+})
+
+test('exec.signal 在途中止：importDirectory 整体抛出 signal.reason', async (t) => {
+  await withTempDshHome(t)
+  const tree = {
+    'D:\\claude\\projects': 'dir',
+    'D:\\claude\\projects\\p1': 'dir',
+    'D:\\claude\\projects\\p1\\a.jsonl': claudeLine('user', { sessionId: 's-a', message: { content: 'q1' } }) + '\n',
+    'D:\\claude\\projects\\p1\\b.jsonl': claudeLine('user', { sessionId: 's-b', message: { content: 'q2' } }) + '\n',
+    'D:\\claude\\projects\\p1\\c.jsonl': claudeLine('user', { sessionId: 's-c', message: { content: 'q3' } }) + '\n',
+  }
+  const { ctx } = makeCtx(tree)
+  apply(ctx)
+  const controller = new AbortController()
+  const fs = ctx.get('fs')
+  const baseRead = fs.readText.bind(fs)
+  let reads = 0
+  fs.readText = async (target) => {
+    reads += 1
+    if (reads === 2) controller.abort(new Error('stop mid-batch'))
+    return baseRead(target)
+  }
+  await assert.rejects(
+    () => importDirectory(ctx, { targetKey: 'D:\\claude\\projects', displayPath: 'D:\\claude\\projects' },
+      { recursive: true }, 64 * 1024 * 1024, undefined, 2, controller.signal),
+    /stop mid-batch/,
+  )
+})
+
+test('importConcurrency：并发读取转换保持结果顺序与 id 分配确定性', async (t) => {
+  await withTempDshHome(t)
+  const file = (name, sid) => JSON.stringify({
+    type: 'user', timestamp: '2026-08-01T10:00:00.000Z', sessionId: sid, cwd: 'D:\\demo\\proj',
+    message: { content: 'q' + name },
+  }) + '\n'
+  const tree = {
+    'D:\\claude\\projects': 'dir',
+    'D:\\claude\\projects\\p1': 'dir',
+    'D:\\claude\\projects\\p1\\a.jsonl': file('a', 's-1'),
+    'D:\\claude\\projects\\p1\\b.jsonl': file('b', 's-2'),
+    'D:\\claude\\projects\\p1\\c.jsonl': file('c', 's-3'),
+    'D:\\claude\\projects\\p1\\d.jsonl': file('d', 's-4'),
+  }
+  const { ctx, persistence, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const batch = await def.execute({ path: 'D:\\claude\\projects', recursive: true },
+    { signal: new AbortController().signal })
+  assert.equal(batch.imported, 4)
+  assert.equal(batch.failed, 0)
+  assert.deepEqual(
+    batch.results.map((r) => r.sessionId),
+    ['import-s-1', 'import-s-2', 'import-s-3', 'import-s-4'],
+    '文件名序稳定、id 顺序确定',
+  )
+  assert.deepEqual(batch.results.map((r) => r.status), ['imported', 'imported', 'imported', 'imported'])
+  assert.equal(persistence.sessions.size, 4)
 })
