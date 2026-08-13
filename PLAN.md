@@ -1,4 +1,4 @@
-# dsh-claude-migrate 研究结论与实施方案
+# dsh-claude-move 研究结论与实施方案
 
 > 目标：Claude Code 全量迁移 + 无缝续聊。研究三个参考插件与本机 DSH（源码 rc.5 / 发布 rc.6）公开扩展点后的实施蓝图。验收以任务书 F/S/C/N 为准。
 
@@ -28,7 +28,7 @@
 ### 1.3 YYTbit/dsh-plugin-claude-bridge（MIT）—— 复用其注入思路
 
 - 结构：`inject: []`；`ctx.systemPrompt.context`（memory、skills catalog）+ `ctx.systemPrompt.section`（全局 CLAUDE.md，order 5）；`~/.claude/projects/<projectKey>/memory/*.md` 按 `feedback > project > reference > user` 排序；skills 发现 `<dir>/<name>/SKILL.md` 与扁平 `<name>.md`；frontmatter 手写解析。
-- **发现其 bug（我们设计时规避）**：其 `text: async () => …` 在 rc.6 不成立——已实测 rc.6 `dsh-system-prompt` 的 `PromptContext.text` 是 `string | ((ctx) => string)`（同步），assembly 实现**不 await**，async 提供者会把 `[object Promise]` 注入提示词。dsh-claude-migrate 一律使用**同步提供者 + 内存缓存（按 mtime 失效）**。
+- **发现其 bug（我们设计时规避）**：其 `text: async () => …` 在 rc.6 不成立——已实测 rc.6 `dsh-system-prompt` 的 `PromptContext.text` 是 `string | ((ctx) => string)`（同步），assembly 实现**不 await**，async 提供者会把 `[object Promise]` 注入提示词。dsh-claude-move 一律使用**同步提供者 + 内存缓存（按 mtime 失效）**。
 - 另一个差异：它用 `encodeProjectPath(process.cwd())` 猜 slug——各平台 Claude 的 slug 编码并不统一；我们**不猜**：直接从扫描到的 `projects/<slug>` 目录本身定位 memory（transcript 与 memory 同目录兄弟），零编码风险。
 
 ## 2. DSH 平台关键机制（已在本机源码 + rc.6 npm 包双重验证）
@@ -64,7 +64,7 @@
 ### 3.1 包结构（单包 = host 插件 + 可选 client bundle）
 
 ```
-dsh-claude-migrate/
+dsh-claude-move/
   index.mjs             # host 入口：注册工具/命令/注入（唯一 host 面）
   lib/
     convert.mjs         # ← vendor 自 dsh-chat-import（MIT 标注），扩展：行号错误、custom-title、统计
@@ -85,7 +85,7 @@ dsh-claude-migrate/
 ### 3.2 索引模型（F2/F3/F4）
 
 `Index { projects: [{ slug, cwd, dirExists, git:{isRepo,branch,dirty}, sessions: [{ file, sessionId, title, createdAt, lastActivity, messages, toolCalls, sizeBytes, import: {dshSessionId?, status: 'none'|'imported'|'source-missing'} }] }], personal: { globalClaudeMd, skills, memoriesByProject, settings }, stats }`
-- 缓存 `<dshHome>/claude-migrate/index.json`（dshHome 用 `@deepseek-ai/dsh-home-paths`）；增量：按 mtime/size 比较，`scan_all`/`scan <path>` 两种入口。
+- 缓存 `<dshHome>/claude-move/index.json`（dshHome 用 `@deepseek-ai/dsh-home-paths`）；增量：按 mtime/size 比较，`scan_all`/`scan <path>` 两种入口。
 - 导入状态：`sessionPersistence.list()` 一次快照（`import-*` 前缀）+ 缓存里的 `源sessionId → dshSessionId` 映射（支持强制重导入链）。
 - 三平台路径：优先 `$CLAUDE_CONFIG_DIR`，Windows 回退 `%USERPROFILE%\.claude`；文件名由 NTFS 原生处理（UCS-2），内容按 UTF-8 读、失败容错降级；不用 iconv 依赖。
 
@@ -106,7 +106,7 @@ dsh-claude-migrate/
 | F13 | `ctx.systemPrompt.section`（order 负值，前置于 persona）：全局 CLAUDE.md + agent cwd 对应项目 `.claude/CLAUDE.md`（项目优先） |
 | F14 | `report.mjs`：解析 settings.json（allow/deny/model）→ 生成 cordis.yml patch 建议 + 权限预设建议 + 无法映射清单；只建议不代写（S1/S3） |
 | F15 | `/claude-import-all` 命令（`ctx.commands`） |
-| F16 | `dsh.client` 面板 + `/api/claude-migrate/*`（`ctx.webServer`）；导入进度用插件内 job 状态 + 轮询 |
+| F16 | `dsh.client` 面板 + `/api/claude-move/*`（`ctx.webServer`）；导入进度用插件内 job 状态 + 轮询 |
 | F17 | `/resume-claude [latest\|id\|关键词]` 命令：未导入先导入 → `agent.inject` 交接摘要（安全模型复用） |
 | F18 | 导入后 `session.list` 应可见（apiproxy 有 `host/session-added` 帧/重连基线）；面板导入完成后刷新并跳转（spike 确认跳转 API，兜底提示刷新） |
 | S1 | 源文件只读；只 `create`+`append`；不碰引擎/apiproxy/官方包 |

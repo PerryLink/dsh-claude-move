@@ -117,7 +117,7 @@ function makeCtx(tree, overrides = {}) {
 }
 
 async function withTempDshHome(t) {
-  const dir = await mkdtemp(path.join(tmpdir(), 'claude-migrate-import-'))
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-move-import-'))
   const prev = process.env.DSH_HOME
   process.env.DSH_HOME = dir
   t.after(async () => {

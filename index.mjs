@@ -1,4 +1,4 @@
-// index.mjs — dsh-claude-migrate host 插件入口。
+// index.mjs — dsh-claude-move host 插件入口。
 //
 // 阶段 1 注册 `claude_scan` 工具：自动定位 Claude 数据根目录，扫描全部
 // project/session/memory/skill/CLAUDE.md 并返回结构化索引（F1-F4）。
@@ -30,7 +30,7 @@ import {
 import { convertClaudeJsonl } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 
-export const name = 'claude-migrate'
+export const name = 'claude-move'
 
 export const inject = ['tools']
 
@@ -319,7 +319,7 @@ export async function archiveSession(ctx, oldId) {
     await wr.archiveSession(oldId)
     return true
   } catch (err) {
-    console.error('[claude-migrate] archive session failed:', String((err && err.message) || err))
+    console.error('[claude-move] archive session failed:', String((err && err.message) || err))
     return false
   }
 }
@@ -340,7 +340,7 @@ export async function attachToWorkspace(ctx, meta) {
     await ws.attachSession(meta.id)
     return true
   } catch (err) {
-    console.error('[claude-migrate] workspace attach failed:', String((err && err.message) || err))
+    console.error('[claude-move] workspace attach failed:', String((err && err.message) || err))
     return false
   }
 }
@@ -359,7 +359,7 @@ export async function rememberImport(ctx, sourceId, dshId) {
     imports[sourceId] = dshId
     await saveImports(cacheDir, imports)
   } catch (err) {
-    console.error('[claude-migrate] remember import failed:', String((err && err.message) || err))
+    console.error('[claude-move] remember import failed:', String((err && err.message) || err))
   }
 }
 

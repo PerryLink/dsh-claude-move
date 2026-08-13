@@ -1,4 +1,4 @@
-# dsh-claude-migrate
+# dsh-claude-move
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件：**Claude Code 全量迁移 + 无缝续聊**。安装后自动发现本机 Claude Code 的全部内容（历史 transcript、记忆、技能、全局指令、配置与项目状态），把「历史对话 + 个人信息」迁移进 DSH，让用户在新会话里无缝继续 Claude Code 的工作上下文。
 
@@ -19,10 +19,10 @@
 
 ```sh
 # 从 GitHub（插件发布后）
-dsh plugin --profile web add -w github:<owner>/dsh-claude-migrate
+dsh plugin --profile web add -w github:<owner>/dsh-claude-move
 
 # 本地源码（开发推荐）
-dsh plugin --profile web add -w link:/path/to/dsh-claude-migrate
+dsh plugin --profile web add -w link:/path/to/dsh-claude-move
 ```
 
 ## 使用
@@ -46,8 +46,8 @@ import_claude { path: "...", force: true }          # 归档旧导入并以 impo
 ## 配置（cordis.yml，全部可选）
 
 ```yaml
-- id: claude-migrate
-  name: dsh-claude-migrate
+- id: claude-move
+  name: dsh-claude-move
   config:
     claudeHome: null          # 缺省自动定位 $CLAUDE_CONFIG_DIR / ~/.claude
     scanGit: true             # 探测 git 分支与脏状态
@@ -57,7 +57,7 @@ import_claude { path: "...", force: true }          # 归档旧导入并以 impo
 
 ## 卸载
 
-从 profile 的 bundles 移除 `claude-migrate` 行并重启 dsh。已导入会话保留在 DSH 数据目录，不受卸载影响；本插件只在 `$DSH_HOME/claude-migrate/` 写索引缓存与导入映射，不触碰 Claude 源数据。
+从 profile 的 bundles 移除 `claude-move` 行并重启 dsh。已导入会话保留在 DSH 数据目录，不受卸载影响；本插件只在 `$DSH_HOME/claude-move/` 写索引缓存与导入映射，不触碰 Claude 源数据。
 
 ## 安全边界
 

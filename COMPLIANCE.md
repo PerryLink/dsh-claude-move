@@ -1,6 +1,6 @@
 # COMPLIANCE.md — 官方约束合规对照
 
-dsh-claude-migrate 对照五个官方文档源的插件开发约束逐条审计。状态：✅ 满足 · ⚠️ 已计划/待验证 · N/A 不适用（附理由）。约束原文以官方文档为准；冲突时以官方仓库 `AGENTS.md` 为最高优先级。
+dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。状态：✅ 满足 · ⚠️ 已计划/待验证 · N/A 不适用（附理由）。约束原文以官方文档为准；冲突时以官方仓库 `AGENTS.md` 为最高优先级。
 
 ## 1. [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（仓库 AGENTS.md / docs/）
 

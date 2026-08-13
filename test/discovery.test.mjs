@@ -24,7 +24,7 @@ import {
 import { parseFrontmatter, extractMetadataType } from '../lib/frontmatter.mjs'
 
 async function makeTempDir(t) {
-  const dir = await mkdtemp(path.join(tmpdir(), 'claude-migrate-test-'))
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-move-test-'))
   t.after(async () => { await rm(dir, { recursive: true, force: true }) })
   return dir
 }
@@ -214,9 +214,9 @@ test('缓存与导入映射：roundtrip、损坏回退', async (t) => {
   assert.deepEqual(await loadImports(dir), { 'sess-1': 'import-sess-1' })
 })
 
-test('resolveCacheDir：DSH_HOME 优先，缺省 ~/.dsh/claude-migrate', () => {
-  assert.equal(resolveCacheDir({ DSH_HOME: '/tmp/dsh' }), path.join('/tmp/dsh', 'claude-migrate'))
-  assert.equal(resolveCacheDir({}), path.join(homedir(), '.dsh', 'claude-migrate'))
+test('resolveCacheDir：DSH_HOME 优先，缺省 ~/.dsh/claude-move', () => {
+  assert.equal(resolveCacheDir({ DSH_HOME: '/tmp/dsh' }), path.join('/tmp/dsh', 'claude-move'))
+  assert.equal(resolveCacheDir({}), path.join(homedir(), '.dsh', 'claude-move'))
 })
 
 test('frontmatter：解析、CRLF、无 frontmatter、metadata 类型提取', () => {
