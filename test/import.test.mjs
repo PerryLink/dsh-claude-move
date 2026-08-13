@@ -261,6 +261,53 @@ test('批量导入：目录 + already-imported + skipped + 失败，逐文件汇
   assert.equal(second.alreadyImported, 2)
 })
 
+test('同源 sessionId 冲突：两个文件都导入，第二个后缀避让（不丢历史）', async (t) => {
+  await withTempDshHome(t)
+  const sameId = (prompt) => JSON.stringify({
+    type: 'user', timestamp: '2026-08-01T10:00:00.000Z', sessionId: 'sess-shared',
+    cwd: 'D:\\demo\\proj', message: { content: prompt },
+  }) + '\n'
+  const tree = {
+    'D:\\demo\\proj\\a.jsonl': sameId('文件A的历史'),
+    'D:\\demo\\proj\\b.jsonl': sameId('文件B的历史'),
+  }
+  const { ctx, persistence, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+
+  const first = await def.execute({ path: 'D:\\demo\\proj\\a.jsonl' })
+  const second = await def.execute({ path: 'D:\\demo\\proj\\b.jsonl' })
+  assert.equal(first.status, 'imported')
+  assert.equal(first.sessionId, 'import-sess-shared')
+  assert.equal(second.status, 'imported', '同 sessionId 的第二文件不静默跳过')
+  assert.equal(second.sessionId, 'import-sess-shared-1', '目标 id 冲突后缀避让')
+  assert.equal(persistence.sessions.size, 2)
+
+  // 各自幂等
+  const again = await def.execute({ path: 'D:\\demo\\proj\\b.jsonl' })
+  assert.equal(again.status, 'already-imported')
+  assert.equal(again.sessionId, 'import-sess-shared-1')
+  assert.equal(persistence.sessions.size, 2)
+})
+
+test('源 sessionId 缺失：目标 id 由文件名决定，重复导入幂等', async (t) => {
+  await withTempDshHome(t)
+  const noId = JSON.stringify({
+    type: 'user', timestamp: '2026-08-01T10:00:00.000Z', cwd: 'D:\\demo\\proj', message: { content: '无 id 的会话' },
+  }) + '\n'
+  const tree = { 'D:\\demo\\proj\\no-id.jsonl': noId }
+  const { ctx, persistence, registered } = makeCtx(tree)
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+
+  const first = await def.execute({ path: 'D:\\demo\\proj\\no-id.jsonl' })
+  assert.equal(first.status, 'imported')
+  assert.equal(first.sessionId, 'import-no-id', '文件名 slug 作为稳定目标 id')
+  const second = await def.execute({ path: 'D:\\demo\\proj\\no-id.jsonl' })
+  assert.equal(second.status, 'already-imported')
+  assert.equal(persistence.sessions.size, 1)
+})
+
 test('大小防护：超过 maxTranscriptBytes 响亮失败（S2）', async (t) => {
   await withTempDshHome(t)
   const big = claudeLine('user', { message: { content: 'x'.repeat(5000) } }) + '\n'

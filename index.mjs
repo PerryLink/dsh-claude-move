@@ -29,7 +29,7 @@ import {
   scanProjectDir,
   scanTranscriptFile,
 } from './lib/discovery.mjs'
-import { convertClaudeJsonl } from './lib/convert.mjs'
+import { convertClaudeJsonl, mintSessionId } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, DEFAULT_MEMORY_MAX_BYTES } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
@@ -249,7 +249,8 @@ export async function annotateImports(ctx, cacheDir, index) {
   }
   for (const project of index.projects ?? []) {
     for (const session of project.sessions ?? []) {
-      const dshId = imports[session.sessionId]
+      // 幂等键 = 源文件路径（新格式）；sessionId 键保留为旧缓存回退。
+      const dshId = imports[session.file] ?? imports[session.sessionId]
       if (dshId && imported.has(dshId)) {
         session.import = { status: 'imported', dshSessionId: dshId }
       } else if (session.error) {
@@ -410,17 +411,19 @@ export async function attachToWorkspace(ctx, meta) {
 }
 
 /**
- * 记录源 sessionId → DSH 会话 id 映射（增量缓存目录 imports.json，F4/F7 基础）。
+ * 记录 源文件路径 → DSH 会话 id 映射（增量缓存目录 imports.json，F4/F7 基础）。
+ * 按文件路径为键：多个源文件可能共享同一源 sessionId（Claude 子会话等），
+ * 按 sessionId 去重会静默丢弃后导入文件的历史（真实数据实测暴露）。
  * @param ctx - Cordis 上下文。
- * @param sourceId - 源 transcript sessionId；缺失则跳过。
+ * @param key - 源 transcript 绝对路径；缺失则跳过。
  * @param dshId - DSH 会话 id。
  */
-export async function rememberImport(ctx, sourceId, dshId) {
-  if (typeof sourceId !== 'string' || sourceId.length === 0) return
+export async function rememberImport(ctx, key, dshId) {
+  if (typeof key !== 'string' || key.length === 0) return
   try {
     const cacheDir = resolveCacheDir()
     const imports = await loadImports(cacheDir)
-    imports[sourceId] = dshId
+    imports[key] = dshId
     await saveImports(cacheDir, imports)
   } catch (err) {
     console.error('[claude-move] remember import failed:', String((err && err.message) || err))
@@ -428,18 +431,27 @@ export async function rememberImport(ctx, sourceId, dshId) {
 }
 
 /**
- * 幂等落盘一份已转换会话（F5-F7/F9）：已存在且未 force → 跳过；
- * force → 归档旧导入 + 新 id 重建。落盘 = create + append（append-only），
- * 随后按 cwd 挂接工作区并记录 imports 映射。
+ * 幂等落盘一份已转换会话（F5-F7/F9）。幂等键 = 源文件路径（imports.json）；
+ * 目标 id 由「显式 sessionId > 源 sessionId > 文件名 slug」确定，若目标 id 已
+ * 被其它文件占用（同源 sessionId 冲突）则后缀避让（import-<src>-<n>），绝不
+ * 静默丢弃历史。force → 归档旧导入 + 新 id 重建。落盘 = create + append
+ * （append-only），随后按 cwd 挂接工作区并记录 imports 映射。
  * @param ctx - Cordis 上下文。
  * @param converted - convertClaudeJsonl 输出。
- * @param args - 工具参数 `{ force? }`。
+ * @param args - 工具参数 `{ sessionId?, force? }`。
  * @param persisted - 已持久化 id 快照（就地更新）。
- * @param sourcePath - 源 transcript 展示路径（报告用）。
+ * @param sourcePath - 源 transcript 绝对路径（幂等键 + 报告用）。
  * @returns 单文件统计。
  */
 export async function persistConverted(ctx, converted, args, persisted, sourcePath) {
   const { meta, events, turns, messages, toolCalls, skipped, skippedLines, typeCounts, sourceId } = converted
+
+  // 源 sessionId 缺失时用文件名 slug 保证目标 id 跨运行稳定（否则 mintSessionId
+  // 回退 Date.now，重复导入不再幂等）。
+  if (!args?.sessionId && !sourceId) {
+    meta.id = mintSessionId(path.basename(sourcePath).replace(/\.jsonl$/i, ''))
+  }
+
   const base = {
     sessionId: meta.id,
     sourcePath,
@@ -451,16 +463,24 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
     permissions: summarizePermissions(typeCounts),
   }
 
-  if (persisted.has(meta.id) && args.force !== true) {
-    return { ...base, status: 'already-imported', alreadyImported: true }
+  const cacheDir = resolveCacheDir()
+  const imports = await loadImports(cacheDir)
+  const knownId = imports[sourcePath]
+  if (knownId && persisted.has(knownId) && args.force !== true) {
+    return { ...base, sessionId: knownId, status: 'already-imported', alreadyImported: true }
   }
   let forceImported
-  if (persisted.has(meta.id) && args.force === true) {
-    const previous = meta.id
-    const nextId = mintForceSessionId(persisted, previous)
-    await archiveSession(ctx, previous)
-    meta.id = nextId
-    forceImported = { previous, current: nextId, archived: true }
+  if (args.force === true) {
+    const previous = (knownId && persisted.has(knownId)) ? knownId : (persisted.has(meta.id) ? meta.id : undefined)
+    if (previous) {
+      const nextId = mintForceSessionId(persisted, previous)
+      await archiveSession(ctx, previous)
+      meta.id = nextId
+      forceImported = { previous, current: nextId, archived: true }
+    }
+  } else if (persisted.has(meta.id)) {
+    // 目标 id 被其它源文件占用（同源 sessionId）：后缀避让，保留双方历史。
+    meta.id = mintForceSessionId(persisted, meta.id)
   }
 
   const sp = ctx.get('sessionPersistence')
@@ -470,7 +490,7 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
   await sp.create(meta)
   await sp.append(meta.id, events)
   const attached = await attachToWorkspace(ctx, meta)
-  await rememberImport(ctx, sourceId ?? null, meta.id)
+  await rememberImport(ctx, sourcePath, meta.id)
   persisted.add(meta.id)
   return {
     ...base,
@@ -787,14 +807,14 @@ export function memoryDirsSync(state) {
   const projectsDir = path.join(state.claudeHome, 'projects')
   try {
     const st = statSync(projectsDir)
-    if (state.memoryDirCache && state.memoryDirCache.mtimeMs === st.mtimeMs) {
+    if (state.memoryDirCache && state.memoryDirCache.mtimeMs === st.mtimeMs && state.memoryDirCache.ctimeMs === st.ctimeMs) {
       return state.memoryDirCache.dirs
     }
     const dirs = readdirSync(projectsDir, { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => path.join(projectsDir, e.name, 'memory'))
       .filter((d) => fileExists(d))
-    state.memoryDirCache = { mtimeMs: st.mtimeMs, dirs }
+    state.memoryDirCache = { mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, dirs }
     return dirs
   } catch {
     // 无 projects 目录：无记忆。
