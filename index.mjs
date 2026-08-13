@@ -13,6 +13,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
@@ -33,6 +34,7 @@ import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, DEFAULT_MEMORY_MAX_BYTES } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
 import { translateSettings } from './lib/settings.mjs'
+import { buildHandoff, DEFAULT_HANDOFF_MAX_CHARS } from './lib/handoff.mjs'
 
 export const name = 'claude-move'
 
@@ -51,6 +53,7 @@ export const inject = ['tools']
  * @property {number} [maxSkills] 技能目录条目上限（默认 30）。
  * @property {string[]} [extraSkillDirs] 额外技能目录（默认空）。
  * @property {boolean} [enableInstructions] 注入全局/项目级 CLAUDE.md 段（默认 true）。
+ * @property {number} [resumeMaxChars] 续聊交接摘要字符上限（默认 2048）。
  */
 
 export const Config = Schema.object({
@@ -64,6 +67,7 @@ export const Config = Schema.object({
   maxSkills: Schema.number().default(30),
   extraSkillDirs: Schema.array(Schema.string()).default([]),
   enableInstructions: Schema.boolean().default(true),
+  resumeMaxChars: Schema.number().default(DEFAULT_HANDOFF_MAX_CHARS),
 })
 
 const sessionImportSchema = {
@@ -791,8 +795,145 @@ export function registerContextContributions(ctx, config, state) {
   }
 }
 
+// ── 人机命令（F15/F17）───────────────────────────────────────────────────────
+
 /**
- * 挂载插件：注册扫描/导入工具与个人上下文贡献。
+ * 把上下文注入当前会话（模型可见 ⟺ 落盘：inject 走 inbox，随日志持久化）。
+ * @param agent - CommandInvocation.agent。
+ * @param text - 注入文本。
+ * @returns 是否注入成功。
+ */
+export function injectContext(agent, text) {
+  if (!agent || typeof agent.inject !== 'function') return false
+  try {
+    agent.inject({
+      id: 'claude-move:' + randomUUID(),
+      role: 'user',
+      content: [{ type: 'text', text }],
+      source: { kind: 'plugin', plugin: 'claude-move' },
+    })
+    return true
+  } catch {
+    // 会话已销毁等：注入失败不阻断命令结果。
+    return false
+  }
+}
+
+/**
+ * 解析 /resume-claude 引用：latest/空 → 最近会话；会话ID（源 id 或 import-<src>）
+ * 精确匹配；关键词匹配标题或源 id（多个命中列候选，绝不猜测）。
+ * @param index - runScan 输出的索引（已标注 import 状态）。
+ * @param ref - 命令输入。
+ * @returns `{ kind: 'one', session }` | `{ kind: 'many', candidates }` | `{ kind: 'none' }`。
+ */
+export function resolveResumeTarget(index, ref) {
+  const sessions = (index.projects ?? [])
+    .flatMap((p) => p.sessions ?? [])
+    .filter((s) => !s.error)
+    .sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0))
+  const trimmed = (ref ?? '').trim()
+  if (trimmed.length === 0 || trimmed === 'latest') {
+    return sessions[0] ? { kind: 'one', session: sessions[0] } : { kind: 'none' }
+  }
+  const exact = sessions.find((s) => s.sessionId === trimmed || s.import?.dshSessionId === trimmed)
+  if (exact) return { kind: 'one', session: exact }
+  const keyword = trimmed.toLowerCase()
+  const matches = sessions.filter((s) => (
+    (s.title ?? '').toLowerCase().includes(keyword) || (s.sessionId ?? '').toLowerCase().includes(keyword)
+  ))
+  if (matches.length === 1) return { kind: 'one', session: matches[0] }
+  if (matches.length > 1) {
+    return {
+      kind: 'many',
+      candidates: matches.slice(0, 10).map((s) => `${s.sessionId} — ${s.title ?? '(无标题)'}`),
+    }
+  }
+  return { kind: 'none' }
+}
+
+/**
+ * 注册 claude-import-all 与 resume-claude 命令（F15/F17）。
+ * 命令由用户直接触发，不经模型回合；结果直接渲染 UI，并注入当前会话上下文。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ */
+export function registerCommands(ctx, config) {
+  const commands = ctx.get('commands')
+  if (!commands || typeof commands.register !== 'function') return
+  const maxBytes = config.maxTranscriptBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
+  const resumeMaxChars = config.resumeMaxChars ?? DEFAULT_HANDOFF_MAX_CHARS
+  const claudeHome = () => config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
+
+  // F15：一条命令完成 扫描 → 导入 → 注入上下文 → 输出报告。
+  commands.register({
+    name: 'claude-import-all',
+    description: '一键全量迁移：扫描本机 Claude Code 数据并导入全部会话，输出报告并注入当前会话',
+    handler: async (invocation) => {
+      try {
+        const target = await ctx.fs.resolve(path.join(claudeHome(), 'projects'))
+        const info = await ctx.fs.stat(target)
+        if (!info || info.type !== 'directory') {
+          return { kind: 'error', text: '未找到 Claude projects 目录（' + claudeHome() + '/projects）。' }
+        }
+        const batch = await importDirectory(ctx, target, { recursive: true }, maxBytes)
+        const lines = renderImport({}, { mode: 'batch', ...batch }).map((b) => b.text)
+        const summaryText = 'Claude 全量迁移完成。\n\n' + lines.join('\n')
+        const injected = injectContext(invocation.agent, summaryText)
+        return {
+          kind: 'success',
+          text: summaryText + (injected ? '\n\n（报告已注入当前会话上下文。）' : ''),
+        }
+      } catch (err) {
+        return { kind: 'error', text: 'claude-import-all 失败：' + String((err && err.message) || err) }
+      }
+    },
+  })
+
+  // F17：未导入先导入，再以交接摘要方式在当前会话继续。
+  commands.register({
+    name: 'resume-claude',
+    description: '继续 Claude Code 会话：latest | 会话ID | 标题关键词；未导入的先导入，再以静态交接摘要继续',
+    input: { hint: 'latest | 会话ID | 标题关键词' },
+    handler: async (invocation) => {
+      try {
+        const ref = invocation.rawInput.trim()
+        const index = await runScan(ctx, config, {})
+        const resolved = resolveResumeTarget(index, ref)
+        if (resolved.kind === 'none') {
+          return { kind: 'error', text: '未找到匹配的 Claude 会话。可用 /claude-import-all 先全量迁移，或运行 claude_scan 后重试。' }
+        }
+        if (resolved.kind === 'many') {
+          return {
+            kind: 'success',
+            text: '关键词匹配到多个会话，请选择其一：\n- ' + resolved.candidates.join('\n- '),
+          }
+        }
+        const session = resolved.session
+        let dshId = session.import?.dshSessionId
+        if (!dshId) {
+          const target = await ctx.fs.resolve(session.file)
+          const persisted = await listPersistedIds(ctx)
+          const single = await importTranscript(ctx, target, {}, maxBytes, persisted)
+          dshId = single.sessionId
+        }
+        const raw = await ctx.fs.readText(await ctx.fs.resolve(session.file))
+        const converted = convertClaudeJsonl(raw, {})
+        const handoff = buildHandoff(converted, { maxChars: resumeMaxChars, title: session.title })
+        const injected = injectContext(invocation.agent, handoff)
+        return {
+          kind: 'success',
+          text: `${handoff}\n\nDSH 会话：${dshId}（可在会话列表中打开继续）`
+            + (injected ? '\n\n（交接摘要已注入当前会话，下一条消息即可继续。）' : ''),
+        }
+      } catch (err) {
+        return { kind: 'error', text: 'resume-claude 失败：' + String((err && err.message) || err) }
+      }
+    },
+  })
+}
+
+/**
+ * 挂载插件：注册扫描/导入工具、个人上下文贡献与命令。
  * @param ctx - Cordis 上下文。
  * @param config - 经 Schemastery 校验的插件配置。
  */
@@ -801,4 +942,5 @@ export function apply(ctx, config = {}) {
   ctx.tools.register(makeScanTool(ctx, config, state))
   ctx.tools.register(makeImportTool(ctx, config))
   registerContextContributions(ctx, config, state)
+  registerCommands(ctx, config)
 }

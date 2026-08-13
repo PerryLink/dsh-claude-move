@@ -14,7 +14,7 @@ async function makeTempDir(t) {
   return dir
 }
 
-test('makeFileCache：mtime 未变复用、变化后重读、缺失返回 null', async (t) => {
+test('makeFileCache：mtime/ctime 未变复用、变化后重读、缺失返回 null', async (t) => {
   const dir = await makeTempDir(t)
   const file = path.join(dir, 'note.md')
   await writeFile(file, 'v1', 'utf8')
@@ -22,8 +22,13 @@ test('makeFileCache：mtime 未变复用、变化后重读、缺失返回 null',
   assert.equal(cache.read(file), 'v1')
   await writeFile(file, 'v1', 'utf8')
   assert.equal(cache.read(file), 'v1')
+  // 等尺寸重写需等时间戳前进（同 tick 等尺寸重写超出时间戳缓存的契约，见 lib/context.mjs）。
+  await new Promise((resolve) => setTimeout(resolve, 25))
   await writeFile(file, 'v2', 'utf8')
   assert.equal(cache.read(file), 'v2')
+  // 尺寸变化即使同 tick 也能检测。
+  await writeFile(file, 'v2-longer', 'utf8')
+  assert.equal(cache.read(file), 'v2-longer')
   assert.equal(cache.read(path.join(dir, 'missing.md')), null)
 })
 

@@ -9,7 +9,7 @@
 
 Um plugin para o [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). Após a instalação, ele descobre automaticamente tudo no seu Claude Code local — transcrições de sessões, memórias, habilidades (skills), instruções globais, configurações e o estado do projeto — e move «histórico + contexto pessoal» para o DSH, para que você possa **continuar suas sessões do Claude Code sem interrupções** dentro do DeepSeek Harness.
 
-> Status: em desenvolvimento (Fase 3/6 — migração do contexto pessoal concluída). Roteiro e design: [PLAN.md](PLAN.md).
+> Status: em desenvolvimento (Fase 4/6 — comandos implementados). Roteiro e design: [PLAN.md](PLAN.md).
 
 ## O que ele faz
 
@@ -24,7 +24,7 @@ Um plugin para o [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harn
 | 1 | Descoberta automática + ferramenta `claude_scan` + cache incremental | ✅ |
 | 2 | Importação de histórico (`import_claude`: mapeamento, idempotência, lote, reimportação forçada, erros com número de linha, vínculo ao workspace) | ✅ |
 | 3 | Contexto pessoal (injeção de memórias, provedor de habilidades do Claude, seção CLAUDE.md, tradução de settings) | ✅ |
-| 4 | Comandos de um passo `/claude-import-all` e `/resume-claude` (resumo de transição + modelo de segurança) | 🚧 |
+| 4 | Comandos de um passo `/claude-import-all` e `/resume-claude` (resumo de transição + modelo de segurança) | ✅ |
 | 5 | Painel web «migração do Claude» (`dsh.client`) | 🚧 |
 | 6 | Polimento para publicação: documentação bilíngue, diagrama de arquitetura, empacotamento, demonstração | 🚧 |
 
@@ -58,6 +58,15 @@ import_claude { path: "all" }                       # tudo
 import_claude { path: "...", force: true }          # arquiva a importação anterior e reconstrói como import-<src>-<n>
 ```
 
+Comandos (disparados pelo usuário, sem turno do modelo):
+
+```
+/claude-import-all                # um passo: varrer → importar → relatório → injetar na sessão atual
+/resume-claude latest             # continuar a sessão Claude mais recente
+/resume-claude <sessionId>        # pelo id da sessão de origem ou id import-<src>
+/resume-claude <palavra-chave>    # busca por título; várias correspondências são listadas, nunca adivinhadas
+```
+
 - **Varredura**: retorna um índice JSON estruturado: projetos (slug/cwd/existência do diretório/branch do git e arquivos modificados), sessões (título/marcas de tempo/contagens/linhas malformadas), memórias, habilidades, CLAUDE.md global e settings.json; cada sessão carrega `import.status` (`none`/`imported`/`source-missing`). `settingsSuggestions` contém a tradução do settings.json para o DSH e as chaves não mapeáveis (ver [COMPLIANCE.md](COMPLIANCE.md)).
 - **Importação**: mapeia mensagens user/assistant/tool/thinking com fidelidade total; o resultado é uma sessão equilibrada e retomável, vinculada ao workspace pelo `cwd`. Lotes são resumidos arquivo por arquivo (`imported`/`already-imported`/`skipped`/`failed`), linhas malformadas carregam número de linha, segredos suspeitos são informados apenas por posição (arquivo:linha:tipo) e registros de permissão são contados, nunca importados.
 - **O contexto pessoal entra em vigor automaticamente** (sem ação de importação):
@@ -83,6 +92,7 @@ Tudo opcional e substituível no `cordis.yml`:
     maxSkills: 30
     extraSkillDirs: []
     enableInstructions: true
+    resumeMaxChars: 2048      # limite de caracteres do resumo
 ```
 
 ## Desinstalação
@@ -127,7 +137,7 @@ npm test      # node --test: convert (vendored + estendido), discovery, import/r
 - Transcrições maiores que `maxTranscriptBytes` falham com aviso em vez de importação parcial (fidelidade primeiro); a importação por streaming em blocos está no roteiro.
 - Sessões cujo diretório de origem foi removido ainda são importadas, mas o vínculo ao workspace falha (ficam desagrupadas; `workspace.attached: false` no relatório).
 - Importações em lote interrompidas podem ser reexecutadas com segurança (idempotentes, somente anexação).
-- O painel web e o comando `/resume-claude` ainda não foram implementados (Fases 4/5).
+- O painel web ainda não foi implementado (Fase 5).
 
 ## Links relacionados
 

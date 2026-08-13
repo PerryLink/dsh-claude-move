@@ -9,7 +9,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）插件：安装后自动发现本机 Claude Code 的全部内容——历史 transcript、记忆、技能、全局指令、settings 与项目状态——把「历史对话 + 个人信息」迁移进 DSH，让你在 DeepSeek Harness 里**无缝继续** Claude Code 的会话与工作上下文。
 
-> 状态：开发中（Phase 3/6 —— 个人信息搬移已完成）。路线图与设计：[PLAN.md](PLAN.md)。
+> 状态：开发中（Phase 4/6 —— 命令已实现）。路线图与设计：[PLAN.md](PLAN.md)。
 
 ## 它能做什么
 
@@ -24,7 +24,7 @@
 | 1 | 自动发现 + `claude_scan` 工具 + 增量缓存 | ✅ |
 | 2 | 历史导入（`import_claude`：映射、幂等、批量、强制重导入、行号报错、工作区挂接） | ✅ |
 | 3 | 个人信息（memory 注入、Claude 技能 provider、CLAUDE.md 段、settings 翻译） | ✅ |
-| 4 | 一键命令 `/claude-import-all` 与 `/resume-claude`（交接摘要 + 安全模型） | 🚧 |
+| 4 | 一键命令 `/claude-import-all` 与 `/resume-claude`（交接摘要 + 安全模型） | ✅ |
 | 5 | Web UI「Claude 迁移」面板（`dsh.client`） | 🚧 |
 | 6 | 发布梳理：双语文档、架构图、打包、演示 | 🚧 |
 
@@ -58,6 +58,15 @@ import_claude { path: "all" }                       # 全量批量
 import_claude { path: "...", force: true }          # 归档旧导入并以 import-<src>-<n> 重建
 ```
 
+命令（用户直接触发，不经模型回合）：
+
+```
+/claude-import-all                # 一键全量：扫描 → 导入 → 报告 → 注入当前会话
+/resume-claude latest             # 继续最近的 Claude 会话
+/resume-claude <会话ID>           # 按源会话 id 或 import-<src> id
+/resume-claude <关键词>           # 匹配标题；多个命中列出候选，绝不猜测
+```
+
 - **扫描**返回结构化 JSON 索引：项目（slug/cwd/目录存在性/git 分支与脏行数）、会话（标题/起止时间/消息与工具调用数/畸形行数）、记忆、技能、全局 CLAUDE.md 与 settings.json；每个会话带 `import.status`（`none`/`imported`/`source-missing`）；`settingsSuggestions` 是 settings.json 的 DSH 翻译建议与无法映射项（见 [COMPLIANCE.md](COMPLIANCE.md)）。
 - **导入**全保真映射 user/assistant/tool/thinking，产物是可继续的平衡会话并按 cwd 挂接工作区；批量逐文件汇总（`imported`/`already-imported`/`skipped`/`failed`），畸形行带行号、疑似凭据只报位置（文件:行:类型）、权限类记录只统计不导入。
 - **个人上下文自动生效（无需导入动作）**：
@@ -81,6 +90,7 @@ import_claude { path: "...", force: true }          # 归档旧导入并以 impo
     maxSkills: 30
     extraSkillDirs: []
     enableInstructions: true
+    resumeMaxChars: 2048      # 交接摘要字符上限
 ```
 
 ## 卸载
@@ -125,7 +135,7 @@ npm test      # node --test：convert（vendored + 扩展）、discovery、impor
 - 超过 `maxTranscriptBytes` 的 transcript 响亮失败而非部分导入（保真优先）；流式分块导入在路线图上。
 - 源目录已删除的会话仍可导入，但工作区挂接失败（留在「未分组」，报告 `workspace.attached: false`）。
 - 批量导入中断可安全重跑（幂等、append-only）。
-- Web 面板与 `/resume-claude` 命令尚未实现（Phase 4/5）。
+- Web 面板尚未实现（Phase 5）。
 
 ## 相关链接
 
