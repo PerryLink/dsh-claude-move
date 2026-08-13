@@ -401,13 +401,14 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
 
   await ctx.sessionPersistence.create(meta)
   await ctx.sessionPersistence.append(meta.id, events)
-  await attachToWorkspace(ctx, meta)
+  const attached = await attachToWorkspace(ctx, meta)
   await rememberImport(ctx, sourceId ?? null, meta.id)
   persisted.add(meta.id)
   return {
     ...base,
     sessionId: meta.id,
     status: 'imported',
+    workspace: { attached, ...(meta.cwd ? { path: meta.cwd } : {}) },
     ...(forceImported ? { forceImported } : {}),
   }
 }
@@ -523,6 +524,7 @@ const importResultSchema = {
     permissions: { type: 'object', additionalProperties: true },
     alreadyImported: { type: 'boolean' },
     status: { type: 'string' },
+    workspace: { type: 'object', additionalProperties: true },
     forceImported: { type: 'object', additionalProperties: true },
     total: { type: 'integer' },
     imported: { type: 'integer' },

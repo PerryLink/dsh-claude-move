@@ -166,6 +166,21 @@ test('单文件导入：落盘、归组、来源映射、输出 schema 校验', 
   assert.equal(saved.events.at(-1).type, 'turn/end')
   assert.ok(saved.events.every((e, i) => e.seq === i))
   assert.deepEqual(attached, [{ ws: 'D:\\demo\\proj', id: 'import-sess-1' }])
+  assert.deepEqual(value.workspace, { attached: true, path: 'D:\\demo\\proj' })
+})
+
+test('无 cwd 的 transcript：正常导入但不挂接工作区（F9）', async (t) => {
+  await withTempDshHome(t)
+  const noCwd = JSON.stringify({
+    type: 'user', timestamp: '2026-08-01T10:00:00.000Z', sessionId: 'sess-nocwd',
+    message: { content: '无目录的会话' },
+  }) + '\n'
+  const { ctx, registered } = makeCtx({ 'D:\\demo\\proj\\nocwd.jsonl': noCwd })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const value = await def.execute({ path: 'D:\\demo\\proj\\nocwd.jsonl' })
+  assert.equal(value.status, 'imported')
+  assert.deepEqual(value.workspace, { attached: false })
 })
 
 test('幂等：重复导入 already-imported 且不重复落盘（F7）', async (t) => {
