@@ -15,10 +15,10 @@
 ## B. 高价值候选（P0：性能/响应性，建议 Phase 3 内完成）
 
 1. **并行项目扫描**（concurrency cap 8）。当前逐项目串行，40 项目 11.7s 中大部分是等待。预期 11.7s → 2~3s。实现：`scanClaudeHome` 内用信号量池并发 `scanProjectDir`；书签合并不变。风险：git 子进程并发需上限（cap 8 内共享）。
-2. **批量导入并行**（cap 4）。2387 会话全量导入串行不可接受；`create+append` 互不相关，幂等快照只读。预期接近线性加速；中断可续跑（幂等）。
+2. ✅ **批量导入并行**（已落地两阶段形态）：`importConcurrency`（默认 4）并发「读取+转换」，落盘按文件名序串行（id 后缀避让与 imports.json 映射依赖顺序，保证确定性）。剩余候选：id 预分配后可进一步并行落盘（`create+append` 互不相关、幂等快照只读），中断可续跑（幂等）。
 3. **transcript 自带 `gitBranch` 复用**：Claude 每行都带 `gitBranch`（resume-plugin 已利用）。`scanTranscriptFile` 捕获后，git 探测只需 `status --porcelain` 算脏行（或缓存），砍掉一半 git spawn。
 4. **personal 上下文 mtime 缓存**：skills/memory frontmatter 每扫必读（数十次 IO）。并入 index.json 书签，未变化直接复用。
-5. **`exec.signal` 接入批量循环**：每文件边界检查取消信号，用户中断立即停止（合规待办，官方工具契约要求）。
+5. ✅ **`exec.signal` 接入**（已落地）：扫描（流式逐行/项目边界）与批量导入（并发阶段与落盘阶段每文件）全程检查 `exec.signal`，中止抛 `signal.reason`；`gitTimeoutMs` 同时配置化。
 6. **git 状态缓存 + 脏状态可关**：`scanGit: 'branch' | 'full' | false` 三级；`branch` 只用 transcript 字段，零 git 调用。
 
 ## C. 结构级优化（P1：内存/规模）
@@ -31,7 +31,7 @@
 
 ## D. 产品与生态（P2：发布后）
 
-12. **增量同步模式**（最高产品价值）：验收是一次性迁移，但用户会继续用 Claude Code。基于现成的 mtime 增量书签，`claude_import_all` 可提供 `sync: true`——只导入新出现/变化的新会话。与「迁移」哲学一致（幂等 append-only），建议 Phase 6 或 v0.2。
+12. **增量同步模式**（已实现 v0.1）：验收是一次性迁移，但用户会继续用 Claude Code。基于现成的 mtime 增量书签与 imports.json 记录，重复导入会自动把新增轮次续写到同一 DSH 会话（`appended`）；后续可再扩展「新增会话自动发现 + 定时同步」。
 13. **续聊摘要的上下文预算**：Phase 4 交接摘要按「目标+停止点+下一步」结构化（resume-plugin 模型），把 token 预算做成 Config（默认 ~2KB），模型可选扩展。
 14. **Web 面板复用官方 RPC 而非自建路由**（备选研究）：`ctx.webServer` 路由是公开 seam 且已选；若 Phase 5 spike 发现 apiproxy 白名单域足以承载（如 `session.list`+`command.execute`），可完全去掉自建路由，进一步缩小攻击面。
 15. **生态对齐**：`create-dsh-plugin` 脚手架结构、`dsh-plugin` topic、awesome 清单收录（AdamPlatin123/awesome-dsh-plugins、0xsline/awesome-deepseek-harness 均有每日兼容追踪）；`zhu1090093659/dsh-web-ui`、`omdsh-dev/DSH-better-sidebar` 是面板先例。
@@ -39,7 +39,7 @@
 
 ## E. 平台协同观察（不改 DSH，只说明选择）
 
-- 持久化 seam 无 delete → 我们选择 archive + 新 id 的重建语义；若官方未来提供 delete，force 路径可简化（预留 switch）。
+- 持久化 seam 无 delete → force 采用「新 id 完整副本、旧副本保留」的复制式语义（不归档：归档会隐藏历史，与复制式迁移冲突）；若官方未来提供 delete，删除旧副本路径可再加开关。
 - `host/session-added` 帧是否覆盖「cold 导入」决定 F18 的面板自动刷新方案；Phase 5 spike 实测后要么依赖帧、要么面板显式刷新 `session.list`。
 - systemPrompt 同步提供者（rc.6 实测不 await）→ Phase 3 注入层必须 `readFileSync`+mtime 缓存；若官方未来支持 async 提供者，可切换（留 TODO 注释）。
 - 建议给官方仓库提一条讨论（GitHub Discussions）：为「外部来源导入的会话」提供可选的 `origin: 'import'` 标记（SessionHeader 已有 `origin` 字段雏形），让会话列表 UI 能过滤/标注迁移来源——这是我们在不改引擎前提下唯一做不到的展示项。

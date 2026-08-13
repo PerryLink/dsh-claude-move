@@ -38,7 +38,7 @@
 | 用途 | 服务 | 关键 API |
 |---|---|---|
 | 导入落盘 | `ctx.sessionPersistence` | `create(meta: SessionHeader)`、`append(id, events)`、`list()`、`load/inspect` |
-| 工作区归组 | `ctx.workspaceRegistry` | `resolveByPath` → `create` → `workspace.attachSession(id)`、`archiveSession` |
+| 工作区归组 | `ctx.workspaceRegistry` | `resolveByPath` → `create` → `workspace.attachSession(id)`（**不用 archiveSession**：复制式迁移绝不归档/隐藏任何会话） |
 | 模型工具 | `ctx.tools` + `defineTool` | 参数 schema 自动校验；输出 oneOf schema |
 | 人机命令 | `ctx.commands` | `register({name, description, input, handler})`；UI（ui-commands）自动发现 |
 | 提示词段 | `ctx.systemPrompt` | `section({name, order, text})`、`context({name, order, text})` —— **text 同步** |
@@ -50,7 +50,8 @@
 ### 2.2 平台坑位（设计已规避）
 
 1. **systemPrompt 同步**：rc.6 不 await 提供者（见 1.3）。
-2. **persistence 无 delete**：强制重导入 = `workspaceRegistry.archiveSession(旧)` + 以新 id（`import-<src>-2`）重建，报告给出新旧映射；只 append 不改写（S1）。
+2. **persistence 无 delete**：复制式强制重导入 = 以新 id（`import-<src>-<n>`）另存一份完整副本，旧副本原样保留；**不归档**（归档会从全部界面隐藏会话）。只 append 不改写（S1）。
+2b. **源文件持续增长**：imports.json 记录 `{ dshId, turns, events }`；重导时 turns 变多则按 turn/start 边界截取新增轮次、seq 续写同一 DSH 会话（增量同步，与运行中的 Claude Code 一致）；源文件被截断（turns 变少）报 `sourceShrunk` 并跳过。
 3. **attachSession 要求 header.cwd 的 realpath 存在**：源目录已删除的会话跳过归组（留在「未分组」），索引打「目录不存在」徽标，导入不失败。
 4. **SessionHeader.version** 必须等于运行构建的 `SESSION_FORMAT_VERSION`（rc.6 为 0，与 chat-import 一致）。
 5. **事件纪律**：seq 连续；surface 事件 `surfaceOp:'append'`；`tool/result.sourceEventSeqs` 指向 `tool/call`；模型可见 ⟺ 落盘。
@@ -97,7 +98,7 @@ dsh-claude-move/
 | F3 | `claude_scan` 工具（`defineTool`，结构化 JSON 输出）；面板展示 |
 | F4 | 索引缓存 mtime/size 增量；`scan_all`/`scan <path>` 参数 |
 | F5-F6 | 扩展 vendored `convert.mjs`；产出平衡事件日志 → `create+append`；点开即 resume（事件平衡 + 标题 + cwd） |
-| F7 | `list()` 判重跳过；`force: true` → archive 旧 + `import-<src>-<n>` 新 id |
+| F7 | `list()` 判重跳过；源文件增长 → 增量续写新轮次到同一会话；`force: true` → 以 `import-<src>-<n>` 另存完整副本（复制式，绝不归档） |
 | F8 | `import_claude { path: "~/.claude/projects" \| "all" \| 具体路径 }` 批量汇总 |
 | F9 | meta：`id: import-<src>`、`cwd`、`createdAt`；`session/title` 钉标题；按 cwd 建/归工作区 |
 | F10 | convert 扩展：`skippedLines: [{line, error}]`（截断上限）；批量报告逐文件 |
@@ -108,15 +109,15 @@ dsh-claude-move/
 | F15 | `/claude-import-all` 命令（`ctx.commands`） |
 | F16 | `dsh.client` 面板 + `/api/claude-move/*`（`ctx.webServer`）；导入进度用插件内 job 状态 + 轮询 |
 | F17 | `/resume-claude [latest\|id\|关键词]` 命令：未导入先导入 → `agent.inject` 交接摘要（安全模型复用） |
-| F18 | 导入后 `session.list` 应可见（apiproxy 有 `host/session-added` 帧/重连基线）；面板导入完成后刷新并跳转（spike 确认跳转 API，兜底提示刷新） |
+| F18 | 导入后 `session.list` 应可见（apiproxy 有 `host/session-added` 帧/重连基线）；面板导入完成后刷新并跳转（spike 确认跳转 API，兜底提示刷新） | ✅ 已核实（当前 harness）：导入即时落盘，服务端 `session.list`/`workspace.list` 立即可见，**无需重启 dsh**；`host/session-added` 只对 live 会话（`session/created`）发射，cold 导入不发 → 已打开的 Web 页面需刷新一次会话列表（面板「刷新会话列表」按钮/F5）；工作区分组经 `domain/changed` → `host/workspace-changed` 实时更新。README 已新增「导入之后」章节 |
 | S1 | 源文件只读；只 `create`+`append`；不碰引擎/apiproxy/官方包 |
 | S2 | 不执行任何 transcript 内容；system/developer/summary/permission/progress 等记录跳过并计数；thinking 只入日志不进摘要；摘要长度截断 |
 | S4 | 正则（AKIA/ghp_/sk-/BEGIN PRIVATE KEY 等）只报 `文件:行:类型` |
 | S5 | `permission`/`queue-operation` 等只统计不导入，报告给迁移建议 |
 | C1/C2 | 纯 ESM、无构建的 host 面（同 chat-import）；client 用 esbuild 单文件构建；peerDeps 锁 rc.6 |
 | C3 | README 三种安装（`github:`/`link:`/本地路径，`dsh plugin --profile web add -w ...`）+ 卸载说明 |
-| C4 | Config：`claudeHome/maxMemoryBytes/maxSkills/enable*/extraSkillDirs/whitelist/excludePaths/maxTranscriptBytes/force...` 全可 cordis.yml 覆盖 |
-| N1 | 流式解析、批量并发上限、`list()` 快照缓存、UI 不阻塞（面板轮询） |
+| C4 | Config：`claudeHome/scanGit/gitTimeoutMs/maxTranscriptBytes/excludeProjects/enable*/maxSkills/extraSkillDirs/resumeMaxChars/enableWebPanel/importConcurrency` 全可 cordis.yml 覆盖 |
+| N1 | 流式解析、批量「读取+转换」并发上限（`importConcurrency` 默认 4，落盘串行保证幂等确定性）、`exec.signal` 全程可中止、`list()` 快照缓存、UI 不阻塞（面板轮询） |
 | N2/N3/N4 | `node --test`；fixtures：正常/含 tool/畸形 + 三平台路径用例；README 含架构图、映射表、复用标注（三个 MIT 出处 + resume-plugin 的 Apache-2.0 传递标注） |
 
 ### 3.4 数据映射表（沿用并完善 chat-import）
@@ -138,7 +139,7 @@ dsh-claude-move/
 
 - **Phase 0**：脚手架 + vendor convert（MIT 标注）+ `node --test` 基线全绿。
 - **Phase 1**：Discovery（F1-F4）+ `claude_scan` + 索引缓存/增量 + 测试。
-- **Phase 2**：导入加固（F5-F10）：行号报错、标题兜底、force 重导入、批量、测试。
+- **Phase 2**：导入加固（F5-F10）：行号报错、标题兜底、复制式 force 重导入、增量续写、批量、测试。
 - **Phase 3**：个人上下文（F11-F14）：memory/CLAUDE.md 同步注入、Claude 技能 provider、settings 翻译报告、测试。
 - **Phase 4**：命令（F15/F17）：`claude-import-all`、`resume-claude` + 交接摘要（安全模型）+ mock 集成测试。
 - **Phase 5**：F16 面板 spike（真实 rc.6 web profile 验证 slot/RPC/跳转），面板或记录 fallback。

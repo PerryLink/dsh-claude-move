@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a defect in dsh-claude-move
+title: '[bug]: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please keep transcript contents out of this report — use small synthetic examples instead.
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: The package version, or the git revision if installed from a checkout.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH version
+      description: `dsh` version / how DSH was installed (release, rc, or source checkout).
+      placeholder: 0.1.0-rc.6
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and Node
+      description: e.g. Windows 11 / Node 22.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Steps to reproduce, observed behavior, and what you expected. Include the failing command or tool call.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: `dsh` console output, `[claude-move]`-prefixed errors, or `--dump-config` excerpts. Trim or redact sensitive content.
+      render: text

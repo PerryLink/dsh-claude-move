@@ -42,7 +42,7 @@ flowchart LR
 - **host 插件**（`index.mjs`）：注册两个工具、两组提示词段、一个技能 provider、两个命令、三个面板路由。只消费公开服务，不发布服务，不改引擎。
 - **lib/**（零 DSH 依赖）：`convert`（JSONL→事件，vendored+扩展）、`discovery`（流式扫描+增量缓存）、`frontmatter`、`context`（同步注入）、`skills-provider`、`settings`（翻译建议）、`report`（S4/S5）、`handoff`（交接摘要）。
 - **client/**（零构建 vanilla）：`__ModuleLoader__.load` 注册的面板，只依赖 DOM + 自注册 JSON 路由。
-- **缓存**（`$DSH_HOME/claude-move/`）：`index.json`（扫描书签 mtime+ctime+size）、`imports.json`（**源文件路径 → DSH 会话 id** 幂等映射）。
+- **缓存**（`$DSH_HOME/claude-move/`）：`index.json`（扫描书签 mtime+ctime+size）、`imports.json`（**源文件路径 → 导入记录** `{ dshId, turns, events, sizeBytes, mtimeMs }`，幂等 + 增量续写共用）。
 
 ## 数据映射表（Claude JSONL → DSH SessionEvent）
 
@@ -68,10 +68,15 @@ flowchart LR
 3. **未声明服务一律 `ctx.get()`**：真实 Cordis 对未声明属性访问抛错（"cannot get property without inject"）。
 4. **rc.6 systemPrompt 同步约束**：memory/CLAUDE.md 段用 `statSync/readFileSync` + mtime/ctime 缓存（组装不 await async 提供者，实测确认）。
 5. **面板零构建**：不依赖 rc.6 未文档化的 UI slot 内部面；数据走插件自注册的 `ctx.webServer` 精确路由（默认 loopback 绑定，与 apiproxy 同信任模型）。
-6. **强制重导入**：persistence 无 delete → `workspaceRegistry.archiveSession(旧)` + 新 id 重建，报告新旧映射。
+6. **强制重导入（复制式）**：persistence 无 delete，且归档会把会话从全部界面隐藏——与「复制式迁移」冲突。`force: true` 改为以新 id（`import-<src>-<n>`）另存一份完整副本，旧副本原样保留；绝不归档、绝不删除。
+7. **增量续写**：imports.json 记录已导入轮次与事件数；源文件增长后重导，用 `tailSessionEvents` 按 turn/start 边界截取新增轮次、seq 续写，同一 DSH 会话只 append 新事件（与运行中的 Claude Code 保持同步）。
+8. **复制式迁移边界**：源文件只读、DSH 会话只 create+append、绝不调用 archiveSession/任何删除面；测试用「源文件内容前后不变」断言钉住该边界。
+9. **导入后无需重启**（已对当前 harness 实测）：导入经 `sessionPersistence` 即时落盘，服务端 `session.list`/`workspace.list` 立即可见；但 UI 的 `host/session-added` 帧只对 live 会话（`session/created`）发射，cold 导入不发 → 已打开的 Web 页面需刷新一次会话列表（面板「刷新会话列表」按钮 / F5）；工作区分组经 `domain/changed` → `host/workspace-changed` 实时更新。面板与 `/claude-import-all` 报告都明示这一点。
+10. **工具契约（exec.signal + 两阶段批量）**：`claude_scan`/`import_claude` 的 execute 签名 `(args, exec)`，全程检查 `exec.signal`（流式扫描逐行、批量并发阶段与落盘阶段每文件），中止抛 `signal.reason`；批量导入分两阶段——并发「读取+转换」（`importConcurrency` 默认 4，IO/CPU 密集、幂等无关），按文件名序**串行落盘**（id 后缀避让与 imports.json 映射依赖顺序，保证确定性）。`gitTimeoutMs` 配置化，消除硬编码可调参数。
 
 ## 兼容与验证
 
 - 目标：`dsh 0.1.0-rc.6`（web profile）；peerDeps 显式锁 rc.6；纯 ESM 无构建（git/npm/tarball 三种安装均免 `prepare`/`allowBuilds`）。
 - 已验证（本机真实数据 + 隔离 DSH_HOME）：`--dump-config` 行生效、web 启动无 FAILED、`__DSH_BOOT__` 客户端条目、`client.js` 伺服、index 路由扫描 40 项目/2387 会话、批量导入 13/13（同源 id 冲突后缀避让）、重导入 13/13 幂等、`workspace.attached=true`、会话产物落盘、重扫标注 `imported`。
+- 已对当前 harness checkout 重新验证（隔离 DSH_HOME，真实 JSONL+zstd 后端 + workspaceRegistry + 完整 web 启动）：全量导入、按 cwd 镜像工作区、增量续写（seq 连续、load 正常）、重启后幂等、既有会话全程不受影响。
 - 待有 API key 的机器验收：导入后「点开续聊」的模型回合（详见 RELEASE.md 验收清单）。

@@ -12,14 +12,15 @@ dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。�
 | 模型可见 ⟺ 已记录 | 工具描述/结果即落盘 `tool/result`；注入走 `ctx.systemPrompt` 组装（可重建）；交接摘要走 `agent.inject`（inbox 持久上下文） | ✅（设计保证） |
 | 类型化事件/服务 declaration merging；事件标注 `@mode` | 纯 JS 插件，不声明/不派发自定义事件与自定义服务 | N/A |
 | 配置用 Schemastery；非法配置加载期响亮失败；不得硬编码可调参数 | `Config = Schema.object(...)`；全部可调参数（claudeHome/scanGit/maxTranscriptBytes/excludeProjects/enable*/max*/resumeMaxChars/enableWebPanel）可 cordis.yml 覆盖 | ✅ |
-| 工具 DSL：`defineTool`、execute 只返回 `output.schema` 规范值、人读内容在 `output.render`、UI presenter 纯函数、尊重 `exec.signal` | defineTool + 输出 schema 经 `validateJsonSchemaValue` 校验；render 生成中文摘要；未定义 presenter（回退 generic 卡）；**exec.signal 尚未接入批量循环** | ⚠️ exec.signal 列入优化待办 |
+| 工具 DSL：`defineTool`、execute 只返回 `output.schema` 规范值、人读内容在 `output.render`、UI presenter 纯函数、尊重 `exec.signal` | defineTool + 输出 schema 经 `validateJsonSchemaValue` 校验；render 生成中文摘要；未定义 presenter（回退 generic 卡）；**execute 签名 `(args, exec)`，扫描/单文件/批量全程检查 `exec.signal`（流式扫描逐行、批量并发阶段与落盘阶段每文件），中止抛出 `signal.reason`**，测试覆盖已中止/在途中止 | ✅ |
 | 可替换能力按三层接缝拆分；不提前拆 | 本插件是固定来源的迁移器，无可替换 provider 需求 | N/A |
 | bundle 清单 `dsh.bundle.patch`；按 id 整行替换 config；`!!js` 双感叹号 | `dsh.bundle` 声明 ✅；不使用 `!!js`（无环境选择需求） | ✅ |
 | 独立插件包：cordis 是 peerDependency；ESM；git 安装需 `prepare`+`allowBuilds`；发布带构建产物 | cordis/dsh-tools/schemastery 均 peer（锁 rc.6）；纯 ESM 无构建步骤 → git 安装免 `prepare`/`allowBuilds` | ✅ |
 | 包 README 含 Model Experience / Known Limitations（仓库门禁惯例） | README 已含两段 | ✅ |
 | 双语文档成对 | GitHub 介绍页已五语（EN 主 + 中/西/葡/印地），行为变更同 commit 同步五语 | ✅ |
-| 测试：纯函数单测 + mock 集成 + 畸形/平台用例 | 90 用例：vendored convert + 扩展单测 + discovery + import/report + context/settings + handoff + commands + routes mock 集成 + 客户端 bundle 契约 + 畸形行/密钥/大小防护；三平台路径用例 | ✅ |
-| 加载验证 `--dump-config` / 行为验证 | 已在真实 `dsh 0.1.0-rc.6` 验证：`--dump-config` 显示 `# == dsh-claude-move` 层与 `claude-move` 行；web 启动无 FAILED；`__DSH_BOOT__` 含 `dsh-claude-move` 客户端条目（`immediately: true`）；`/plugins/dsh-claude-move/client.js` 正常伺服；`/api/claude-move/index` 真实扫描 40 项目/2387 会话；单会话真实导入成功（`imported=1`、`workspace.attached=true`、`sessions/…/session.jsonl.zstd` 落盘、重扫标注 `imported`） | ✅（模型驱动续聊回合仍需有 API key 的机器验收，见 Phase 6） |
+| 测试：纯函数单测 + mock 集成 + 畸形/平台用例 | 100 用例：vendored convert + 扩展单测 + discovery + import/report + context/settings + handoff + commands + routes mock 集成 + 客户端 bundle 契约 + 畸形行/密钥/大小防护 + 复制式迁移（源文件内容不变/force 不归档）+ 增量续写 + 工作区镜像 + exec.signal 中止 + 并发确定性；三平台路径用例 | ✅ |
+| 加载验证 `--dump-config` / 行为验证 | 已在真实 `dsh 0.1.0-rc.6` 验证：`--dump-config` 显示 `# == dsh-claude-move` 层与 `claude-move` 行；web 启动无 FAILED；`__DSH_BOOT__` 含 `dsh-claude-move` 客户端条目（`immediately: true`）；`/plugins/dsh-claude-move/client.js` 正常伺服；`/api/claude-move/index` 真实扫描 40 项目/2387 会话；单会话真实导入成功（`imported=1`、`workspace.attached=true`、`sessions/…/session.jsonl.zstd` 落盘、重扫标注 `imported`）。另在隔离 DSH_HOME 对当前 harness checkout（JSONL+zstd 后端 + workspaceRegistry + 完整 web 启动）复验：全量导入、按 cwd 镜像工作区、增量续写（seq 连续、load 正常）、重启后幂等、既有会话全程不受影响 | ✅（模型驱动续聊回合仍需有 API key 的机器验收，见 Phase 6） |
+| 复制式迁移边界（S1）：源文件只读；DSH 会话只 create+append；不归档、不删除、不隐藏任何会话 | 导入路径无任何 archiveSession/删除调用；`force` 只另存新 id 副本；测试断言「导入前后源文件内容不变」「force 不触发归档」 | ✅ |
 
 ## 2. [deepseek.com/harness](https://www.deepseek.com/harness/)（官网开发者预览页）
 

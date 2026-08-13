@@ -2,8 +2,8 @@
 
 ## 发布前检查（本机已全部通过）
 
-- [x] `npm test`：**92/92** 用例全绿（convert/discovery/import/context/skills/settings/handoff/commands/routes + 客户端 bundle 契约）。
-- [x] `npm pack` 发布面：tarball 19 项（index.mjs、lib/*、client/client.js、cordis.patch.yml、五语 README、LICENSE、THIRD_PARTY_NOTICES），**不含** dev/、test/、node_modules。
+- [x] `npm test`：**100/100** 用例全绿（convert/discovery/import/context/skills/settings/handoff/commands/routes + 客户端 bundle 契约 + 复制式迁移/增量续写/工作区镜像/轮次内变化 + exec.signal 中止 + 并发确定性）。
+- [x] `npm pack` 发布面：tarball **21 项**（index.mjs、lib/*、client/client.js、assets/social-card.png、cordis.patch.yml、五语 README、CHANGELOG、LICENSE、THIRD_PARTY_NOTICES、package.json），**不含** dev/、test/、node_modules。
 - [x] tarball 从零安装：`dsh plugin --profile <p> add -w ./dsh-claude-move-0.1.0.tgz` → `--dump-config` 出现 `# == dsh-claude-move` 层。
 - [x] web 启动无 FAILED；`__DSH_BOOT__` 含客户端条目；`/plugins/dsh-claude-move/client.js` 正常伺服。
 - [x] 真实数据验证（隔离 DSH_HOME）：
@@ -21,7 +21,7 @@
 | 记忆、技能、CLAUDE.md 在续聊中生效、新记忆即时生效 | ✅（注册与注入已实测；模型回合同上待 key 机器） | systemPrompt 段 + SkillProvider 注册于真实 boot；单测覆盖渲染与缓存 |
 | 重复导入幂等；畸形 JSONL 不中断且报告行号 | ✅ | 真实重导入 13/13 already-imported；`skippedLines[{line,error}]` |
 | Windows/macOS/Linux 各至少一名开发者验证 | ⚠️ Windows 已验证（本机）；macOS/Linux 待验证（纯 Node API，无平台专用依赖） | — |
-| `npm test` 通过；卸载不污染原数据 | ✅ | 92/92；源文件只读、缓存仅 `$DSH_HOME/claude-move/` |
+| `npm test` 通过；卸载不污染原数据 | ✅ | 100/100；源文件只读、缓存仅 `$DSH_HOME/claude-move/` |
 | 交付物 1-4 | ✅/⚠️ | 仓库 ✅；README（五语）✅；测试与 fixtures ✅；演示 GIF 见 `docs/`（发布时录制） |
 
 ## 待有 key 机器的验收步骤（模型续聊回合）
@@ -42,10 +42,11 @@ dsh web
 
 ## 发布步骤
 
-1. ✅ 已推送到 GitHub：https://github.com/PerryLink/dsh-claude-move（public，master，16 commits，topic 已标注 dsh-plugin）。
-2. 仓库 About 添加 topic：`dsh-plugin`（生态发现渠道）。
-3. 打 tag `v0.1.0` 并附 Release Notes（引用本文件验收表）。
-4. 可选 npm 发布：`npm publish`（bundle 形态；`dsh plugin add dsh-claude-move` 即可安装）。
+1. ✅ 已推送到 GitHub：https://github.com/PerryLink/dsh-claude-move（public，master，topic 已标注 dsh-plugin）。
+2. ✅ GitHub 项目面：CI（`.github/workflows/test.yml`，Node 22 全量测试 + README 徽标）、Issue 模板（bug/feature）、社交分享卡（`assets/social-card.png`，README 首图 → 链接预览卡）、CHANGELOG.md、package.json 的 repository/homepage/bugs 元数据。
+3. 仓库 About 侧：设置 topics 至少包含 **`dsh`**、**`dsh-plugin`**（推荐再加 `claude-code`、`deepseek-harness`、`migration`），确认 description；可在 Settings → Social preview 直接指定 `assets/social-card.png` 作为仓库社交预览图。
+4. 打 tag `v0.1.0` 并附 Release Notes（引用本文件验收表）。
+5. 可选 npm 发布：`npm publish`（bundle 形态；`dsh plugin add dsh-claude-move` 即可安装）。
 
 ## 已知局限（发布版如实说明）
 
