@@ -1,4 +1,4 @@
-# dsh-claude-port bundle patch: mount the Claude migration host plugin.
+# dsh-claude-migrate bundle patch: mount the Claude migration host plugin.
 - insert:
-    - id: claude-port
-      name: dsh-claude-port
+    - id: claude-migrate
+      name: dsh-claude-migrate

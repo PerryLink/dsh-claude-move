@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`dsh-claude-port` 是 DeepSeek Harness 的 Host 插件：把 Claude Code 的历史 transcript、记忆、技能与全局指令迁移进 DSH 并可无缝续聊。DSH 哲学是 **everything is a plugin**——本仓库只做插件，不碰引擎。改代码前先读 `README.md`（对外契约）、`PLAN.md`（实施方案）与 `test/`（现有行为）。
+`dsh-claude-migrate` 是 DeepSeek Harness 的 Host 插件：把 Claude Code 的历史 transcript、记忆、技能与全局指令迁移进 DSH 并可无缝续聊。DSH 哲学是 **everything is a plugin**——本仓库只做插件，不碰引擎。改代码前先读 `README.md`（对外契约）、`PLAN.md`（实施方案）与 `test/`（现有行为）。
 
 ## 仓库布局：发布面 / 本地工程面
 
@@ -11,7 +11,7 @@ index.mjs            插件入口（唯一 host 面文件）：注册 claude_sca
 lib/convert.mjs      转换核心（vendored + 扩展，零 DSH 依赖，可独立单测）
 lib/discovery.mjs    自动发现：定位/流式扫描/索引/增量缓存（零 DSH 依赖）
 lib/frontmatter.mjs  Claude Markdown frontmatter 解析（零依赖）
-cordis.patch.yml     bundle 声明（insert claude-port）
+cordis.patch.yml     bundle 声明（insert claude-migrate）
 package.json         npm 元数据；files 白名单 = 发布内容
 README.md / PLAN.md  对外契约与实施方案，行为变更必须同步
 LICENSE / THIRD_PARTY_NOTICES.md   MIT + 复用出处标注
@@ -44,7 +44,7 @@ npm test      # node --test 跑 test/*.test.mjs
 - **插件，不是引擎改动**：不修改 DSH 引擎 / apiproxy / 官方 UI 包。
 - **会话日志 append-only**：只 `create` + `append`，绝不改写历史事件；强制重导入走 archive + 新 id。
 - **模型可见 ⟺ 落盘**：进入模型上下文的任何内容必须能从会话日志重建。
-- **源文件只读**：绝不写入 Claude 数据目录；缓存只写 `$DSH_HOME/claude-port/`。
+- **源文件只读**：绝不写入 Claude 数据目录；缓存只写 `$DSH_HOME/claude-migrate/`。
 - **systemPrompt 提供者必须同步**（rc.6 不 await）：用 readFileSync + mtime 缓存。
 - **失败要大声**：畸形 JSONL 行计数并报行号，绝不静默吞掉；未知 Claude 字段宽容跳过并计数。
 

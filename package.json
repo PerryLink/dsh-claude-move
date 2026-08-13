@@ -1,5 +1,5 @@
 {
-  "name": "dsh-claude-port",
+  "name": "dsh-claude-migrate",
   "description": "Migrate Claude Code transcripts, memory, skills and instructions into DeepSeek Harness with seamless resume",
   "version": "0.1.0",
   "private": true,

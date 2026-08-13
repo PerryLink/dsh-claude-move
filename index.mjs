@@ -1,4 +1,4 @@
-// index.mjs — dsh-claude-port host 插件入口。
+// index.mjs — dsh-claude-migrate host 插件入口。
 //
 // 阶段 1 注册 `claude_scan` 工具：自动定位 Claude 数据根目录，扫描全部
 // project/session/memory/skill/CLAUDE.md 并返回结构化索引（F1-F4）。
@@ -27,7 +27,7 @@ import {
   scanTranscriptFile,
 } from './lib/discovery.mjs'
 
-export const name = 'claude-port'
+export const name = 'claude-migrate'
 
 export const inject = ['tools']
 

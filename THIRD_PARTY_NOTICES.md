@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-`dsh-claude-port` reuses code and design patterns from the following
+`dsh-claude-migrate` reuses code and design patterns from the following
 open-source projects. Every reuse is attributed here and in the source files.
 
 ## Nwflower/dsh-chat-import — MIT

@@ -10,7 +10,7 @@ import { apply, runScan, resolveScanTarget } from '../index.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 async function makeTempDir(t) {
-  const dir = await mkdtemp(path.join(tmpdir(), 'claude-port-index-'))
+  const dir = await mkdtemp(path.join(tmpdir(), 'claude-migrate-index-'))
   t.after(async () => { await rm(dir, { recursive: true, force: true }) })
   return dir
 }
@@ -91,7 +91,7 @@ test('runScan 全量：扫描、导入状态标注、缓存落盘、输出通过
   assert.equal(byId['sess-2'].import.status, 'none')
 
   // 写入导入映射后重扫：标注 imported
-  const cacheDir = path.join(dshHome, 'claude-port')
+  const cacheDir = path.join(dshHome, 'claude-migrate')
   const { saveImports } = await import('../lib/discovery.mjs')
   await saveImports(cacheDir, { 'sess-1': 'import-sess-1' })
   const second = await runScan(ctx, { claudeHome: home }, {})
