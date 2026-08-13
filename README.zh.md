@@ -100,6 +100,27 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
 
 从 profile 的 bundles 移除 `claude-move` 行并重启 dsh。已导入会话保留在 DSH 数据目录；本插件只在 `$DSH_HOME/claude-move/` 写索引缓存与导入映射，绝不触碰 Claude 源数据。
 
+## 兼容性
+
+- 目标 `dsh 0.1.0-rc.6`（web profile）；peer 依赖锁定 rc.6；Node `^22.19 || >=24`。
+- 最后验证 **2026-08-13**（Windows / Node 22，针对 `@deepseek-ai/dsh@0.1.0-rc.6`）：tarball 从零安装、真实扫描（40 项目 / 2387 会话）、真实批量导入 13/13 + 幂等重导入 13/13、工作区挂接与持久化产物确认。macOS/Linux 待验证。
+- 开发者预览窗口期：锁定版本，DSH 升级后重新验证。
+
+## 权限与数据
+
+- **读取** `~/.claude`（transcript、记忆、技能、CLAUDE.md、settings.json）——严格只读——以及导入目标项目目录（工作区挂接）。
+- **写入** 经公开 `sessionPersistence` 服务的 DSH 会话日志（append-only）、工作区注册表记录，以及插件自有缓存 `$DSH_HOME/claude-move/`（扫描书签 + 导入映射）。
+- **绝不** 改写 Claude 源文件、触碰其它应用数据、访问网络。
+- **不读取、不传输任何凭据**；transcript 中的疑似密钥只报告位置。
+
+## 排障
+
+- 行未生效：`dsh --profile <p> --dump-config` 应显示 `# == dsh-claude-move`；重新执行 `dsh plugin --profile <p> add -w ...`。
+- web 启动后无响应：`dsh plugin add` 初始化的新 profile 只有 `dsh-base`，需在 `dsh.profile.bundles` 补 `@deepseek-ai/dsh-web-app`（装进已有 `web` profile 无需处理）。
+- 面板路由 404：仅当 `enableWebPanel: true` 且组成包含 web 服务器时提供；检查启动日志 FAILED。
+- 导入报「transcript 过大」：调高 `maxTranscriptBytes` 或单独导入该文件。
+- 日志：启动失败打印在 `dsh` 控制台；插件以 `[claude-move]` 前缀输出工作区/映射错误。
+
 ## 安全边界
 
 - 源文件一律只读；DSH 会话日志 append-only（只 `create` + `append`）。
@@ -149,4 +170,4 @@ npm test      # node --test：convert（vendored + 扩展）、discovery、impor
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+MIT — 见 [LICENSE](LICENSE)。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。安全问题请通过 GitHub Security Advisories（仓库 Settings → Security）私下报告。

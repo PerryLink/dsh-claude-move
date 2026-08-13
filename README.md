@@ -102,6 +102,27 @@ All optional, overridable in `cordis.yml`:
 
 Remove the `claude-move` row from the profile's bundles and restart `dsh`. Imported sessions stay in DSH's data directory; the plugin only writes its cache (`$DSH_HOME/claude-move/`) and never touches Claude source data.
 
+## Compatibility
+
+- Targets `dsh 0.1.0-rc.6` (web profile); peer dependencies pinned to `0.1.0-rc.6`. Node `^22.19 || >=24`.
+- Last verified **2026-08-13** on Windows (Node 22) against `@deepseek-ai/dsh@0.1.0-rc.6`: fresh tarball install, real scan (40 projects / 2387 sessions), real batch import 13/13 with idempotent re-import 13/13, workspace attach and persistence artifacts confirmed. macOS/Linux pending.
+- Developer-preview window: pin the version and re-verify after DSH upgrades.
+
+## Permissions & data
+
+- **Reads** `~/.claude` (transcripts, memories, skills, CLAUDE.md, settings.json) — strictly read-only — and the project directories it imports into (workspace attach).
+- **Writes** DSH session logs via the public `sessionPersistence` service (append-only), workspace-registry records, and its own cache under `$DSH_HOME/claude-move/` (scan bookmarks + import map).
+- **Never** modifies Claude source files, touches other applications' data, or accesses the network.
+- **No credentials** are read or transmitted; suspected secrets in transcripts are reported by position only.
+
+## Troubleshooting
+
+- Row not effective: `dsh --profile <p> --dump-config` should print `# == dsh-claude-move`; re-run `dsh plugin --profile <p> add -w ...`.
+- Web boots but hangs silently: new profiles initialized by `dsh plugin add` contain only `dsh-base` — add `@deepseek-ai/dsh-web-app` to `dsh.profile.bundles`. Installing into the existing `web` profile needs nothing.
+- Panel routes 404: they are served only when `enableWebPanel: true` and a web server is composed; check the boot log for FAILED fibers.
+- Import fails with "transcript 过大": raise `maxTranscriptBytes` or import that file individually.
+- Logs: boot failures print to the `dsh` console; the plugin logs `[claude-move]`-prefixed errors for workspace/import-map issues.
+
 ## Security boundaries
 
 - Source files are strictly read-only; DSH session logs are append-only (`create` + `append` only).
@@ -151,4 +172,4 @@ npm test      # node --test: convert (vendored + extended), discovery, import/re
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Third-party notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT — see [LICENSE](LICENSE). Third-party notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Report security issues privately via GitHub Security Advisories (repo Settings → Security).

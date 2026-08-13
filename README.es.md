@@ -102,6 +102,27 @@ Todo opcional y reemplazable en `cordis.yml`:
 
 Elimina la fila `claude-move` de los bundles del perfil y reinicia `dsh`. Las sesiones importadas permanecen en el directorio de datos de DSH; el plugin solo escribe su caché (`$DSH_HOME/claude-move/`) y nunca toca los datos de origen de Claude.
 
+## Compatibilidad
+
+- Objetivo: `dsh 0.1.0-rc.6` (perfil web); peer deps fijadas a `0.1.0-rc.6`. Node `^22.19 || >=24`.
+- Última verificación: **2026-08-13** en Windows (Node 22) contra `@deepseek-ai/dsh@0.1.0-rc.6`: instalación desde tarball, escaneo real (40 proyectos / 2387 sesiones), importación en lote real 13/13 con reimportación idempotente 13/13, vínculo al espacio de trabajo y artefactos de persistencia confirmados. Pendiente macOS/Linux.
+- Ventana de vista previa de desarrollo: fija la versión y vuelve a verificar tras actualizar DSH.
+
+## Permisos y datos
+
+- **Lee** `~/.claude` (transcripciones, memorias, habilidades, CLAUDE.md, settings.json) — estrictamente solo lectura — y los directorios de proyecto a los que importa (vínculo de workspace).
+- **Escribe** registros de sesión de DSH a través del servicio público `sessionPersistence` (solo adición), registros del workspace-registry, y su propia caché en `$DSH_HOME/claude-move/` (marcadores de escaneo + mapa de importación).
+- **Nunca** modifica archivos de origen de Claude, toca datos de otras aplicaciones ni accede a la red.
+- **No lee ni transmite credenciales**; los secretos sospechosos se informan solo por posición.
+
+## Solución de problemas
+
+- Fila sin efecto: `dsh --profile <p> --dump-config` debe mostrar `# == dsh-claude-move`; vuelve a ejecutar `dsh plugin --profile <p> add -w ...`.
+- La web arranca pero no responde: los perfiles nuevos inicializados por `dsh plugin add` solo contienen `dsh-base`; añade `@deepseek-ai/dsh-web-app` a `dsh.profile.bundles` (instalar en el perfil `web` existente no requiere nada).
+- Rutas del panel en 404: solo se sirven con `enableWebPanel: true` y un servidor web compuesto; revisa el registro de arranque por fibras FAILED.
+- La importación falla con "transcript 过大": sube `maxTranscriptBytes` o importa ese archivo individualmente.
+- Registros: los fallos de arranque se imprimen en la consola de `dsh`; el plugin registra errores con prefijo `[claude-move]` para workspace/mapa de importación.
+
 ## Límites de seguridad
 
 - Los archivos de origen son estrictamente de solo lectura; los registros de sesión de DSH son solo de adición (`create` + `append` únicamente).
@@ -151,4 +172,4 @@ npm test      # node --test: convert (vendored + extendido), discovery, import/r
 
 ## Licencia
 
-MIT — ver [LICENSE](LICENSE). Avisos de terceros en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT — ver [LICENSE](LICENSE). Avisos de terceros en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Reporta problemas de seguridad de forma privada mediante GitHub Security Advisories (repo Settings → Security).
