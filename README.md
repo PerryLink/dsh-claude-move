@@ -9,7 +9,7 @@ English | [中文](README.zh.md) | [Español](README.es.md) | [Português](READM
 
 A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). After installation it automatically discovers everything in your local Claude Code — session transcripts, memories, skills, global instructions, settings, and project state — and moves "history + personal context" into DSH, so you can **continue your Claude Code sessions seamlessly** inside DeepSeek Harness.
 
-> Status: in development (Phase 4/6 — commands done). Roadmap and design: [PLAN.md](PLAN.md).
+> Status: in development (Phase 5/6 — web panel done). Roadmap and design: [PLAN.md](PLAN.md).
 
 ## What it does
 
@@ -25,7 +25,7 @@ A plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 | 2 | History import (`import_claude`: mapping, idempotency, batch, force re-import, line-number errors, workspace attach) | ✅ |
 | 3 | Personal context (memory injection, Claude skills provider, CLAUDE.md section, settings translation) | ✅ |
 | 4 | One-shot commands `/claude-import-all` and `/resume-claude` (handoff summary + safety model) | ✅ |
-| 5 | Web UI "Claude migration" panel (`dsh.client`) | 🚧 |
+| 5 | Web UI "Claude migration" panel (`dsh.client`) | ✅ |
 | 6 | Release polish: bilingual docs, architecture diagram, packaging, demo | 🚧 |
 
 ## Install
@@ -67,6 +67,8 @@ Commands (user-triggered, no model turn):
 /resume-claude <keyword>          # match titles; multiple matches are listed, never guessed
 ```
 
+Web panel: a floating **🐳 Claude 迁移** button (bottom-right) opens the migration panel — project/session tree with status badges (not imported / imported / source missing / directory missing / git dirty), keyword filter, per-session "Import & continue" + "Refresh session list", batch import with a live progress bar. Served through the plugin's own `/api/claude-move/*` JSON routes registered on the public `ctx.webServer` seam.
+
 - **Scan** returns a structured JSON index: projects (slug/cwd/directory existence/git branch & dirty count), sessions (title/timestamps/message & tool-call counts/malformed lines), memories, skills, global CLAUDE.md and settings.json; each session carries `import.status` (`none`/`imported`/`source-missing`). `settingsSuggestions` holds the DSH translation of settings.json plus the unmappable keys (see [Compliance](COMPLIANCE.md)).
 - **Import** maps user/assistant/tool/thinking messages with full fidelity; the result is a balanced, resumable session attached to its workspace by `cwd`. Batch results are per-file (`imported`/`already-imported`/`skipped`/`failed`), malformed lines carry line numbers, suspected secrets are reported by position only (file:line:kind), and permission-class records are counted but never imported.
 - **Personal context takes effect automatically** (no import action needed):
@@ -93,6 +95,7 @@ All optional, overridable in `cordis.yml`:
     extraSkillDirs: []
     enableInstructions: true
     resumeMaxChars: 2048      # handoff summary char cap
+    enableWebPanel: true      # register the /api/claude-move/* panel routes
 ```
 
 ## Uninstall
@@ -137,7 +140,7 @@ npm test      # node --test: convert (vendored + extended), discovery, import/re
 - Transcripts larger than `maxTranscriptBytes` fail loudly instead of partial import (fidelity first); chunked streaming import is on the roadmap.
 - Sessions whose source directory was deleted still import, but workspace attach fails (left ungrouped; `workspace.attached: false` in the report).
 - Interrupted batch imports can be safely re-run (idempotent, append-only).
-- The Web panel is not implemented yet (Phase 5).
+- The Web panel is a zero-build floating panel driven by the plugin's own JSON routes; it does not use the shell's internal UI slot system (kept independent of undocumented rc.6 internals).
 
 ## Related links
 

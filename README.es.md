@@ -9,7 +9,7 @@
 
 Un plugin para [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). Tras instalarlo, descubre automáticamente todo lo que hay en tu Claude Code local — transcripciones de sesiones, memorias, habilidades (skills), instrucciones globales, configuración y estado del proyecto — y traslada «historial + contexto personal» a DSH, para que puedas **continuar tus sesiones de Claude Code sin interrupciones** dentro de DeepSeek Harness.
 
-> Estado: en desarrollo (Fase 4/6 — comandos implementados). Hoja de ruta y diseño: [PLAN.md](PLAN.md).
+> Estado: en desarrollo (Fase 5/6 — panel web implementado). Hoja de ruta y diseño: [PLAN.md](PLAN.md).
 
 ## Qué hace
 
@@ -25,7 +25,7 @@ Un plugin para [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harnes
 | 2 | Importación de historial (`import_claude`: mapeo, idempotencia, lotes, reimportación forzada, errores con número de línea, vinculación al espacio de trabajo) | ✅ |
 | 3 | Contexto personal (inyección de memorias, proveedor de habilidades de Claude, sección CLAUDE.md, traducción de settings) | ✅ |
 | 4 | Comandos de un paso `/claude-import-all` y `/resume-claude` (resumen de traspaso + modelo de seguridad) | ✅ |
-| 5 | Panel web «migración de Claude» (`dsh.client`) | 🚧 |
+| 5 | Panel web «migración de Claude» (`dsh.client`) | ✅ |
 | 6 | Pulido para publicación: documentación bilingüe, diagrama de arquitectura, empaquetado, demo | 🚧 |
 
 ## Instalación
@@ -67,6 +67,8 @@ Comandos (los dispara el usuario, sin turno del modelo):
 /resume-claude <palabra clave>    # coincide con títulos; varias coincidencias se listan, nunca se adivina
 ```
 
+Panel web: el botón flotante **🐳 Claude 迁移** (abajo a la derecha) abre el panel — árbol de proyectos/sesiones con insignias de estado (sin importar / importado / origen faltante / directorio inexistente / git sucio), filtro por palabra clave, «Importar y continuar» por sesión + «Refrescar lista de sesiones», e importación por lotes con barra de progreso. Usa las rutas JSON `/api/claude-move/*` propias del plugin, registradas en el seam público `ctx.webServer`.
+
 - **Escaneo**: devuelve un índice JSON estructurado: proyectos (slug/cwd/existencia del directorio/rama de git y archivos modificados), sesiones (título/marcas de tiempo/recuentos/líneas malformadas), memorias, habilidades, CLAUDE.md global y settings.json; cada sesión lleva `import.status` (`none`/`imported`/`source-missing`). `settingsSuggestions` contiene la traducción a DSH del settings.json y las claves no mapeables (ver [COMPLIANCE.md](COMPLIANCE.md)).
 - **Importación**: mapea mensajes user/assistant/tool/thinking con fidelidad total; el resultado es una sesión equilibrada y reanudable, vinculada a su espacio de trabajo por `cwd`. Los lotes se resumen archivo por archivo (`imported`/`already-imported`/`skipped`/`failed`), las líneas malformadas llevan número de línea, los posibles secretos se informan solo por posición (archivo:línea:tipo) y los registros de permisos se cuentan pero nunca se importan.
 - **El contexto personal se aplica automáticamente** (sin acción de importación):
@@ -93,6 +95,7 @@ Todo opcional y reemplazable en `cordis.yml`:
     extraSkillDirs: []
     enableInstructions: true
     resumeMaxChars: 2048      # límite de caracteres del resumen
+    enableWebPanel: true      # registrar las rutas /api/claude-move/*
 ```
 
 ## Desinstalación
@@ -137,7 +140,7 @@ npm test      # node --test: convert (vendored + extendido), discovery, import/r
 - Las transcripciones mayores que `maxTranscriptBytes` fallan con aviso en lugar de importarse parcialmente (fidelidad primero); la importación por streaming en bloques está en la hoja de ruta.
 - Las sesiones cuyo directorio de origen se eliminó se importan igualmente, pero la vinculación al espacio de trabajo falla (quedan sin agrupar; `workspace.attached: false` en el informe).
 - Las importaciones por lotes interrumpidas se pueden reejecutar con seguridad (idempotentes, solo adición).
-- El panel web aún no está implementado (Fase 5).
+- El panel web es un panel flotante sin compilación que usa las rutas JSON propias del plugin; no usa el sistema interno de slots de la shell (independiente de los internals no documentados de rc.6).
 
 ## Enlaces relacionados
 

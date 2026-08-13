@@ -6,20 +6,20 @@ dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。�
 
 | 官方约束 | 本插件 | 状态 |
 |---|---|---|
-| 一切皆插件；新行为挂已文档化扩展点，不改 agent-loop | 只注册 `ctx.tools`（后续 `commands`/`systemPrompt`/`skills`/`webServer`），不碰 agent-loop/引擎/apiproxy/官方 UI 包 | ✅ |
-| 注册即 effect：贡献走 `ctx.effect()`/`ctx.on()`/服务 `register()`（返回 disposer） | 工具经 `ctx.tools.register()`（返回 disposer）；无手动清理 | ✅ |
+| 一切皆插件；新行为挂已文档化扩展点，不改 agent-loop | 只注册 `ctx.tools`/`ctx.commands`/`ctx.systemPrompt`/`ctx.skills`/`ctx.webServer`，不碰 agent-loop/引擎/apiproxy/官方 UI 包 | ✅ |
+| 注册即 effect：贡献走 `ctx.effect()`/`ctx.on()`/服务 `register()`（返回 disposer） | 工具/命令/路由/提示词段/技能 provider 均经服务 `register()`（返回 disposer）；可选服务经 `ctx.on('internal/service')` 响应式注册（disposer 随插件生命周期撤销） | ✅ |
 | waterfall 监听器必须 `next()` | 不监听任何 waterfall 事件 | N/A（无监听） |
-| 模型可见 ⟺ 已记录 | 工具描述/结果即落盘 `tool/result`；Phase 3 注入走 `ctx.systemPrompt` 组装（可重建）；Phase 4 交接摘要走 `agent.inject`（logged 持久上下文） | ✅（设计保证） |
+| 模型可见 ⟺ 已记录 | 工具描述/结果即落盘 `tool/result`；注入走 `ctx.systemPrompt` 组装（可重建）；交接摘要走 `agent.inject`（inbox 持久上下文） | ✅（设计保证） |
 | 类型化事件/服务 declaration merging；事件标注 `@mode` | 纯 JS 插件，不声明/不派发自定义事件与自定义服务 | N/A |
-| 配置用 Schemastery；非法配置加载期响亮失败；不得硬编码可调参数 | `Config = Schema.object(...)`；全部可调参数（claudeHome/scanGit/maxTranscriptBytes/excludeProjects）可 cordis.yml 覆盖 | ✅ |
+| 配置用 Schemastery；非法配置加载期响亮失败；不得硬编码可调参数 | `Config = Schema.object(...)`；全部可调参数（claudeHome/scanGit/maxTranscriptBytes/excludeProjects/enable*/max*/resumeMaxChars/enableWebPanel）可 cordis.yml 覆盖 | ✅ |
 | 工具 DSL：`defineTool`、execute 只返回 `output.schema` 规范值、人读内容在 `output.render`、UI presenter 纯函数、尊重 `exec.signal` | defineTool + 输出 schema 经 `validateJsonSchemaValue` 校验；render 生成中文摘要；未定义 presenter（回退 generic 卡）；**exec.signal 尚未接入批量循环** | ⚠️ exec.signal 列入优化待办 |
 | 可替换能力按三层接缝拆分；不提前拆 | 本插件是固定来源的迁移器，无可替换 provider 需求 | N/A |
 | bundle 清单 `dsh.bundle.patch`；按 id 整行替换 config；`!!js` 双感叹号 | `dsh.bundle` 声明 ✅；不使用 `!!js`（无环境选择需求） | ✅ |
 | 独立插件包：cordis 是 peerDependency；ESM；git 安装需 `prepare`+`allowBuilds`；发布带构建产物 | cordis/dsh-tools/schemastery 均 peer（锁 rc.6）；纯 ESM 无构建步骤 → git 安装免 `prepare`/`allowBuilds` | ✅ |
 | 包 README 含 Model Experience / Known Limitations（仓库门禁惯例） | README 已含两段 | ✅ |
-| 双语文档成对 | 计划 Phase 6：README.en.md + 中文双轨（i18n 结构） | ⚠️ 待办 |
-| 测试：纯函数单测 + mock 集成 + 畸形/平台用例 | 52 用例：vendored convert + 扩展单测 + discovery 单测 + import/report mock 集成 + 畸形行/密钥/大小防护；三平台路径用例（locateClaudeHome/Windows 路径） | ✅ |
-| 加载验证 `--dump-config` / 行为验证 | Phase 5 集成验证（真实 dsh web profile + 续聊实测） | ⚠️ 待验证 |
+| 双语文档成对 | GitHub 介绍页已五语（EN 主 + 中/西/葡/印地），行为变更同 commit 同步五语 | ✅ |
+| 测试：纯函数单测 + mock 集成 + 畸形/平台用例 | 90 用例：vendored convert + 扩展单测 + discovery + import/report + context/settings + handoff + commands + routes mock 集成 + 客户端 bundle 契约 + 畸形行/密钥/大小防护；三平台路径用例 | ✅ |
+| 加载验证 `--dump-config` / 行为验证 | 已在真实 `dsh 0.1.0-rc.6` 验证：`--dump-config` 显示 `# == dsh-claude-move` 层与 `claude-move` 行；web 启动无 FAILED；`__DSH_BOOT__` 含 `dsh-claude-move` 客户端条目（`immediately: true`）；`/plugins/dsh-claude-move/client.js` 正常伺服；`/api/claude-move/index` 真实扫描 40 项目/2387 会话；单会话真实导入成功（`imported=1`、`workspace.attached=true`、`sessions/…/session.jsonl.zstd` 落盘、重扫标注 `imported`） | ✅（模型驱动续聊回合仍需有 API key 的机器验收，见 Phase 6） |
 
 ## 2. [deepseek.com/harness](https://www.deepseek.com/harness/)（官网开发者预览页）
 
@@ -46,9 +46,9 @@ dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。�
 |---|---|---|
 | 插件 = 实现 Service 的对象（函数形态带可选 `inject`/`apply`） | 函数形态 `export { name, inject, apply }` | ✅ |
 | 上下文是服务仓库；依赖经 `inject` 声明，服务就绪前插件等待 | `inject: ['tools']`；可选服务用 `ctx.get()`（sessionPersistence/workspaceRegistry） | ✅ |
-| 依赖服务消失 → 自动卸载，恢复 → 自动重载 | 全部贡献在 apply 内注册（可撤销），无持久引用 | ✅ |
-| 注册可撤销（disposer） | 工具注册返回 disposer，交给 Cordis 生命周期 | ✅ |
-| 类型化事件/服务（declaration merging） | 不声明自定义事件/服务（纯消费方） | N/A |
+| 依赖服务消失 → 自动卸载，恢复 → 自动重载 | 全部贡献在 apply 内注册（可撤销），无持久引用；可选服务（systemPrompt/skills/commands/webServer）经 `internal/service` 事件响应式注册（真实 boot 实测：服务可能晚于本插件就绪） | ✅ |
+| 注册可撤销（disposer） | 工具/命令/路由注册均返回 disposer，交给 Cordis 生命周期 | ✅ |
+| 类型化事件/服务（declaration merging） | 不声明自定义事件/服务（纯消费方）；未声明 inject 的服务一律经 `ctx.get()` 访问（真实 Cordis 对未声明属性访问抛错，已实测修正并被测试覆盖） | ✅ |
 | 文档指针：primers 与教程 | README 链接官方 cordis-primer | ✅ |
 
 ## 5. [cordiverse/paper](https://github.com/cordiverse/paper)（时空可组合范式）
@@ -61,6 +61,6 @@ dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。�
 
 ## 审计结论
 
-- **无红线违规**；唯一代码级待办：`exec.signal` 接入批量导入循环（取消响应）。
-- 待验证项集中在 Phase 5 集成：`--dump-config` 行生效、真实 profile 续聊、导入后会话列表刷新行为。
-- 计划 Phase 6：双语文档、npm 发布面核对（`npm pack --dry-run`）、`dsh-plugin` topic。
+- **无红线违规**；集成验证发现并修复的全为真实运行时语义（未声明服务必须 `ctx.get`、可选服务响应式注册、web profile 需 `dsh-web-app` bundle），已补测试覆盖。
+- 剩余待办集中在 Phase 6：模型驱动续聊回合验收（需 `DEEPSEEK_API_KEY` 的机器）、`npm pack` 发布面核对、`dsh-plugin` topic、面板浏览器端交互演示（GIF）。
+- 面板 JSON 路由绑定 `ctx.webServer`（默认仅 loopback 绑定，与 apiproxy 同机同源，信任模型一致；`enableWebPanel: false` 可整体关闭）。

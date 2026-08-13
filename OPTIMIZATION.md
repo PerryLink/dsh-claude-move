@@ -2,12 +2,15 @@
 
 对 dsh-claude-move 及其与 DSH 平台协作方式的深入研究结论。基线数据来自本机真实 Claude 数据（40 项目 / 2387 会话）：全量首扫 **11.7s**、7k 消息单 transcript 转换 **154ms**、52 用例测试 **~290ms**。候选按「价值 × 成本」排序；已落地的标注状态。
 
-## A. 已落地（本轮）
+## A. 已落地（含 Phase 5 真实运行时实测修复）
 
 1. ✅ **S4 正则重叠修复**：`sk-` 会吞掉 `sk-ant-`（双计），改为更具体前缀在前 + 负向先行断言。
 2. ✅ **导入结果携带工作区挂接状态**（`workspace.attached`），失败不再只进 console。
-3. ✅ **cordis peerDependency**（官方红线 5）；`listPersistedIds` 双通道读取（注入值/`ctx.get`）。
-4. ✅ **增量缓存**：mtime+size 书签，重扫只读变化文件（测试证明 2 文件改 1 → 只重扫 1）。
+3. ✅ **cordis peerDependency**（官方红线 5）；**未声明服务一律 `ctx.get()`**——真实 Cordis 对未声明属性访问抛 "cannot get property without inject"，实测暴露并修复，测试已覆盖。
+4. ✅ **可选服务响应式注册**（`internal/service` 事件）：systemPrompt/skills/commands/webServer 可能晚于本插件就绪；apply 缺失则等事件（真实 boot 实测触发 404 竞态）。
+5. ✅ **增量缓存 + ctime**：mtime+ctime+size 书签，同毫秒等尺寸重写也能检出（文件缓存与扫描书签同步加固）。
+6. ✅ **单读批量导入**：批量路径 stat→read→convert 一次完成，不双读大文件。
+7. ✅ **面板任务化 + 进度轮询**：导入异步 job + `/api/claude-move/progress` 轮询，UI 不阻塞主循环。
 
 ## B. 高价值候选（P0：性能/响应性，建议 Phase 3 内完成）
 
