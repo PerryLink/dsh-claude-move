@@ -1,17 +1,18 @@
 // index.mjs — dsh-claude-move host 插件入口。
 //
-// 阶段 1 注册 `claude_scan` 工具：自动定位 Claude 数据根目录，扫描全部
-// project/session/memory/skill/CLAUDE.md 并返回结构化索引（F1-F4）。
-// 后续阶段在同一 apply 里追加 import_claude 工具、claude-import-all 与
-// resume-claude 命令、memory/CLAUDE.md 提示词注入、技能 provider 与面板路由。
+// 已注册：claude_scan（F1-F4 + settings 翻译建议 F14）、import_claude（F5-F10/S4/S5）、
+// memory/CLAUDE.md 系统提示词段（F11/F13，同步提供者 + mtime 缓存）、
+// Claude 技能 provider（F12）。后续阶段追加 claude-import-all 与
+// resume-claude 命令、面板路由。
 //
-// 只消费公开服务：ctx.tools 注册工具；导入状态经 ctx.get('sessionPersistence')
-// 可选读取（无该服务时状态一律 none，不影响扫描）。源文件只读，缓存只写
+// 只消费公开服务：tools / systemPrompt / skills / sessionPersistence /
+// workspaceRegistry（后两者经 ctx.get 可选读取）。源文件只读，缓存只写
 // resolveCacheDir()。
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
@@ -29,6 +30,9 @@ import {
 } from './lib/discovery.mjs'
 import { convertClaudeJsonl } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
+import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, DEFAULT_MEMORY_MAX_BYTES } from './lib/context.mjs'
+import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
+import { translateSettings } from './lib/settings.mjs'
 
 export const name = 'claude-move'
 
@@ -41,6 +45,12 @@ export const inject = ['tools']
  * @property {boolean} [scanGit] 是否探测 git 分支与脏状态（默认 true）。
  * @property {number} [maxTranscriptBytes] transcript oversized 判定阈值（默认 64 MiB）。
  * @property {string[]} [excludeProjects] 排除的项目 slug（子串匹配，默认空）。
+ * @property {boolean} [enableMemory] 注入 Claude memory 上下文段（默认 true）。
+ * @property {number} [memoryMaxBytes] memory 注入字节上限（默认 8192）。
+ * @property {boolean} [enableSkills] 注册 Claude 技能 provider（默认 true）。
+ * @property {number} [maxSkills] 技能目录条目上限（默认 30）。
+ * @property {string[]} [extraSkillDirs] 额外技能目录（默认空）。
+ * @property {boolean} [enableInstructions] 注入全局/项目级 CLAUDE.md 段（默认 true）。
  */
 
 export const Config = Schema.object({
@@ -48,6 +58,12 @@ export const Config = Schema.object({
   scanGit: Schema.boolean().default(true),
   maxTranscriptBytes: Schema.number().default(DEFAULT_MAX_TRANSCRIPT_BYTES),
   excludeProjects: Schema.array(Schema.string()).default([]),
+  enableMemory: Schema.boolean().default(true),
+  memoryMaxBytes: Schema.number().default(DEFAULT_MEMORY_MAX_BYTES),
+  enableSkills: Schema.boolean().default(true),
+  maxSkills: Schema.number().default(30),
+  extraSkillDirs: Schema.array(Schema.string()).default([]),
+  enableInstructions: Schema.boolean().default(true),
 })
 
 const sessionImportSchema = {
@@ -170,7 +186,42 @@ export async function runScan(ctx, config, args) {
   index.claudeHomeExists = existsSync(claudeHome)
 
   await annotateImports(ctx, cacheDir, index)
+  await annotateSettings(index)
   return index
+}
+
+/**
+ * 把全局与项目级 settings.json 翻译为 DSH 配置建议（F14）：只建议不代写，
+ * 无法映射的键显式列出。读取失败单独记入 errors，不影响扫描。
+ * @param index - 扫描索引（就地附加 settingsSuggestions）。
+ */
+export async function annotateSettings(index) {
+  const files = []
+  const globalSettings = index.personal?.settings
+  if (globalSettings) files.push(globalSettings.path)
+  for (const project of index.projects ?? []) {
+    if (project.projectSettings) files.push(project.projectSettings.path)
+  }
+  const suggestions = []
+  const unmapped = new Set()
+  const errors = []
+  for (const file of files) {
+    let raw
+    try {
+      raw = await readFile(file, 'utf8')
+    } catch (err) {
+      errors.push(`${file}: ${String((err && err.message) || err)}`)
+      continue
+    }
+    const result = translateSettings(raw, file)
+    if (result.error) {
+      errors.push(result.error)
+      continue
+    }
+    suggestions.push(...result.suggestions)
+    for (const key of result.unmapped) unmapped.add(key)
+  }
+  index.settingsSuggestions = { suggestions, unmapped: [...unmapped], errors }
 }
 
 /**
@@ -215,6 +266,11 @@ export function renderScan(args, value) {
   lines.push(`- 项目 ${projects.length} 个、会话 ${sessions.length} 个（已导入 ${imported} 个）、技能 ${skills.length} 个`)
   const malformedTotal = sessions.reduce((sum, s) => sum + (s.malformed ?? 0), 0)
   if (malformedTotal > 0) lines.push(`- 畸形 JSONL 行 ${malformedTotal} 条（导入时逐条报告行号）`)
+  const suggestionCount = value.settingsSuggestions?.suggestions?.length ?? 0
+  const unmappedCount = value.settingsSuggestions?.unmapped?.length ?? 0
+  if (suggestionCount > 0 || unmappedCount > 0) {
+    lines.push(`- settings.json 翻译建议 ${suggestionCount} 条、无法映射项 ${unmappedCount} 条（见 settingsSuggestions）`)
+  }
   const recent = projects.slice(0, 5)
   if (recent.length > 0) {
     lines.push('最近活动：')
@@ -230,7 +286,7 @@ export function renderScan(args, value) {
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
-function makeScanTool(ctx, config) {
+function makeScanTool(ctx, config, state) {
   return defineTool({
     name: 'claude_scan',
     description:
@@ -254,7 +310,9 @@ function makeScanTool(ctx, config) {
       render: renderScan,
     },
     async execute(args) {
-      return runScan(ctx, config, args)
+      const value = await runScan(ctx, config, args)
+      state?.invalidateSkills?.()
+      return value
     },
   })
 }
@@ -629,12 +687,118 @@ function makeImportTool(ctx, config) {
   })
 }
 
+// ── 个人信息搬移（F11-F13）：同步注入 + 技能 provider ────────────────────────
+
 /**
- * 挂载插件：注册 claude_scan 与 import_claude 工具。
+ * 插件状态：Claude 根目录、同步文件缓存、技能目录失效回调。
+ * @param config - 插件配置。
+ * @returns 状态对象（apply 闭包持有）。
+ */
+export function makeClaudeState(config = {}) {
+  return {
+    claudeHome: config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome(),
+    fileCache: makeFileCache(),
+    memoryDirCache: null,
+    invalidateSkills: null,
+  }
+}
+
+/**
+ * 平台感知的路径相等（Windows 大小写不敏感）。
+ * @param a - 路径一。
+ * @param b - 路径二。
+ * @returns boolean。
+ */
+export function samePath(a, b) {
+  const norm = (x) => path.resolve(x)
+  if (process.platform === 'win32') return norm(a).toLowerCase() === norm(b).toLowerCase()
+  return norm(a) === norm(b)
+}
+
+/**
+ * 枚举全部 memory 目录（同步，按 projects 目录 mtime 缓存）。
+ * F11 注入全部项目的 memory 并按类型优先级排序，由字节上限控制总量。
+ * @param state - 插件状态。
+ * @returns memory 目录绝对路径数组。
+ */
+export function memoryDirsSync(state) {
+  const projectsDir = path.join(state.claudeHome, 'projects')
+  try {
+    const st = statSync(projectsDir)
+    if (state.memoryDirCache && state.memoryDirCache.mtimeMs === st.mtimeMs) {
+      return state.memoryDirCache.dirs
+    }
+    const dirs = readdirSync(projectsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(projectsDir, e.name, 'memory'))
+      .filter((d) => fileExists(d))
+    state.memoryDirCache = { mtimeMs: st.mtimeMs, dirs }
+    return dirs
+  } catch {
+    // 无 projects 目录：无记忆。
+    return []
+  }
+}
+
+/**
+ * 注册 F11/F12/F13 三组贡献（服务缺失时按可选依赖跳过）。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ * @param state - 插件状态。
+ */
+export function registerContextContributions(ctx, config, state) {
+  const systemPrompt = ctx.get('systemPrompt')
+
+  // F11：memory 动态上下文段（同步提供者 + mtime 缓存，每次请求重读变化文件）。
+  if (systemPrompt && typeof systemPrompt.context === 'function' && config.enableMemory !== false) {
+    systemPrompt.context({
+      name: 'claude-move:memory',
+      order: 120,
+      text: () => {
+        const dirs = memoryDirsSync(state)
+        const memories = dirs.flatMap((dir) => readMemoriesSync(dir, state.fileCache))
+        return renderMemories(memories, config.memoryMaxBytes ?? DEFAULT_MEMORY_MAX_BYTES)
+      },
+    })
+  }
+
+  // F13：全局 + 项目级 CLAUDE.md（项目优先，前置于 persona）。
+  if (systemPrompt && typeof systemPrompt.section === 'function' && config.enableInstructions !== false) {
+    systemPrompt.section({
+      name: 'claude-move:instructions',
+      order: -90,
+      text: (assemble) => {
+        const cwd = assemble?.agent?.session?.header?.cwd
+        const globalPath = path.join(state.claudeHome, 'CLAUDE.md')
+        const globalText = fileExists(globalPath) ? state.fileCache.read(globalPath) : null
+        const projectPath = typeof cwd === 'string' && cwd.length > 0
+          ? path.join(cwd, '.claude', 'CLAUDE.md')
+          : null
+        const projectText = projectPath && fileExists(projectPath) ? state.fileCache.read(projectPath) : null
+        return renderClaudeMd(projectText, globalText)
+      },
+    })
+  }
+
+  // F12：Claude 技能 provider（async list/get；扫描后失效目录缓存）。
+  const skills = ctx.get('skills')
+  if (skills && typeof skills.registerProvider === 'function' && config.enableSkills !== false) {
+    const roots = [path.join(state.claudeHome, 'skills'), ...(config.extraSkillDirs ?? [])]
+    skills.registerProvider((control) => {
+      state.invalidateSkills = () => control.invalidate()
+      return makeClaudeSkillsProvider({ roots, maxSkills: config.maxSkills ?? 30 })
+    })
+  }
+}
+
+/**
+ * 挂载插件：注册扫描/导入工具与个人上下文贡献。
  * @param ctx - Cordis 上下文。
  * @param config - 经 Schemastery 校验的插件配置。
  */
 export function apply(ctx, config = {}) {
-  ctx.tools.register(makeScanTool(ctx, config))
+  const state = makeClaudeState(config)
+  ctx.tools.register(makeScanTool(ctx, config, state))
   ctx.tools.register(makeImportTool(ctx, config))
+  registerContextContributions(ctx, config, state)
 }

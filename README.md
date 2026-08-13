@@ -2,7 +2,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件：**Claude Code 全量迁移 + 无缝续聊**。安装后自动发现本机 Claude Code 的全部内容（历史 transcript、记忆、技能、全局指令、配置与项目状态），把「历史对话 + 个人信息」迁移进 DSH，让用户在新会话里无缝继续 Claude Code 的工作上下文。
 
-> 状态：开发中（Phase 2/6 —— 历史对话导入已实现）。见 [PLAN.md](PLAN.md)。
+> 状态：开发中（Phase 3/6 —— 个人信息搬移已实现）。见 [PLAN.md](PLAN.md)。
 
 ## 功能路线
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 1 | 自动发现（`$CLAUDE_CONFIG_DIR`/`~/.claude`）+ 项目/会话/git/记忆/技能索引 + `claude_scan` 工具 + 增量缓存 | ✅ |
 | 2 | 历史对话导入（`import_claude`：全保真映射、幂等、批量、强制重导入、行号报错、工作区挂接、密钥告警、权限类统计） | ✅ |
-| 3 | 个人信息搬移（memory 动态注入、Claude 技能 provider、CLAUDE.md 段、settings.json 翻译建议） | 🚧 |
+| 3 | 个人信息搬移（memory 动态注入、Claude 技能 provider、CLAUDE.md 段、settings.json 翻译建议） | ✅ |
 | 4 | 一键命令 `/claude-import-all` 与 `/resume-claude`（交接摘要 + 安全模型） | 🚧 |
 | 5 | Web UI「Claude 迁移」面板（dsh.client） | 🚧 |
 | 6 | 文档收尾、打包、演示 | 🚧 |
@@ -40,8 +40,12 @@ import_claude { path: "all" }                       # 全量批量
 import_claude { path: "...", force: true }          # 归档旧导入并以 import-<src>-<n> 重建
 ```
 
-- **扫描**返回结构化 JSON 索引：项目（slug/cwd/目录存在性/git 分支与脏状态）、会话（标题/起止时间/消息与工具调用数/畸形行数）、记忆、技能、全局 CLAUDE.md 与 settings.json；每个会话带 `import.status`（`none`/`imported`/`source-missing`）。
+- **扫描**返回结构化 JSON 索引：项目（slug/cwd/目录存在性/git 分支与脏状态）、会话（标题/起止时间/消息与工具调用数/畸形行数）、记忆、技能、全局 CLAUDE.md 与 settings.json；每个会话带 `import.status`（`none`/`imported`/`source-missing`）；`settingsSuggestions` 给出 settings.json 的 DSH 翻译建议与无法映射项（F14）。
 - **导入**全保真映射（turn/step/user/assistant/tool/call-result/reasoning），产物是可继续（resume）的平衡会话，按 cwd 自动挂接工作区；返回单文件或批量逐文件汇总（`imported`/`already-imported`/`skipped`/`failed`），畸形行带行号、疑似凭据只报位置（文件:行:类型）、权限类记录只统计不导入。
+- **个人上下文自动生效（无需导入动作）**：
+  - memory：全部 `projects/*/memory/*.md` 注入动态上下文段，每次请求按 mtime 重读（新记忆即时生效），`feedback > project > reference > user` 排序，默认 8KB 上限；
+  - 技能：`~/.claude/skills/**/SKILL.md`（+ 扁平 `.md`）注册为 DSH 技能（名称 kebab 归一化、冲突加后缀、上限 30），catalog 注入与 `skill` 工具由 DSH 负责；
+  - 指令：全局 `~/.claude/CLAUDE.md` + 当前会话 cwd 的 `.claude/CLAUDE.md` 注入前置段（项目级优先）。
 
 ## 配置（cordis.yml，全部可选）
 
@@ -53,6 +57,12 @@ import_claude { path: "...", force: true }          # 归档旧导入并以 impo
     scanGit: true             # 探测 git 分支与脏状态
     maxTranscriptBytes: 67108864   # 单个 transcript 大小上限（导入与 oversized 标记共用）
     excludeProjects: []       # slug 子串排除，如 ['demo-']
+    enableMemory: true        # 注入 Claude memory 上下文段
+    memoryMaxBytes: 8192      # memory 注入字节上限
+    enableSkills: true        # 注册 Claude 技能 provider
+    maxSkills: 30             # 技能目录条目上限
+    extraSkillDirs: []        # 额外技能目录
+    enableInstructions: true  # 注入全局/项目级 CLAUDE.md 段
 ```
 
 ## 卸载
