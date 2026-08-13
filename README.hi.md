@@ -32,7 +32,7 @@
 
 ```sh
 # GitHub से
-dsh plugin --profile web add -w github:<owner>/dsh-claude-move
+dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
 
 # स्थानीय चेकआउट (विकास हेतु)
 dsh plugin --profile web add -w link:/path/to/dsh-claude-move

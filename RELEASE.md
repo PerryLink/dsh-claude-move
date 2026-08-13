@@ -42,7 +42,7 @@ dsh web
 
 ## 发布步骤
 
-1. 推送到 GitHub：`gh repo create dsh-claude-move --public --source .`（或手动建库后 push）。
+1. ✅ 已推送到 GitHub：https://github.com/PerryLink/dsh-claude-move（public，master，16 commits，topic 已标注 dsh-plugin）。
 2. 仓库 About 添加 topic：`dsh-plugin`（生态发现渠道）。
 3. 打 tag `v0.1.0` 并附 Release Notes（引用本文件验收表）。
 4. 可选 npm 发布：`npm publish`（bundle 形态；`dsh plugin add dsh-claude-move` 即可安装）。

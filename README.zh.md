@@ -32,7 +32,7 @@
 
 ```sh
 # 从 GitHub
-dsh plugin --profile web add -w github:<owner>/dsh-claude-move
+dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
 
 # 本地源码（开发推荐）
 dsh plugin --profile web add -w link:/path/to/dsh-claude-move

@@ -32,7 +32,7 @@ Um plugin para o [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harn
 
 ```sh
 # Do GitHub
-dsh plugin --profile web add -w github:<owner>/dsh-claude-move
+dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
 
 # Cópia local (desenvolvimento)
 dsh plugin --profile web add -w link:/path/to/dsh-claude-move
