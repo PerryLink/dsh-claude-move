@@ -54,6 +54,7 @@ export const inject = ['tools']
  * @property {string[]} [extraSkillDirs] 额外技能目录（默认空）。
  * @property {boolean} [enableInstructions] 注入全局/项目级 CLAUDE.md 段（默认 true）。
  * @property {number} [resumeMaxChars] 续聊交接摘要字符上限（默认 2048）。
+ * @property {boolean} [enableWebPanel] 注册面板 JSON 路由 /api/claude-move/*（默认 true）。
  */
 
 export const Config = Schema.object({
@@ -68,6 +69,7 @@ export const Config = Schema.object({
   extraSkillDirs: Schema.array(Schema.string()).default([]),
   enableInstructions: Schema.boolean().default(true),
   resumeMaxChars: Schema.number().default(DEFAULT_HANDOFF_MAX_CHARS),
+  enableWebPanel: Schema.boolean().default(true),
 })
 
 const sessionImportSchema = {
@@ -517,9 +519,10 @@ async function collectJsonlFiles(ctx, dirTarget, out, recursive) {
  * @param dirTarget - 目录目标。
  * @param args - 工具参数 `{ recursive?, force? }`。
  * @param maxBytes - 单文件大小上限。
+ * @param onProgress - 每个文件处理完后的进度回调（面板轮询用），可选。
  * @returns `{ total, imported, alreadyImported, skipped, failed, results }`。
  */
-export async function importDirectory(ctx, dirTarget, args, maxBytes) {
+export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress) {
   const files = []
   await collectJsonlFiles(ctx, dirTarget, files, args.recursive !== false)
   files.sort((a, b) => a.displayPath.localeCompare(b.displayPath))
@@ -529,6 +532,11 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes) {
   let alreadyImported = 0
   let skipped = 0
   let failed = 0
+  const notify = () => {
+    if (typeof onProgress === 'function') {
+      onProgress({ total: files.length, imported, alreadyImported, skipped, failed, results })
+    }
+  }
   for (const target of files) {
     const pathLabel = target.displayPath || ctx.fs.processPath(target)
     try {
@@ -539,6 +547,7 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes) {
           path: pathLabel, status: 'failed',
           error: `transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）`,
         })
+        notify()
         continue
       }
       const raw = await ctx.fs.readText(target)
@@ -546,6 +555,7 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes) {
       if (converted.turns.length === 0 && converted.events.length === 0) {
         skipped++
         results.push({ path: pathLabel, status: 'skipped', reason: 'not a Claude transcript (no user turns)' })
+        notify()
         continue
       }
       const single = await persistConverted(ctx, converted, { force: args.force }, persisted, pathLabel)
@@ -556,6 +566,7 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes) {
       failed++
       results.push({ path: pathLabel, status: 'failed', error: String((err && err.message) || err) })
     }
+    notify()
   }
   return { total: files.length, imported, alreadyImported, skipped, failed, results }
 }
@@ -932,8 +943,136 @@ export function registerCommands(ctx, config) {
   })
 }
 
+// ── 面板 JSON 路由（F16）：ctx.webServer 公开 seam ─────────────────────────────
+
+/** 发送 JSON 响应（node:http）。 */
+function sendJson(res, status, value) {
+  const body = JSON.stringify(value)
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(body)
+}
+
+/** 读取 JSON 请求体（上限 1 MiB）。 */
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = ''
+    req.on('data', (chunk) => {
+      data += chunk
+      if (data.length > 1024 * 1024) {
+        reject(new Error('body too large'))
+        req.destroy()
+      }
+    })
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : {})
+      } catch (err) {
+        reject(err)
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
 /**
- * 挂载插件：注册扫描/导入工具、个人上下文贡献与命令。
+ * 注册面板路由（enableWebPanel=false 或 headless 无 webServer 时跳过）：
+ * - GET /api/claude-move/index   → 最近扫描索引（含导入状态与 settings 建议）
+ * - POST /api/claude-move/import → 启动批量/单文件导入任务，返回 jobId
+ * - GET /api/claude-move/progress?job=<id> → 任务进度（面板轮询）
+ * 路由随本插件生命周期自动撤销（webServer.register 返回 disposer）。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ * @param state - 插件状态。
+ */
+export function registerWebRoutes(ctx, config, state) {
+  if (config.enableWebPanel === false) return
+  const webServer = ctx.get('webServer')
+  if (!webServer || typeof webServer.register !== 'function') return
+
+  const maxBytes = config.maxTranscriptBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
+  const claudeHome = () => config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
+  const jobs = new Map()
+  const JOB_RETENTION = 20
+
+  webServer.register({
+    kind: 'exact',
+    path: '/api/claude-move/index',
+    handler: async (req, res) => {
+      try {
+        const index = await runScan(ctx, config, {})
+        state.invalidateSkills?.()
+        sendJson(res, 200, index)
+      } catch (err) {
+        sendJson(res, 500, { error: String((err && err.message) || err) })
+      }
+    },
+  })
+
+  webServer.register({
+    kind: 'exact',
+    path: '/api/claude-move/import',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'method not allowed' })
+        return
+      }
+      let body
+      try {
+        body = await readJsonBody(req)
+      } catch (err) {
+        sendJson(res, 400, { error: String((err && err.message) || err) })
+        return
+      }
+      const jobId = randomUUID()
+      const job = {
+        jobId, status: 'running', total: 0, imported: 0, alreadyImported: 0, skipped: 0, failed: 0, results: [],
+      }
+      jobs.set(jobId, job)
+      while (jobs.size > JOB_RETENTION) jobs.delete(jobs.keys().next().value)
+      sendJson(res, 200, { jobId })
+
+      void (async () => {
+        try {
+          const rawPath = body && typeof body.path === 'string' && body.path !== 'all'
+            ? body.path
+            : path.join(claudeHome(), 'projects')
+          const target = await ctx.fs.resolve(rawPath)
+          const info = await ctx.fs.stat(target)
+          if (!info || info.type !== 'directory') {
+            job.status = 'error'
+            job.error = '目录不存在：' + rawPath
+            return
+          }
+          const done = await importDirectory(ctx, target, {
+            recursive: true, force: body && body.force === true,
+          }, maxBytes, (progress) => Object.assign(job, progress))
+          Object.assign(job, done, { status: 'done' })
+        } catch (err) {
+          job.status = 'error'
+          job.error = String((err && err.message) || err)
+        }
+      })()
+    },
+  })
+
+  webServer.register({
+    kind: 'exact',
+    path: '/api/claude-move/progress',
+    handler: (req, res) => {
+      const url = new URL(req.url ?? '', 'http://localhost')
+      const id = url.searchParams.get('job')
+      const job = id ? jobs.get(id) : undefined
+      if (!job) {
+        sendJson(res, 404, { error: 'unknown job' })
+        return
+      }
+      sendJson(res, 200, job)
+    },
+  })
+}
+
+/**
+ * 挂载插件：注册扫描/导入工具、个人上下文贡献、命令与面板路由。
  * @param ctx - Cordis 上下文。
  * @param config - 经 Schemastery 校验的插件配置。
  */
@@ -943,4 +1082,5 @@ export function apply(ctx, config = {}) {
   ctx.tools.register(makeImportTool(ctx, config))
   registerContextContributions(ctx, config, state)
   registerCommands(ctx, config)
+  registerWebRoutes(ctx, config, state)
 }
