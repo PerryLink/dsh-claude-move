@@ -89,6 +89,22 @@ npm install   # 安装 peer 依赖（cordis、@deepseek-ai/dsh-tools、schemaste
 npm test      # node --test：convert（vendored + 扩展）单测 + discovery 单测 + mock ctx 集成
 ```
 
+## Model Experience
+
+- 模型可见面 = 两个工具的 description/schema 与其输出：`claude_scan` 返回结构化索引（模型据此挑选会话），`import_claude` 返回导入汇总（含行号与告警位置）。工具结果本身即落盘的 `tool/result`，可重建。
+- 本插件不向模型注入任何隐藏文本；Phase 3 的 memory/CLAUDE.md 段将注册在 `ctx.systemPrompt`（提示词组装，随会话日志重建）。
+- 无模型-可见 KV 缓存副作用：插件不参与 provider 请求组装。
+
+## Known Limitations and Deferred Work
+
+- 会话标题只取 `custom-title`/`ai-title`/首问，Claude 的 `summary` 记录不作为标题（与 resume-plugin 一致）。
+- `thinking` 块保留在导入日志的 `reasoning` 内容块中，但不进入续聊摘要（Phase 4 的安全模型）。
+- 权限类记录（`permission`/`permission-mode`/`queue-operation`）只统计不导入；DSH 权限预设建议见 Phase 3/4 报告。
+- 单 transcript 超过 `maxTranscriptBytes` 时导入响亮失败而非部分导入（保真优先）；流式分块导入（内存 O(块)）列入优化路线。
+- 源目录已删除的会话仍可导入，但挂接工作区会失败（保留为「未分组」），报告 `workspace.attached: false`。
+- 批量导入中断可安全重跑：幂等跳过已完成文件（append-only 无中间态）。
+- Web 面板与 `/resume-claude` 命令尚未实现（Phase 4/5）。
+
 ## License
 
 MIT，见 [LICENSE](LICENSE)。
