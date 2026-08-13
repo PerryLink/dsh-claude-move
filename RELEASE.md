@@ -45,7 +45,7 @@ dsh web
 1. ✅ 已推送到 GitHub：https://github.com/PerryLink/dsh-claude-move（public，master，topic 已标注 dsh-plugin）。
 2. ✅ GitHub 项目面：CI（`.github/workflows/test.yml`，Node 22 全量测试 + README 徽标）、Issue 模板（bug/feature）、社交分享卡（`assets/social-card.png`，README 首图 → 链接预览卡）、CHANGELOG.md、package.json 的 repository/homepage/bugs 元数据。
 3. ✅ 仓库 About 侧：topics 已设置（`dsh`、`dsh-plugin`、`claude-code`、`deepseek-harness`、`migration`、`claude`、`resume`、`session-import`）。剩余手动项：Settings → Social preview 指定 `assets/social-card.png` 作为社交预览图。
-4. 打 tag `v0.1.0` 并附 Release Notes（引用本文件验收表）。
+4. ✅ 已打 tag `v0.1.0` 并创建 GitHub Release（Release Notes 引用 CHANGELOG 与本文验收表）：https://github.com/PerryLink/dsh-claude-move/releases/tag/v0.1.0
 5. 可选 npm 发布：`npm publish`（bundle 形态；`dsh plugin add dsh-claude-move` 即可安装）。
 
 ## 已知局限（发布版如实说明）
