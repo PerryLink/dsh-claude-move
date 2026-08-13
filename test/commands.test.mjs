@@ -94,10 +94,12 @@ function makeCtx(tree, { persistedIds = [] } = {}) {
     fs,
     sessionPersistence: persistence,
     tools: { register: () => () => {} },
+    on: () => () => {},
     get(service) {
       if (service === 'commands') return { register: (def) => { commandDefs.push(def); return () => {} } }
       if (service === 'workspaceRegistry') return workspaceRegistry
       if (service === 'sessionPersistence') return persistence
+      if (service === 'fs') return fs
       return undefined
     },
   }

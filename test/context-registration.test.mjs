@@ -20,6 +20,7 @@ function makeRichCtx(services = { systemPrompt: true, skills: true }) {
   const skillProviderFactories = []
   const ctx = {
     tools: { register: (d) => { registered.push(d); return () => {} } },
+    on: () => () => {},
     get(service) {
       if (service === 'systemPrompt' && services.systemPrompt) {
         return {

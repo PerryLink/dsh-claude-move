@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply } from '../index.mjs'
+import { apply, requireFs } from '../index.mjs'
 
 async function makeTempDir(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'claude-move-routes-'))
@@ -75,10 +75,12 @@ function makeCtx(tree) {
     fs,
     sessionPersistence: persistence,
     tools: { register: () => () => {} },
+    on: () => () => {},
     get(service) {
       if (service === 'webServer') return webServer
       if (service === 'workspaceRegistry') return workspaceRegistry
       if (service === 'sessionPersistence') return persistence
+      if (service === 'fs') return fs
       return undefined
     },
   }
@@ -191,6 +193,39 @@ test('POST import → jobId → progress 轮询到 done（F16 进度条）', asy
   assert.equal(missingRes.status, 404)
 })
 
+test('POST import 单文件路径：直接导入该会话（面板「导入并继续」）', async (t) => {
+  const home = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = await makeTempDir(t)
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+
+  const projectsDir = path.join(home, 'projects')
+  await mkdir(path.join(projectsDir, 'demo-a'), { recursive: true })
+  const file = path.join(projectsDir, 'demo-a', 'sess-1.jsonl')
+  await writeFile(file, simple, 'utf8')
+
+  const { ctx, routes, persistence } = makeCtx({ [projectsDir]: 'dir', [file]: simple })
+  apply(ctx, { claudeHome: home, scanGit: false })
+
+  const importRoute = routes.find((r) => r.path === '/api/claude-move/import')
+  const postRes = mockRes()
+  await importRoute.handler(mockReq({ method: 'POST', url: '/api/claude-move/import', body: JSON.stringify({ path: file }) }), postRes)
+  const { jobId } = JSON.parse(postRes.body)
+
+  const progressRoute = routes.find((r) => r.path === '/api/claude-move/progress')
+  let job = null
+  for (let i = 0; i < 50 && (!job || job.status === 'running'); i++) {
+    const res = mockRes()
+    await progressRoute.handler(mockReq({ url: '/api/claude-move/progress?job=' + jobId }), res)
+    job = JSON.parse(res.body)
+    if (job.status === 'running') await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  assert.equal(job.status, 'done')
+  assert.equal(job.imported, 1)
+  assert.equal(job.results[0].sessionId, 'import-sess-1')
+  assert.equal(persistence.sessions.size, 1)
+})
+
 test('POST import 非 POST 方法返回 405', async () => {
   const { ctx, routes } = makeCtx({})
   apply(ctx)
@@ -198,6 +233,34 @@ test('POST import 非 POST 方法返回 405', async () => {
   const res = mockRes()
   await route.handler(mockReq({ method: 'GET', url: '/api/claude-move/import' }), res)
   assert.equal(res.status, 405)
+})
+
+test('webServer 后置就绪：经 internal/service 响应式注册路由', () => {
+  const services = {}
+  const routes = []
+  const listeners = {}
+  const ctx = {
+    tools: { register: () => () => {} },
+    get(service) { return services[service] },
+    on(event, cb) {
+      ;(listeners[event] ??= []).push(cb)
+      return () => {}
+    },
+  }
+  apply(ctx)
+  assert.equal(routes.length, 0, '服务未就绪时暂不注册')
+
+  services.webServer = { register: (route) => { routes.push(route); return () => {} } }
+  for (const cb of listeners['internal/service'] ?? []) cb('webServer')
+  assert.deepEqual(routes.map((r) => r.path), [
+    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress',
+  ], '服务出现后经 internal/service 注册')
+})
+
+test('requireFs：fs 服务缺失时响亮失败（真实 Cordis 禁止未声明属性访问）', () => {
+  assert.throws(() => requireFs({ get: () => undefined }), /fs 服务不可用|ctx\.fs/)
+  const fs = { resolve: async () => ({}) }
+  assert.equal(requireFs({ get: (n) => (n === 'fs' ? fs : undefined) }), fs)
 })
 
 test('client bundle：注册协议与零 node 依赖（classic script）', () => {

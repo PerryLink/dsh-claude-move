@@ -104,8 +104,11 @@ function makeCtx(tree, overrides = {}) {
   const ctx = {
     fs,
     sessionPersistence: persistence,
+    on: () => () => {},
     get(service) {
       if (service === 'workspaceRegistry') return workspaceRegistry
+      if (service === 'sessionPersistence') return persistence
+      if (service === 'fs') return fs
       return undefined
     },
     tools: {

@@ -344,7 +344,7 @@ export function resolveImportTarget(raw, claudeHome) {
 
 /** 已持久化会话 id 集合（批量导入一次快照，避免逐文件 O(n) 列表）。 */
 async function listPersistedIds(ctx) {
-  const sp = ctx.sessionPersistence ?? ctx.get('sessionPersistence')
+  const sp = ctx.get('sessionPersistence')
   if (!sp || typeof sp.list !== 'function') return new Set()
   try {
     return new Set((await sp.list()).map((h) => h.id))
@@ -463,8 +463,12 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
     forceImported = { previous, current: nextId, archived: true }
   }
 
-  await ctx.sessionPersistence.create(meta)
-  await ctx.sessionPersistence.append(meta.id, events)
+  const sp = ctx.get('sessionPersistence')
+  if (!sp || typeof sp.create !== 'function' || typeof sp.append !== 'function') {
+    throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
+  }
+  await sp.create(meta)
+  await sp.append(meta.id, events)
   const attached = await attachToWorkspace(ctx, meta)
   await rememberImport(ctx, sourceId ?? null, meta.id)
   persisted.add(meta.id)
@@ -478,6 +482,21 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
 }
 
 /**
+ * 获取文件系统服务（可选依赖，经 ctx.get 查询；缺失响亮失败）。
+ * Cordis 未声明 inject 的服务不能直接读 ctx.fs 属性（"cannot get property
+ * without inject"），工具/命令/路由统一走这里。
+ * @param ctx - Cordis 上下文。
+ * @returns FileSystem 服务。
+ */
+export function requireFs(ctx) {
+  const fs = ctx.get('fs')
+  if (!fs || typeof fs.resolve !== 'function') {
+    throw new Error('文件系统服务（ctx.fs）不可用：claude-move 的导入/扫描需要 fs 服务')
+  }
+  return fs
+}
+
+/**
  * 导入单个 transcript（F5-F7/F9/F10）：stat → 大小防护 → 读取 → 转换 → 落盘。
  * @param ctx - Cordis 上下文。
  * @param target - ctx.fs 目标。
@@ -488,13 +507,14 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
  * @returns 单文件统计。
  */
 export async function importTranscript(ctx, target, args, maxBytes, persisted, rawOverride) {
-  const sourcePath = target.displayPath || ctx.fs.processPath(target)
-  const info = await ctx.fs.stat(target)
+  const fs = requireFs(ctx)
+  const sourcePath = target.displayPath || fs.processPath(target)
+  const info = await fs.stat(target)
   if (info && typeof info.size === 'number' && info.size > maxBytes) {
     throw new Error(`transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）：` +
       '请调高 maxTranscriptBytes 或单独处理该文件（S2 长度防护）')
   }
-  const raw = rawOverride ?? await ctx.fs.readText(target)
+  const raw = rawOverride ?? await fs.readText(target)
   const converted = convertClaudeJsonl(raw, args.sessionId ? { sessionId: args.sessionId } : {})
   const result = await persistConverted(ctx, converted, args, persisted, sourcePath)
   result.secrets = scanSecrets(raw)
@@ -503,7 +523,8 @@ export async function importTranscript(ctx, target, args, maxBytes, persisted, r
 
 /** 递归收集目录下 .jsonl（按路径稳定排序），与上游 chat-import 一致。 */
 async function collectJsonlFiles(ctx, dirTarget, out, recursive) {
-  const entries = await ctx.fs.listDir(dirTarget)
+  const fs = requireFs(ctx)
+  const entries = await fs.listDir(dirTarget)
   for (const entry of entries) {
     if (entry.type === 'directory') {
       if (recursive) await collectJsonlFiles(ctx, entry.target, out, recursive)
@@ -523,6 +544,7 @@ async function collectJsonlFiles(ctx, dirTarget, out, recursive) {
  * @returns `{ total, imported, alreadyImported, skipped, failed, results }`。
  */
 export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress) {
+  const fs = requireFs(ctx)
   const files = []
   await collectJsonlFiles(ctx, dirTarget, files, args.recursive !== false)
   files.sort((a, b) => a.displayPath.localeCompare(b.displayPath))
@@ -538,9 +560,9 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress
     }
   }
   for (const target of files) {
-    const pathLabel = target.displayPath || ctx.fs.processPath(target)
+    const pathLabel = target.displayPath || fs.processPath(target)
     try {
-      const info = await ctx.fs.stat(target)
+      const info = await fs.stat(target)
       if (info && typeof info.size === 'number' && info.size > maxBytes) {
         failed++
         results.push({
@@ -550,7 +572,7 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress
         notify()
         continue
       }
-      const raw = await ctx.fs.readText(target)
+      const raw = await fs.readText(target)
       const converted = convertClaudeJsonl(raw, {})
       if (converted.turns.length === 0 && converted.events.length === 0) {
         skipped++
@@ -687,10 +709,11 @@ function makeImportTool(ctx, config) {
       render: renderImport,
     },
     async execute(args) {
+      const fs = requireFs(ctx)
       const claudeHome = config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
       const targetPath = resolveImportTarget(args.path, claudeHome)
-      const target = await ctx.fs.resolve(targetPath)
-      const info = await ctx.fs.stat(target)
+      const target = await fs.resolve(targetPath)
+      const info = await fs.stat(target)
       if (info && info.type === 'directory') {
         const batch = await importDirectory(ctx, target, args, maxBytes)
         return { mode: 'batch', ...batch }
@@ -703,6 +726,30 @@ function makeImportTool(ctx, config) {
 }
 
 // ── 个人信息搬移（F11-F13）：同步注入 + 技能 provider ────────────────────────
+
+/**
+ * 可选服务就绪即调用：apply 时已存在则立即调用；否则订阅 cordis 的
+ * `internal/service` 事件，服务出现时再调用（避免插件先于服务加载的竞态，
+ * 同时不在 headless 等无该服务的 profile 里保持 PENDING）。
+ * @param ctx - Cordis 上下文。
+ * @param name - 服务名。
+ * @param fn - 服务就绪回调。
+ */
+export function withService(ctx, name, fn) {
+  const existing = ctx.get(name)
+  if (existing !== undefined && existing !== null) {
+    fn(existing)
+    return
+  }
+  const off = ctx.on('internal/service', (serviceName) => {
+    if (serviceName !== name) return
+    const service = ctx.get(name)
+    if (service !== undefined && service !== null) {
+      off()
+      fn(service)
+    }
+  })
+}
 
 /**
  * 插件状态：Claude 根目录、同步文件缓存、技能目录失效回调。
@@ -762,48 +809,49 @@ export function memoryDirsSync(state) {
  * @param state - 插件状态。
  */
 export function registerContextContributions(ctx, config, state) {
-  const systemPrompt = ctx.get('systemPrompt')
+  withService(ctx, 'systemPrompt', (systemPrompt) => {
+    // F11：memory 动态上下文段（同步提供者 + mtime 缓存，每次请求重读变化文件）。
+    if (config.enableMemory !== false && typeof systemPrompt.context === 'function') {
+      systemPrompt.context({
+        name: 'claude-move:memory',
+        order: 120,
+        text: () => {
+          const dirs = memoryDirsSync(state)
+          const memories = dirs.flatMap((dir) => readMemoriesSync(dir, state.fileCache))
+          return renderMemories(memories, config.memoryMaxBytes ?? DEFAULT_MEMORY_MAX_BYTES)
+        },
+      })
+    }
 
-  // F11：memory 动态上下文段（同步提供者 + mtime 缓存，每次请求重读变化文件）。
-  if (systemPrompt && typeof systemPrompt.context === 'function' && config.enableMemory !== false) {
-    systemPrompt.context({
-      name: 'claude-move:memory',
-      order: 120,
-      text: () => {
-        const dirs = memoryDirsSync(state)
-        const memories = dirs.flatMap((dir) => readMemoriesSync(dir, state.fileCache))
-        return renderMemories(memories, config.memoryMaxBytes ?? DEFAULT_MEMORY_MAX_BYTES)
-      },
-    })
-  }
-
-  // F13：全局 + 项目级 CLAUDE.md（项目优先，前置于 persona）。
-  if (systemPrompt && typeof systemPrompt.section === 'function' && config.enableInstructions !== false) {
-    systemPrompt.section({
-      name: 'claude-move:instructions',
-      order: -90,
-      text: (assemble) => {
-        const cwd = assemble?.agent?.session?.header?.cwd
-        const globalPath = path.join(state.claudeHome, 'CLAUDE.md')
-        const globalText = fileExists(globalPath) ? state.fileCache.read(globalPath) : null
-        const projectPath = typeof cwd === 'string' && cwd.length > 0
-          ? path.join(cwd, '.claude', 'CLAUDE.md')
-          : null
-        const projectText = projectPath && fileExists(projectPath) ? state.fileCache.read(projectPath) : null
-        return renderClaudeMd(projectText, globalText)
-      },
-    })
-  }
+    // F13：全局 + 项目级 CLAUDE.md（项目优先，前置于 persona）。
+    if (config.enableInstructions !== false && typeof systemPrompt.section === 'function') {
+      systemPrompt.section({
+        name: 'claude-move:instructions',
+        order: -90,
+        text: (assemble) => {
+          const cwd = assemble?.agent?.session?.header?.cwd
+          const globalPath = path.join(state.claudeHome, 'CLAUDE.md')
+          const globalText = fileExists(globalPath) ? state.fileCache.read(globalPath) : null
+          const projectPath = typeof cwd === 'string' && cwd.length > 0
+            ? path.join(cwd, '.claude', 'CLAUDE.md')
+            : null
+          const projectText = projectPath && fileExists(projectPath) ? state.fileCache.read(projectPath) : null
+          return renderClaudeMd(projectText, globalText)
+        },
+      })
+    }
+  })
 
   // F12：Claude 技能 provider（async list/get；扫描后失效目录缓存）。
-  const skills = ctx.get('skills')
-  if (skills && typeof skills.registerProvider === 'function' && config.enableSkills !== false) {
-    const roots = [path.join(state.claudeHome, 'skills'), ...(config.extraSkillDirs ?? [])]
-    skills.registerProvider((control) => {
-      state.invalidateSkills = () => control.invalidate()
-      return makeClaudeSkillsProvider({ roots, maxSkills: config.maxSkills ?? 30 })
-    })
-  }
+  withService(ctx, 'skills', (skills) => {
+    if (config.enableSkills !== false && typeof skills.registerProvider === 'function') {
+      const roots = [path.join(state.claudeHome, 'skills'), ...(config.extraSkillDirs ?? [])]
+      skills.registerProvider((control) => {
+        state.invalidateSkills = () => control.invalidate()
+        return makeClaudeSkillsProvider({ roots, maxSkills: config.maxSkills ?? 30 })
+      })
+    }
+  })
 }
 
 // ── 人机命令（F15/F17）───────────────────────────────────────────────────────
@@ -869,8 +917,13 @@ export function resolveResumeTarget(index, ref) {
  * @param config - 插件配置。
  */
 export function registerCommands(ctx, config) {
-  const commands = ctx.get('commands')
-  if (!commands || typeof commands.register !== 'function') return
+  withService(ctx, 'commands', (commands) => {
+    if (typeof commands.register !== 'function') return
+    registerCommandDefinitions(ctx, config, commands)
+  })
+}
+
+function registerCommandDefinitions(ctx, config, commands) {
   const maxBytes = config.maxTranscriptBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
   const resumeMaxChars = config.resumeMaxChars ?? DEFAULT_HANDOFF_MAX_CHARS
   const claudeHome = () => config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
@@ -881,8 +934,9 @@ export function registerCommands(ctx, config) {
     description: '一键全量迁移：扫描本机 Claude Code 数据并导入全部会话，输出报告并注入当前会话',
     handler: async (invocation) => {
       try {
-        const target = await ctx.fs.resolve(path.join(claudeHome(), 'projects'))
-        const info = await ctx.fs.stat(target)
+        const fs = requireFs(ctx)
+        const target = await fs.resolve(path.join(claudeHome(), 'projects'))
+        const info = await fs.stat(target)
         if (!info || info.type !== 'directory') {
           return { kind: 'error', text: '未找到 Claude projects 目录（' + claudeHome() + '/projects）。' }
         }
@@ -921,13 +975,14 @@ export function registerCommands(ctx, config) {
         }
         const session = resolved.session
         let dshId = session.import?.dshSessionId
+        const fs = requireFs(ctx)
         if (!dshId) {
-          const target = await ctx.fs.resolve(session.file)
+          const target = await fs.resolve(session.file)
           const persisted = await listPersistedIds(ctx)
           const single = await importTranscript(ctx, target, {}, maxBytes, persisted)
           dshId = single.sessionId
         }
-        const raw = await ctx.fs.readText(await ctx.fs.resolve(session.file))
+        const raw = await fs.readText(await fs.resolve(session.file))
         const converted = convertClaudeJsonl(raw, {})
         const handoff = buildHandoff(converted, { maxChars: resumeMaxChars, title: session.title })
         const injected = injectContext(invocation.agent, handoff)
@@ -986,8 +1041,13 @@ function readJsonBody(req) {
  */
 export function registerWebRoutes(ctx, config, state) {
   if (config.enableWebPanel === false) return
-  const webServer = ctx.get('webServer')
-  if (!webServer || typeof webServer.register !== 'function') return
+  withService(ctx, 'webServer', (webServer) => {
+    if (typeof webServer.register !== 'function') return
+    registerRouteDefinitions(ctx, config, state, webServer)
+  })
+}
+
+function registerRouteDefinitions(ctx, config, state, webServer) {
 
   const maxBytes = config.maxTranscriptBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
   const claudeHome = () => config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
@@ -1033,14 +1093,32 @@ export function registerWebRoutes(ctx, config, state) {
 
       void (async () => {
         try {
+          const fs = requireFs(ctx)
           const rawPath = body && typeof body.path === 'string' && body.path !== 'all'
             ? body.path
             : path.join(claudeHome(), 'projects')
-          const target = await ctx.fs.resolve(rawPath)
-          const info = await ctx.fs.stat(target)
-          if (!info || info.type !== 'directory') {
+          const target = await fs.resolve(rawPath)
+          const info = await fs.stat(target)
+          if (!info) {
             job.status = 'error'
-            job.error = '目录不存在：' + rawPath
+            job.error = '路径不存在：' + rawPath
+            return
+          }
+          if (info.type === 'file') {
+            const persisted = await listPersistedIds(ctx)
+            const single = await importTranscript(ctx, target, { force: body && body.force === true }, maxBytes, persisted)
+            Object.assign(job, {
+              status: 'done',
+              total: 1,
+              imported: single.status === 'imported' ? 1 : 0,
+              alreadyImported: single.status === 'already-imported' ? 1 : 0,
+              results: [{ path: rawPath, ...single }],
+            })
+            return
+          }
+          if (info.type !== 'directory') {
+            job.status = 'error'
+            job.error = '不支持的目标类型：' + rawPath
             return
           }
           const done = await importDirectory(ctx, target, {

@@ -33,6 +33,7 @@ function makeCtx(persistedIds) {
     tools: {
       register(def) { registered.push(def); return () => {} },
     },
+    on: () => () => {},
     get(service) {
       if (service === 'sessionPersistence') {
         return { list: async () => persistedIds.map((id) => ({ id })) }
