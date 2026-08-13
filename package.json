@@ -1,6 +1,6 @@
 {
   "name": "dsh-claude-move",
-  "description": "Migrate Claude Code transcripts, memory, skills and instructions into DeepSeek Harness with seamless resume",
+  "description": "Copy Claude Code transcripts, memories, skills and CLAUDE.md into DeepSeek Harness as resumable sessions — one workspace per project, copy-only, seamlessly resumable",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,17 +11,28 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
+  "homepage": "https://github.com/PerryLink/dsh-claude-move#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PerryLink/dsh-claude-move.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PerryLink/dsh-claude-move/issues"
+  },
   "files": [
     "index.mjs",
     "lib",
     "client",
+    "assets",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
     "README.es.md",
     "README.pt.md",
     "README.hi.md",
+    "CHANGELOG.md",
     "LICENSE",
+    "NOTICE",
     "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
@@ -52,5 +63,5 @@
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }

@@ -1,0 +1,23 @@
+dsh-claude-move
+Copyright 2026 dsh-claude-move contributors
+
+This product is licensed to you under the Apache License, Version 2.0
+(the "License"); you may not use this product except in compliance with
+the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This product includes software and design patterns developed by third
+parties under their own licenses. A full account of every reuse —
+including the MIT license text required by the MIT-licensed components —
+is in THIRD_PARTY_NOTICES.md, which ships alongside this NOTICE file.
+
+Bundled components:
+
+- lib/convert.mjs is vendored and extended from Nwflower/dsh-chat-import
+  (MIT). Portions remain under the MIT license; see the file header and
+  THIRD_PARTY_NOTICES.md.
+- Discovery conventions and the foreign-session safety model follow
+  Demogorgon314/dsh-resume-plugin (MIT).
+- Memory/skills injection and frontmatter parsing patterns follow
+  YYTbit/dsh-plugin-claude-bridge (MIT).

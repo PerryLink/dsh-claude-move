@@ -20,7 +20,7 @@ package.json         npm 元数据；files 白名单 = 发布内容
 README.md            英文主介绍（GitHub 默认页）
 README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链）
 PLAN.md / COMPLIANCE.md / OPTIMIZATION.md   方案与审计（行为变更必须同步）
-LICENSE / THIRD_PARTY_NOTICES.md   MIT + 复用出处标注
+LICENSE / NOTICE / THIRD_PARTY_NOTICES.md   Apache-2.0 + 复用出处标注
 test/                单测 + mock ctx 集成测试（进 GitHub，不进 npm 包）
 dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——永不提交
 ```
@@ -49,7 +49,7 @@ npm test      # node --test 跑 test/*.test.mjs
 
 - **只消费 host 公开服务**：`tools`、`sessionPersistence`、`workspaceRegistry`、`commands`、`systemPrompt`、`skills`、`webServer`。不发布新服务（除非确有必要并在 PR 说明）。
 - **插件，不是引擎改动**：不修改 DSH 引擎 / apiproxy / 官方 UI 包。
-- **会话日志 append-only**：只 `create` + `append`，绝不改写历史事件；强制重导入走 archive + 新 id。
+- **会话日志 append-only**：只 `create` + `append`，绝不改写历史事件；强制重导入 = 新 id 完整副本（复制式），绝不 archive/删除/隐藏任何会话。
 - **模型可见 ⟺ 落盘**：进入模型上下文的任何内容必须能从会话日志重建。
 - **源文件只读**：绝不写入 Claude 数据目录；缓存只写 `$DSH_HOME/claude-move/`。
 - **systemPrompt 提供者必须同步**（rc.6 不 await）：用 readFileSync + mtime 缓存。

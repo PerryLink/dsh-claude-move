@@ -1,7 +1,9 @@
 # Third-Party Notices
 
-`dsh-claude-move` reuses code and design patterns from the following
-open-source projects. Every reuse is attributed here and in the source files.
+`dsh-claude-move` is licensed under the **Apache License 2.0** (see
+[LICENSE](LICENSE) and [NOTICE](NOTICE)). It reuses code and design
+patterns from the following open-source projects, which remain under
+their own licenses. Every reuse is attributed here and in the source files.
 
 ## Nwflower/dsh-chat-import — MIT
 
@@ -12,6 +14,8 @@ open-source projects. Every reuse is attributed here and in the source files.
   (`sessionPersistence.create` + `append`, `workspaceRegistry.attachSession`,
   idempotent batch import), and the `test/convert.test.mjs` suite plus its
   synthetic fixtures.
+- The MIT-licensed portions of `lib/convert.mjs` are retained under MIT;
+  the file header records the provenance.
 
 ## Demogorgon314/dsh-resume-plugin — MIT
 
@@ -37,3 +41,27 @@ open-source projects. Every reuse is attributed here and in the source files.
   skills, and CLAUDE.md, the memory type priority order
   (feedback > project > reference > user), and the frontmatter parsing shape
   (`lib/frontmatter.mjs`).
+
+## MIT license text (required by the MIT-licensed components above)
+
+```
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
