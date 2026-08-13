@@ -56,7 +56,7 @@ test('apply 注册 claude_scan 工具且输出 schema 为结构化索引', () =>
 })
 
 test('resolveScanTarget：all/文件/目录收窄', () => {
-  const home = path.join('C:', 'Users', 'u', '.claude')
+  const home = path.resolve(path.join('C:', 'Users', 'u', '.claude'))
   assert.deepEqual(resolveScanTarget(undefined, home), { kind: 'all' })
   assert.deepEqual(resolveScanTarget('all', home), { kind: 'all' })
   assert.deepEqual(resolveScanTarget(path.join(home, 'projects'), home), { kind: 'all' })

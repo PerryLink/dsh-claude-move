@@ -67,11 +67,11 @@ function makeCtx(tree, { persistedIds = [] } = {}) {
     },
     async listDir(target) {
       const entries = []
-      const prefix = target.targetKey.endsWith('\\') ? target.targetKey : target.targetKey + '\\'
+      const prefix = target.targetKey.endsWith(path.sep) ? target.targetKey : target.targetKey + path.sep
       for (const [p, v] of Object.entries(tree)) {
         if (p.startsWith(prefix) && p !== prefix) {
           const rest = p.slice(prefix.length)
-          if (!rest.includes('\\')) {
+          if (!rest.includes(path.sep)) {
             entries.push({ name: rest, type: v === 'dir' ? 'directory' : 'file', target: { targetKey: p, displayPath: p } })
           }
         }
