@@ -148,6 +148,7 @@ function installPanel(ctx) {
     try {
       index = await json('/api/claude-move/index')
       disabled = false
+      visibleCount = PAGE_SIZE
       status.textContent = `已扫描：${index.projects?.length ?? 0} 个项目 / ${sessionCount(index)} 个会话`
       render()
     } catch (err) {
@@ -167,14 +168,20 @@ function installPanel(ctx) {
 
   function badge(klass, text) { return `<span class="cm-badge ${klass}">${text}</span>` }
 
+  // 大索引分页渲染（D4）：每次最多渲染 PAGE_SIZE 行，点击「加载更多」增量追加。
+  const PAGE_SIZE = 150
+  let visibleCount = PAGE_SIZE
+
   function render() {
     const kw = filter.value.trim().toLowerCase()
     const projects = (index?.projects ?? []).filter((p) => (
       !kw || p.slug.toLowerCase().includes(kw)
       || (p.sessions ?? []).some((s) => (s.title ?? '').toLowerCase().includes(kw) || (s.sessionId ?? '').toLowerCase().includes(kw))
     ))
+    const total = projects.reduce((n, p) => n + (p.sessions ?? []).length, 0)
     const parts = []
-    for (const p of projects) {
+    let shown = 0
+    outer: for (const p of projects) {
       const badges = []
       if (p.git?.isRepo) {
         if (typeof p.git.dirtyCount === 'number' && p.git.dirtyCount > 0) badges.push(badge('dirty', 'git 脏 ' + p.git.dirtyCount))
@@ -183,9 +190,11 @@ function installPanel(ctx) {
       if (!p.dirExists) badges.push(badge('missing', '目录不存在'))
       parts.push(`<div class="cm-proj">📁 ${esc(p.slug)}${badges.join('')}</div>`)
       for (const s of p.sessions ?? []) {
+        if (shown >= visibleCount) break outer
+        shown++
         const st = s.import?.status ?? 'none'
         const b = st === 'imported'
-          ? badge('imported', '已导入')
+          ? badge('imported', s.import?.updatesPending ? '已导入·有新增' : '已导入')
           : st === 'source-missing' ? badge('missing', '源缺失') : badge('', '未导入')
         parts.push(`<div class="cm-sess" data-file="${esc(s.file)}">
           <span class="t">${esc(s.title ?? s.sessionId)}</span>
@@ -193,9 +202,16 @@ function installPanel(ctx) {
         </div>`)
       }
     }
+    if (total > shown) {
+      parts.push(`<div class="cm-sess" id="cm-more">已显示 ${shown}/${total} 个会话，点击加载更多…</div>`)
+    }
     body.innerHTML = parts.length ? parts.join('') : '<div class="cm-proj">（无数据，点「刷新」重新扫描）</div>'
     for (const el of body.querySelectorAll('.cm-sess')) {
-      el.addEventListener('click', () => showDetail(el.dataset.file))
+      if (el.id === 'cm-more') {
+        el.addEventListener('click', () => { visibleCount += PAGE_SIZE; render() })
+      } else {
+        el.addEventListener('click', () => showDetail(el.dataset.file))
+      }
     }
   }
 

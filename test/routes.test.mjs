@@ -312,6 +312,15 @@ test('client bundle：重置缓存按钮（D5）', () => {
   assert.ok(source.includes("'/api/claude-move/reset'"), '调用重置路由')
 })
 
+test('client bundle：有新增徽标与分页渲染（D4）', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  assert.ok(source.includes("s.import?.updatesPending"), '读取 updatesPending 标记')
+  assert.ok(source.includes('已导入·有新增'), '有新增徽标文案')
+  assert.ok(source.includes('PAGE_SIZE'), '分页渲染')
+  assert.ok(source.includes("id=\"cm-more\""), '加载更多入口')
+  assert.ok(source.includes('visibleCount += PAGE_SIZE'), '增量追加')
+})
+
 test('POST /api/claude-move/reset：清除缓存文件并返回 reset（D5）', async (t) => {
   const dshHome = await makeTempDir(t)
   const prev = process.env.DSH_HOME

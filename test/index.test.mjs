@@ -211,6 +211,44 @@ test('annotateImports：listSnapshots 优先 + 失效映射惰性清理（B4）'
   assert.deepEqual(Object.keys(imports), [file], '映射文件只保留有效记录')
 })
 
+test('annotateImports：源轮次多于导入记录时打 updatesPending（D4）', async (t) => {
+  const home = await makeTempDir(t)
+  const dshHome = await makeTempDir(t)
+  const prevDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prevDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevDshHome })
+
+  const projDir = path.join(home, 'projects', 'demo')
+  await mkdir(projDir, { recursive: true })
+  const file = path.join(projDir, 'sess-1.jsonl')
+  // 两轮：源轮次 2 > 已导入记录 1 → 有新增待同步。
+  await writeFile(file,
+    claudeLine('user', { sessionId: 'sess-1', message: { content: 'q1' } }) + '\n'
+    + claudeLine('assistant', { sessionId: 'sess-1', message: { content: [{ type: 'text', text: 'a1' }] } }) + '\n'
+    + claudeLine('user', { sessionId: 'sess-1', message: { content: 'q2' } }) + '\n', 'utf8')
+
+  await mkdir(path.join(dshHome, 'claude-move'), { recursive: true })
+  await writeFile(path.join(dshHome, 'claude-move', 'imports.json'), JSON.stringify({
+    [file]: { dshId: 'import-sess-1', turns: 1, events: 5 },
+  }), 'utf8')
+
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return { listSnapshots: async () => [{ header: { id: 'import-sess-1' }, revision: 'r1' }] }
+      }
+      return undefined
+    },
+  }
+  const index = await runScan(ctx, { claudeHome: home, scanGit: false }, {})
+  const session = index.projects[0].sessions[0]
+  assert.equal(session.import.status, 'imported')
+  assert.equal(session.import.updatesPending, true, '源有新增轮次未同步')
+  assert.equal(session.turns, 2, '扫描头统计轮次数')
+})
+
 test('trimIndex：projectsLimit/sessionsLimit/brief 裁剪（C4）', () => {
   const index = {
     projects: [

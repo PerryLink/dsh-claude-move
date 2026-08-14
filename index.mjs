@@ -95,6 +95,7 @@ const sessionImportSchema = {
   properties: {
     status: { type: 'string', required: true },
     dshSessionId: { type: 'string' },
+    updatesPending: { type: 'boolean' },
   },
 }
 
@@ -330,10 +331,15 @@ export async function annotateImports(ctx, cacheDir, index, cleanStale = false) 
   for (const project of index.projects ?? []) {
     for (const session of project.sessions ?? []) {
       // 幂等键 = 源文件路径（新格式）；sessionId 键保留为旧缓存回退。
-      const dshId = unwrapImport(imports[session.file])?.dshId
-        ?? unwrapImport(imports[session.sessionId])?.dshId
+      const record = unwrapImport(imports[session.file])
+        ?? unwrapImport(imports[session.sessionId])
+      const dshId = record?.dshId
       if (dshId && imported.has(dshId)) {
         session.import = { status: 'imported', dshSessionId: dshId }
+        // 源文件轮次多于已导入记录 → 面板打「有新增」徽标（D4）。
+        if (typeof record.turns === 'number' && typeof session.turns === 'number' && session.turns > record.turns) {
+          session.import.updatesPending = true
+        }
       } else if (session.error) {
         session.import = { status: 'source-missing' }
       } else {
