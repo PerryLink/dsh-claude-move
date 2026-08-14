@@ -3,8 +3,8 @@
 //
 // 已注册：claude_scan（F1-F4 + settings 翻译建议 F14）、import_claude（F5-F10/S4/S5）、
 // memory/CLAUDE.md 系统提示词段（F11/F13，同步提供者 + mtime 缓存）、
-// Claude 技能 provider（F12）。后续阶段追加 claude-import-all 与
-// resume-claude 命令、面板路由。
+// Claude 技能 provider（F12）、/claude-import-all 与 /resume-claude 命令（F15/F17）、
+// /api/claude-move/* 面板 JSON 路由（F16）。
 //
 // 只消费公开服务：tools / systemPrompt / skills / sessionPersistence /
 // workspaceRegistry（后两者经 ctx.get 可选读取）。源文件只读，缓存只写
@@ -26,7 +26,6 @@ import {
   loadCache,
   saveCache,
   loadImports,
-  saveImports,
   scanClaudeHome,
   scanProjectDir,
   scanTranscriptFile,
@@ -37,6 +36,7 @@ import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileEx
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
 import { translateSettings } from './lib/settings.mjs'
 import { buildHandoff, DEFAULT_HANDOFF_MAX_CHARS } from './lib/handoff.mjs'
+import { importsStore } from './lib/imports-store.mjs'
 
 export const name = 'claude-move'
 
@@ -414,17 +414,18 @@ export async function attachToWorkspace(ctx, meta) {
  * 记录形如 `{ dshId, turns, events, sizeBytes, mtimeMs }`：幂等跳过与增量续写
  * 都依赖它；按文件路径为键：多个源文件可能共享同一源 sessionId（Claude
  * 子会话等），按 sessionId 去重会静默丢弃后导入文件的历史。
- * @param ctx - Cordis 上下文。
+ * 写入经 importsStore 串行化 + 原子写：与模型工具/命令/面板 job 的并发
+ * 读-改-写互不覆盖。
+ * @param ctx - Cordis 上下文（保留签名兼容，当前不再读取）。
  * @param key - 源 transcript 绝对路径；缺失则跳过。
  * @param record - `{ dshId, turns, events, sizeBytes, mtimeMs }`。
  */
 export async function rememberImport(ctx, key, record) {
   if (typeof key !== 'string' || key.length === 0) return
   try {
-    const cacheDir = resolveCacheDir()
-    const imports = await loadImports(cacheDir)
-    imports[key] = record
-    await saveImports(cacheDir, imports)
+    await importsStore.update((imports) => {
+      imports[key] = record
+    })
   } catch (err) {
     console.error('[claude-move] remember import failed:', String((err && err.message) || err))
   }
@@ -468,6 +469,26 @@ async function storedEventCount(ctx, dshId) {
  * @returns 单文件统计。
  */
 export async function persistConverted(ctx, converted, args, persisted, sourcePath, source = {}) {
+  // 同一源文件并发导入互斥：后到者等先行者落盘后重跑，按幂等路径复用结果
+  // （否则 create duplicate 会被记为 failed，且 imports.json 会被并发覆盖）。
+  return importsStore.exclusive(sourcePath, () =>
+    persistConvertedInner(ctx, converted, args, persisted, sourcePath, source))
+}
+
+/** 探测同名持久化会话是否为空日志（上次 create 成功、append 失败残留）；无法确定返回 false。 */
+async function isEmptyStoredSession(ctx, dshId) {
+  const sp = ctx.get('sessionPersistence')
+  if (!sp || typeof sp.readFrom !== 'function') return false
+  try {
+    const read = await sp.readFrom(dshId, 0)
+    return Array.isArray(read?.events) && read.events.length === 0
+  } catch {
+    // 读不到/读失败：按「非空」处理，走保守路径。
+    return false
+  }
+}
+
+async function persistConvertedInner(ctx, converted, args, persisted, sourcePath, source = {}) {
   const { meta, events, turns, messages, toolCalls, skipped, skippedLines, typeCounts, sourceId } = converted
 
   // 源 sessionId 缺失时用文件名 slug 保证目标 id 跨运行稳定（否则 mintSessionId
@@ -561,6 +582,24 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
 
   // ── 首次导入（或源文件从未成功落盘） ─────────────────────────────────────
   if (persisted.has(meta.id)) {
+    // 半建残留恢复（A5）：同名会话日志为空（上次 create 成功、append 失败）
+    // → 复用原 id 直接 append 补全，不另建副本；无法确认时后缀避让。
+    if (await isEmptyStoredSession(ctx, meta.id)) {
+      await spAppend(ctx, meta.id, events)
+      persisted.add(meta.id)
+      const attached = await attachToWorkspace(ctx, meta)
+      await rememberImport(ctx, sourcePath, {
+        dshId: meta.id, turns: turns.length, events: events.length,
+        sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+      })
+      return {
+        ...base,
+        sessionId: meta.id,
+        status: 'imported',
+        recoveredHalfCreated: true,
+        workspace: { ...attached, ...(meta.cwd ? { path: meta.cwd } : {}) },
+      }
+    }
     // 目标 id 被其它源文件占用（同源 sessionId）：后缀避让，保留双方历史。
     meta.id = mintForceSessionId(persisted, meta.id)
   }
@@ -577,6 +616,15 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
     status: 'imported',
     workspace: { ...attached, ...(meta.cwd ? { path: meta.cwd } : {}) },
   }
+}
+
+/** append 一份事件批次；服务缺失响亮抛出。 */
+async function spAppend(ctx, id, events) {
+  const sp = ctx.get('sessionPersistence')
+  if (!sp || typeof sp.append !== 'function') {
+    throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
+  }
+  await sp.append(id, events)
 }
 
 /** create + append 一份完整会话日志；服务缺失/落盘失败响亮抛出。 */
@@ -789,6 +837,7 @@ const importResultSchema = {
     appendedSkipped: { type: 'string' },
     sourceShrunk: { type: 'boolean' },
     changedInPlace: { type: 'boolean' },
+    recoveredHalfCreated: { type: 'boolean' },
     workspace: { type: 'object', additionalProperties: true },
     forceImported: { type: 'object', additionalProperties: true },
     total: { type: 'integer' },
@@ -835,6 +884,9 @@ export function renderImport(args, value) {
       }
       if (value.changedInPlace) {
         lines.push('源文件在已导入轮次内新增内容（导入时该轮尚未完成）：保留已导入快照，下一轮完成后自动续写；需要当前完整快照请用 force: true。')
+      }
+      if (value.recoveredHalfCreated) {
+        lines.push('检测到上次中断残留的空会话，已复用原 id 补全（未另建副本）。')
       }
     }
     if (value.skipped) {
@@ -1106,6 +1158,32 @@ export function resolveResumeTarget(index, ref) {
 }
 
 /**
+ * /resume-claude 定位快路径（A6）：精确 sessionId / import-<src> id 无需全量
+ * 扫描——直接用 imports.json 映射 + index.json 书签定位；未命中返回 null
+ * （调用方回退 runScan 增量扫描）。latest/关键词不走快路径（依赖最近活动
+ * 排序与标题匹配，必须扫描索引）。
+ * @param ctx - Cordis 上下文（当前仅用于签名对称）。
+ * @param ref - 命令输入。
+ * @returns `{ session }` 或 null。
+ */
+export async function resolveResumeFast(ctx, ref) {
+  const trimmed = (ref ?? '').trim()
+  if (trimmed.length === 0 || trimmed === 'latest') return null
+  const cacheDir = resolveCacheDir()
+  const [imports, cache] = await Promise.all([loadImports(cacheDir), loadCache(cacheDir)])
+  const files = cache?.files ?? {}
+  for (const [sourcePath, entry] of Object.entries(imports)) {
+    const record = unwrapImport(entry)
+    if (record?.dshId === trimmed) {
+      const header = files[sourcePath]
+      return header && !header.error ? { session: header } : null
+    }
+  }
+  const bySessionId = Object.values(files).find((s) => s && !s.error && s.sessionId === trimmed)
+  return bySessionId ? { session: bySessionId } : null
+}
+
+/**
  * 注册 claude-import-all 与 resume-claude 命令（F15/F17）。
  * 命令由用户直接触发，不经模型回合；结果直接渲染 UI，并注入当前会话上下文。
  * @param ctx - Cordis 上下文。
@@ -1163,8 +1241,9 @@ function registerCommandDefinitions(ctx, config, commands) {
     handler: async (invocation) => {
       try {
         const ref = invocation.rawInput.trim()
-        const index = await runScan(ctx, config, {})
-        const resolved = resolveResumeTarget(index, ref)
+        // 快路径：精确 id 直接由 imports.json + 缓存书签定位，省掉全量/增量扫描。
+        const fast = await resolveResumeFast(ctx, ref)
+        const resolved = fast ?? resolveResumeTarget(await runScan(ctx, config, {}), ref)
         if (resolved.kind === 'none') {
           return { kind: 'error', text: '未找到匹配的 Claude 会话。可用 /claude-import-all 先全量迁移，或运行 claude_scan 后重试。' }
         }
@@ -1177,14 +1256,27 @@ function registerCommandDefinitions(ctx, config, commands) {
         const session = resolved.session
         let dshId = session.import?.dshSessionId
         const fs = requireFs(ctx)
+        const target = await fs.resolve(session.file)
+        const info = await fs.stat(target)
+        if (info && typeof info.size === 'number' && info.size > maxBytes) {
+          return {
+            kind: 'error',
+            text: `transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）：` +
+              '请调高 maxTranscriptBytes，或改由 /claude-import-all 全量迁移。',
+          }
+        }
+        invocation.signal?.throwIfAborted()
+        // 只读一次原文：同一转换结果既用于幂等落盘，也用于生成交接摘要（A6 消除双读）。
+        const raw = await fs.readText(target)
+        const converted = convertClaudeJsonl(raw, {})
         if (!dshId) {
-          const target = await fs.resolve(session.file)
           const persisted = await listPersistedIds(ctx)
-          const single = await importTranscript(ctx, target, {}, maxBytes, persisted, undefined, invocation.signal)
+          const single = await persistConverted(ctx, converted, {}, persisted, session.file, {
+            sizeBytes: info && typeof info.size === 'number' ? info.size : undefined,
+            mtimeMs: info && typeof info.mtimeMs === 'number' ? info.mtimeMs : undefined,
+          })
           dshId = single.sessionId
         }
-        const raw = await fs.readText(await fs.resolve(session.file))
-        const converted = convertClaudeJsonl(raw, {})
         const handoff = buildHandoff(converted, { maxChars: resumeMaxChars, title: session.title })
         const injected = injectContext(invocation.agent, handoff)
         return {

@@ -6,7 +6,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, resolveImportTarget, mintForceSessionId, importDirectory } from '../index.mjs'
+import { apply, resolveImportTarget, mintForceSessionId, importDirectory, persistConverted } from '../index.mjs'
+import { convertClaudeJsonl } from '../lib/convert.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 function claudeLine(type, extra = {}) {
@@ -32,7 +33,7 @@ const simple = [
 
 const withSecrets = claudeLine('user', { message: { content: 'key: ghp_abcdefghijklmnopqrstuvwxyz0123456789AB' } }) + '\n'
 
-// 内存态会话库：create/append/list，模拟 sessionPersistence。
+// 内存态会话库：create/append/list/readFrom，模拟 sessionPersistence。
 function makePersistence() {
   const sessions = new Map()
   return {
@@ -46,6 +47,11 @@ function makePersistence() {
       const s = sessions.get(id)
       if (!s) throw new Error('unknown session ' + id)
       s.events.push(...events)
+    },
+    async readFrom(id, fromSeq) {
+      const s = sessions.get(id)
+      if (!s) throw new Error('unknown session ' + id)
+      return { meta: s.meta, events: s.events.slice(fromSeq) }
     },
   }
 }
@@ -499,4 +505,54 @@ test('importConcurrency：并发读取转换保持结果顺序与 id 分配确�
   )
   assert.deepEqual(batch.results.map((r) => r.status), ['imported', 'imported', 'imported', 'imported'])
   assert.equal(persistence.sessions.size, 4)
+})
+
+test('并发导入同一源文件：一个 imported、一个 already-imported，映射不丢（A4）', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence } = makeCtx({ [P('sess-1.jsonl')]: simple })
+  const converted = convertClaudeJsonl(simple, {})
+  const persisted = new Set()
+  const [r1, r2] = await Promise.all([
+    persistConverted(ctx, converted, {}, persisted, P('sess-1.jsonl'), {}),
+    persistConverted(ctx, converted, {}, persisted, P('sess-1.jsonl'), {}),
+  ])
+  assert.deepEqual(
+    [r1.status, r2.status].sort(),
+    ['already-imported', 'imported'],
+    '后到者等待先行者并复用其落盘结果',
+  )
+  assert.equal(persistence.sessions.size, 1, '只落盘一份')
+  assert.equal(r1.sessionId, r2.sessionId, '同一目标 id')
+})
+
+test('半建残留恢复：同名空会话复用原 id 补全，不另建副本（A5）', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence } = makeCtx({ [P('sess-1.jsonl')]: simple })
+  // 模拟上次 create 成功、append 失败留下的空会话。
+  await persistence.create({ version: 0, id: 'import-sess-1', createdAt: Date.now() })
+
+  const converted = convertClaudeJsonl(simple, {})
+  const persisted = new Set(['import-sess-1'])
+  const result = await persistConverted(ctx, converted, {}, persisted, P('sess-1.jsonl'), {})
+  assert.equal(result.status, 'imported')
+  assert.equal(result.sessionId, 'import-sess-1', '复用原 id')
+  assert.equal(result.recoveredHalfCreated, true)
+  assert.equal(persistence.sessions.size, 1, '不另建副本')
+  assert.ok(persistence.sessions.get('import-sess-1').events.length > 0, '事件补全落盘')
+})
+
+test('半建残留：readFrom 不可用时保守后缀避让（A5 保守路径）', async (t) => {
+  await withTempDshHome(t)
+  const { ctx, persistence } = makeCtx({ [P('sess-1.jsonl')]: simple })
+  await persistence.create({ version: 0, id: 'import-sess-1', createdAt: Date.now() })
+  // 去掉 readFrom：无法确认日志是否为空 → 保持既有后缀避让语义。
+  persistence.readFrom = undefined
+
+  const converted = convertClaudeJsonl(simple, {})
+  const persisted = new Set(['import-sess-1'])
+  const result = await persistConverted(ctx, converted, {}, persisted, P('sess-1.jsonl'), {})
+  assert.equal(result.status, 'imported')
+  assert.equal(result.sessionId, 'import-sess-1-1', '后缀避让保留双方历史')
+  assert.equal(result.recoveredHalfCreated, undefined)
+  assert.equal(persistence.sessions.size, 2)
 })
