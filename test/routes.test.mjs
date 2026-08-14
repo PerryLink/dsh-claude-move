@@ -269,7 +269,7 @@ test('client bundle：注册协议与零 node 依赖（classic script）', () =>
   assert.ok(source.includes("id: 'dsh-claude-move'"), 'id 与包名一致')
   assert.ok(source.includes('name: \'claude-move-panel\''), '导出 Cordis 客户端插件形态')
   assert.ok(source.includes('inject: []'), '零注入依赖')
-  assert.ok(!/\bimport\s/.test(source), '无 ES import（classic script）')
+  assert.ok(!/^\s*import\s/m.test(source), '无 ES import（classic script）')
   assert.ok(!source.includes('node:'), '无 node 依赖')
 })
 
@@ -319,6 +319,15 @@ test('client bundle：有新增徽标与分页渲染（D4）', () => {
   assert.ok(source.includes('PAGE_SIZE'), '分页渲染')
   assert.ok(source.includes("id=\"cm-more\""), '加载更多入口')
   assert.ok(source.includes('visibleCount += PAGE_SIZE'), '增量追加')
+})
+
+test('client bundle：面板文案 zh/en 双语字典（D3）', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  assert.ok(source.includes('const PANEL_STRINGS'), '文案字典存在')
+  assert.ok(source.includes("en: {\n    panelTitle: 'Claude Code Migration'"), '英文文案存在')
+  assert.ok(source.includes("zh: {\n    panelTitle: 'Claude Code 迁移'"), '中文文案存在')
+  assert.ok(source.includes('navigator.language'), '按浏览器语言选择')
+  assert.ok(source.includes('function panelText('), '文案取值函数存在')
 })
 
 test('POST /api/claude-move/reset：清除缓存文件并返回 reset（D5）', async (t) => {

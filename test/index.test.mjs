@@ -55,6 +55,17 @@ test('apply 注册 claude_scan 工具且输出 schema 为结构化索引', () =>
   assert.ok(def.output.schema.properties.claudeHome)
 })
 
+test('工具描述双语：英文主 + 中文附（D3）', () => {
+  const ctx = makeCtx([])
+  apply(ctx)
+  const scan = ctx.registered.find((d) => d.name === 'claude_scan')
+  const importTool = ctx.registered.find((d) => d.name === 'import_claude')
+  assert.ok(scan.description.includes('Scan the local Claude Code data'), 'claude_scan 英文主描述')
+  assert.ok(scan.description.includes('扫描本机 Claude Code 数据'), 'claude_scan 中文附描述')
+  assert.ok(importTool.description.includes('Copy Claude Code JSONL transcripts'), 'import_claude 英文主描述')
+  assert.ok(importTool.description.includes('复制导入历史对话'), 'import_claude 中文附描述')
+})
+
 test('resolveScanTarget：all/文件/目录收窄', () => {
   const home = path.resolve(path.join('C:', 'Users', 'u', '.claude'))
   assert.deepEqual(resolveScanTarget(undefined, home), { kind: 'all' })

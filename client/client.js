@@ -5,7 +5,7 @@
 // 注入 __DSH_BOOT__ 图，执行时经 window.__ModuleLoader__.load 注册工厂；
 // 工厂闭包在首次 materialize 时运行，apply 挂载浮层面板（无注入服务，
 // 只依赖 DOM + 本插件自注册的 /api/claude-move/* JSON 路由）。
-// 面板自身不产生任何模型可见内容。
+// 面板自身不产生任何模型可见内容。文案按浏览器语言 zh/en 双语（D3）。
 
 (function () {
   'use strict'
@@ -37,6 +37,122 @@ function safeService(ctx, name) {
   } catch {
     return undefined
   }
+}
+
+/** 面板文案（D3）：zh/en 双语，缺失键回退英文键名。 */
+const PANEL_STRINGS = {
+  zh: {
+    panelTitle: 'Claude Code 迁移',
+    openButton: '🐳 Claude 迁移',
+    refresh: '刷新',
+    refreshTitle: '重新扫描',
+    reset: '重置缓存',
+    resetTitle: '重置扫描缓存与导入映射（保留已导入会话）',
+    close: '关闭',
+    filterPlaceholder: '关键词过滤（标题/会话）…',
+    importAll: '批量导入全部',
+    cancel: '取消',
+    cancelTitle: '取消当前导入',
+    scanning: '扫描中…',
+    scanned: '已扫描：{0} 个项目 / {1} 个会话',
+    panelDisabled: '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，面板不可用',
+    panelDisabledImport: '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，导入不可用',
+    scanFailed: '扫描失败：',
+    gitDirty: 'git 脏 ',
+    git: 'git ',
+    dirMissing: '目录不存在',
+    imported: '已导入',
+    importedNew: '已导入·有新增',
+    sourceMissing: '源缺失',
+    notImported: '未导入',
+    messagesTools: '{0} 消息 · {1} 工具',
+    showMore: '已显示 {0}/{1} 个会话，点击加载更多…',
+    empty: '（无数据，点「刷新」重新扫描）',
+    kvSession: '会话：',
+    kvLastActivity: '最近活动：',
+    messagesToolCalls: '{0} 消息 · {1} 工具调用',
+    kvDshSession: 'DSH 会话：',
+    kvDir: '目录：',
+    unknown: '未知',
+    dirNotExists: '（不存在）',
+    importContinue: '导入并继续',
+    openSession: '打开会话',
+    openSessionTitle: '在当前窗口打开已导入会话',
+    refreshSessions: '刷新会话列表',
+    refreshSessionsTitle: '导入后刷新会话列表以点开续聊',
+    cacheReset: '缓存已重置，正在重新扫描…',
+    resetFailed: '重置失败：',
+    submitting: '提交导入…',
+    importing: '导入中：{0}/{1} 新增，{2} 追加，{3} 失败',
+    importDone: '导入完成：新增 {0}、已存在 {1}、追加 {2}、跳过 {3}、失败 {4}。会话列表已自动刷新，无需重启 dsh。',
+    importCancelled: '导入已取消。',
+    importFailed: '导入失败：',
+    cancelling: '正在取消…',
+    cancelFailed: '取消失败：',
+    unknownError: '未知错误',
+  },
+  en: {
+    panelTitle: 'Claude Code Migration',
+    openButton: '🐳 Claude Migration',
+    refresh: 'Refresh',
+    refreshTitle: 'Rescan',
+    reset: 'Reset cache',
+    resetTitle: 'Reset scan cache and import map (imported sessions are kept)',
+    close: 'Close',
+    filterPlaceholder: 'Filter by keyword (title/session)…',
+    importAll: 'Import everything',
+    cancel: 'Cancel',
+    cancelTitle: 'Cancel current import',
+    scanning: 'Scanning…',
+    scanned: 'Scanned: {0} projects / {1} sessions',
+    panelDisabled: 'Panel routes disabled: enableWebPanel is false or the Web service is not loaded — the panel is unavailable',
+    panelDisabledImport: 'Panel routes disabled: enableWebPanel is false or the Web service is not loaded — import is unavailable',
+    scanFailed: 'Scan failed: ',
+    gitDirty: 'git dirty ',
+    git: 'git ',
+    dirMissing: 'directory missing',
+    imported: 'imported',
+    importedNew: 'imported · new turns',
+    sourceMissing: 'source missing',
+    notImported: 'not imported',
+    messagesTools: '{0} msgs · {1} tools',
+    showMore: 'Showing {0}/{1} sessions — click to load more…',
+    empty: '(No data — click "Refresh" to rescan)',
+    kvSession: 'Session: ',
+    kvLastActivity: 'Last activity: ',
+    messagesToolCalls: '{0} msgs · {1} tool calls',
+    kvDshSession: 'DSH session: ',
+    kvDir: 'Directory: ',
+    unknown: 'unknown',
+    dirNotExists: ' (missing)',
+    importContinue: 'Import & continue',
+    openSession: 'Open session',
+    openSessionTitle: 'Open the imported session in this window',
+    refreshSessions: 'Refresh session list',
+    refreshSessionsTitle: 'Refresh the session list after importing',
+    cacheReset: 'Cache reset — rescanning…',
+    resetFailed: 'Reset failed: ',
+    submitting: 'Submitting import…',
+    importing: 'Importing: {0}/{1} new, {2} appended, {3} failed',
+    importDone: 'Import done: {0} new, {1} existing, {2} appended, {3} skipped, {4} failed. The session list refreshed automatically — no DSH restart needed.',
+    importCancelled: 'Import cancelled.',
+    importFailed: 'Import failed: ',
+    cancelling: 'Cancelling…',
+    cancelFailed: 'Cancel failed: ',
+    unknownError: 'unknown error',
+  },
+}
+
+/** 按浏览器语言取文案并代入 {0}/{1}/… 参数。 */
+function panelText(key, ...args) {
+  const lang = typeof navigator !== 'undefined' && String(navigator.language || '').toLowerCase().startsWith('zh')
+    ? 'zh'
+    : 'en'
+  let text = (PANEL_STRINGS[lang] ?? PANEL_STRINGS.en)[key] ?? key
+  for (let i = 0; i < args.length; i++) {
+    text = text.replace('{' + i + '}', String(args[i] ?? ''))
+  }
+  return text
 }
 
 function installPanel(ctx) {
@@ -81,7 +197,7 @@ function installPanel(ctx) {
 
   const openBtn = document.createElement('button')
   openBtn.id = 'cm-open'
-  openBtn.textContent = '🐳 Claude 迁移'
+  openBtn.textContent = panelText('openButton')
 
   const root = document.createElement('div')
   root.id = 'claude-move-panel'
@@ -89,17 +205,17 @@ function installPanel(ctx) {
   drawer.id = 'cm-drawer'
   drawer.style.display = 'none'
   drawer.innerHTML = `
-    <div id="cm-head"><b>Claude Code 迁移</b>
-      <button id="cm-refresh" title="重新扫描">刷新</button>
-      <button id="cm-reset" title="重置扫描缓存与导入映射（保留已导入会话）">重置缓存</button>
-      <button id="cm-close" title="关闭">✕</button>
+    <div id="cm-head"><b>${panelText('panelTitle')}</b>
+      <button id="cm-refresh" title="${panelText('refreshTitle')}">${panelText('refresh')}</button>
+      <button id="cm-reset" title="${panelText('resetTitle')}">${panelText('reset')}</button>
+      <button id="cm-close" title="${panelText('close')}">✕</button>
     </div>
-    <input id="cm-filter" placeholder="关键词过滤（标题/会话）…" />
+    <input id="cm-filter" placeholder="${panelText('filterPlaceholder')}" />
     <div id="cm-body"></div>
     <div id="cm-detail" style="display:none"></div>
     <div id="cm-foot">
-      <button id="cm-import-all">批量导入全部</button>
-      <button id="cm-cancel" style="display:none" title="取消当前导入">取消</button>
+      <button id="cm-import-all">${panelText('importAll')}</button>
+      <button id="cm-cancel" style="display:none" title="${panelText('cancelTitle')}">${panelText('cancel')}</button>
       <div id="cm-progress"><i></i></div>
       <span id="cm-status"></span>
     </div>`
@@ -130,10 +246,10 @@ function installPanel(ctx) {
   async function resetCache() {
     try {
       await json('/api/claude-move/reset', { method: 'POST' })
-      status.textContent = '缓存已重置，正在重新扫描…'
+      status.textContent = panelText('cacheReset')
       await refresh()
     } catch (err) {
-      status.textContent = '重置失败：' + String(err && err.message)
+      status.textContent = panelText('resetFailed') + String(err && err.message)
     }
   }
 
@@ -144,20 +260,20 @@ function installPanel(ctx) {
   }
 
   async function refresh() {
-    status.textContent = '扫描中…'
+    status.textContent = panelText('scanning')
     try {
       index = await json('/api/claude-move/index')
       disabled = false
       visibleCount = PAGE_SIZE
-      status.textContent = `已扫描：${index.projects?.length ?? 0} 个项目 / ${sessionCount(index)} 个会话`
+      status.textContent = panelText('scanned', index.projects?.length ?? 0, sessionCount(index))
       render()
     } catch (err) {
       const msg = String(err && err.message)
       if (msg === 'HTTP 404') {
         disabled = true
-        status.textContent = '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，面板不可用'
+        status.textContent = panelText('panelDisabled')
       } else {
-        status.textContent = '扫描失败：' + msg
+        status.textContent = panelText('scanFailed') + msg
       }
     }
   }
@@ -184,28 +300,28 @@ function installPanel(ctx) {
     outer: for (const p of projects) {
       const badges = []
       if (p.git?.isRepo) {
-        if (typeof p.git.dirtyCount === 'number' && p.git.dirtyCount > 0) badges.push(badge('dirty', 'git 脏 ' + p.git.dirtyCount))
-        else badges.push(badge('', 'git ' + (p.git.branch ?? '?')))
+        if (typeof p.git.dirtyCount === 'number' && p.git.dirtyCount > 0) badges.push(badge('dirty', panelText('gitDirty') + p.git.dirtyCount))
+        else badges.push(badge('', panelText('git') + (p.git.branch ?? '?')))
       }
-      if (!p.dirExists) badges.push(badge('missing', '目录不存在'))
+      if (!p.dirExists) badges.push(badge('missing', panelText('dirMissing')))
       parts.push(`<div class="cm-proj">📁 ${esc(p.slug)}${badges.join('')}</div>`)
       for (const s of p.sessions ?? []) {
         if (shown >= visibleCount) break outer
         shown++
         const st = s.import?.status ?? 'none'
         const b = st === 'imported'
-          ? badge('imported', s.import?.updatesPending ? '已导入·有新增' : '已导入')
-          : st === 'source-missing' ? badge('missing', '源缺失') : badge('', '未导入')
+          ? badge('imported', s.import?.updatesPending ? panelText('importedNew') : panelText('imported'))
+          : st === 'source-missing' ? badge('missing', panelText('sourceMissing')) : badge('', panelText('notImported'))
         parts.push(`<div class="cm-sess" data-file="${esc(s.file)}">
           <span class="t">${esc(s.title ?? s.sessionId)}</span>
-          ${b} <span class="cm-badge">${s.messages ?? 0} 消息 · ${s.toolCalls ?? 0} 工具</span>
+          ${b} <span class="cm-badge">${panelText('messagesTools', s.messages ?? 0, s.toolCalls ?? 0)}</span>
         </div>`)
       }
     }
     if (total > shown) {
-      parts.push(`<div class="cm-sess" id="cm-more">已显示 ${shown}/${total} 个会话，点击加载更多…</div>`)
+      parts.push(`<div class="cm-sess" id="cm-more">${panelText('showMore', shown, total)}</div>`)
     }
-    body.innerHTML = parts.length ? parts.join('') : '<div class="cm-proj">（无数据，点「刷新」重新扫描）</div>'
+    body.innerHTML = parts.length ? parts.join('') : `<div class="cm-proj">${panelText('empty')}</div>`
     for (const el of body.querySelectorAll('.cm-sess')) {
       if (el.id === 'cm-more') {
         el.addEventListener('click', () => { visibleCount += PAGE_SIZE; render() })
@@ -227,20 +343,20 @@ function installPanel(ctx) {
     const found = findSession(file)
     if (!found) return
     const { project, session } = found
-    const when = session.lastActivity ? new Date(session.lastActivity).toLocaleString() : '未知'
+    const when = session.lastActivity ? new Date(session.lastActivity).toLocaleString() : panelText('unknown')
     const dshId = session.import?.dshSessionId
     const canOpen = typeof sessions?.open === 'function'
     detail.style.display = 'block'
     detail.innerHTML = `
       <h4>${esc(session.title ?? session.sessionId)}</h4>
-      <div class="kv">会话：${esc(session.sessionId)}</div>
-      <div class="kv">最近活动：${esc(when)} · ${session.messages ?? 0} 消息 · ${session.toolCalls ?? 0} 工具调用</div>
-      ${dshId ? `<div class="kv">DSH 会话：${esc(dshId)}</div>` : ''}
-      <div class="kv">目录：${esc(project.cwd ?? '（未知）')}${project.dirExists ? '' : '（不存在）'}</div>
+      <div class="kv">${panelText('kvSession')}${esc(session.sessionId)}</div>
+      <div class="kv">${panelText('kvLastActivity')}${esc(when)} · ${panelText('messagesToolCalls', session.messages ?? 0, session.toolCalls ?? 0)}</div>
+      ${dshId ? `<div class="kv">${panelText('kvDshSession')}${esc(dshId)}</div>` : ''}
+      <div class="kv">${panelText('kvDir')}${esc(project.cwd ?? panelText('unknown'))}${project.dirExists ? '' : panelText('dirNotExists')}</div>
       <p style="margin-top:8px">
-        <button data-act="import">导入并继续</button>
-        ${dshId && canOpen ? '<button data-act="open" title="在当前窗口打开已导入会话">打开会话</button>' : ''}
-        <button data-act="reload" title="导入后刷新会话列表以点开续聊">刷新会话列表</button>
+        <button data-act="import">${panelText('importContinue')}</button>
+        ${dshId && canOpen ? `<button data-act="open" title="${panelText('openSessionTitle')}">${panelText('openSession')}</button>` : ''}
+        <button data-act="reload" title="${panelText('refreshSessionsTitle')}">${panelText('refreshSessions')}</button>
       </p>`
     detail.querySelector('[data-act="import"]').addEventListener('click', () => importJob(session.file))
     const openBtn = detail.querySelector('[data-act="open"]')
@@ -275,18 +391,18 @@ function installPanel(ctx) {
     if (!currentJobId) return
     try {
       await json('/api/claude-move/job?job=' + encodeURIComponent(currentJobId), { method: 'DELETE' })
-      status.textContent = '正在取消…'
+      status.textContent = panelText('cancelling')
     } catch (err) {
-      status.textContent = '取消失败：' + String(err && err.message)
+      status.textContent = panelText('cancelFailed') + String(err && err.message)
     }
   }
 
   async function importJob(target) {
     if (disabled) {
-      status.textContent = '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，导入不可用'
+      status.textContent = panelText('panelDisabledImport')
       return
     }
-    status.textContent = '提交导入…'
+    status.textContent = panelText('submitting')
     setBar(0)
     cancelBtn.style.display = 'none'
     currentJobId = null
@@ -303,16 +419,16 @@ function installPanel(ctx) {
         const job = await json('/api/claude-move/progress?job=' + encodeURIComponent(jobId))
         const total = job.total ?? 0
         if (total > 0) setBar(((job.imported + job.alreadyImported + job.skipped + job.failed) / total) * 100)
-        status.textContent = `导入中：${job.imported}/${total} 新增，${job.appended ?? 0} 追加，${job.failed} 失败`
+        status.textContent = panelText('importing', job.imported, total, job.appended ?? 0, job.failed)
         if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
           if (job.status === 'done') {
-            status.textContent = `导入完成：新增 ${job.imported}、已存在 ${job.alreadyImported}、追加 ${job.appended ?? 0}、跳过 ${job.skipped}、失败 ${job.failed}。会话列表已自动刷新，无需重启 dsh。`
+            status.textContent = panelText('importDone', job.imported, job.alreadyImported, job.appended ?? 0, job.skipped, job.failed)
             setBar(100)
             await refreshSessions()
           } else if (job.status === 'cancelled') {
-            status.textContent = '导入已取消。'
+            status.textContent = panelText('importCancelled')
           } else {
-            status.textContent = '导入失败：' + (job.error ?? '未知错误')
+            status.textContent = panelText('importFailed') + (job.error ?? panelText('unknownError'))
           }
           cancelBtn.style.display = 'none'
           currentJobId = null
@@ -321,7 +437,7 @@ function installPanel(ctx) {
         }
       }
     } catch (err) {
-      status.textContent = '导入失败：' + String(err && err.message)
+      status.textContent = panelText('importFailed') + String(err && err.message)
     }
   }
 

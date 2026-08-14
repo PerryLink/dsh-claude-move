@@ -416,12 +416,8 @@ function makeScanTool(ctx, config, state) {
   return defineTool({
     name: 'claude_scan',
     description:
-      '扫描本机 Claude Code 数据：自动定位数据根目录（$CLAUDE_CONFIG_DIR 或 ~/.claude），' +
-      '索引全部项目/会话（标题、起止时间、消息与工具调用数）、目录与 git 状态，以及' +
-      '记忆、技能、全局 CLAUDE.md 与 settings.json。返回结构化 JSON 索引；' +
-      'path 可收窄到 projects 目录、单个项目目录、单个 .jsonl 或任意含 .jsonl 的目录，' +
-      'refresh=true 跳过增量缓存全量重扫，projectsLimit/sessionsLimit/fields 裁剪输出体量。' +
-      '导入历史请用 import_claude。',
+      'Scan the local Claude Code data: locate the data root ($CLAUDE_CONFIG_DIR or ~/.claude), index every project/session (title, timestamps, message & tool-call counts), directory & git state, memories, skills, global CLAUDE.md and settings.json. Returns a structured JSON index. path narrows to the projects directory, one project, one .jsonl or any directory containing .jsonl files; refresh=true bypasses the incremental cache; projectsLimit/sessionsLimit/fields trim the output. Use import_claude for imports. ' +
+      '（扫描本机 Claude Code 数据：自动定位数据根目录，索引全部项目/会话、目录与 git 状态、记忆/技能/CLAUDE.md/settings.json；path 收窄范围，refresh 全量重扫，projectsLimit/sessionsLimit/fields 裁剪输出。导入请用 import_claude。）',
     parameters: {
       path: {
         type: 'string',
@@ -1040,12 +1036,8 @@ function makeImportTool(ctx, config) {
   return defineTool({
     name: 'import_claude',
     description:
-      '从 Claude Code 的 JSONL transcript 复制导入历史对话为可继续（resume）的 DSH 会话。' +
-      "path 可以是单个 .jsonl、目录、'~/.claude/projects' 或 'all'（全量批量）。" +
-      '全保真映射 user/assistant/tool/thinking 消息、合成平衡会话事件并持久化、按 cwd 挂接对应工作区；' +
-      '迁移是复制式的：绝不删除源文件，也绝不删除/改写 DSH 既有会话。' +
-      '重复导入同一文件时自动增量续写新增轮次；force=true 为该源文件创建一份新的完整副本（新 id import-<src>-<n>），旧副本原样保留。' +
-      '畸形行带行号上报、疑似凭据只报位置、权限类记录只统计不导入。返回单文件或批量逐文件汇总。',
+      'Copy Claude Code JSONL transcripts into resumable DSH sessions. path is a single .jsonl, a directory, "~/.claude/projects" or "all". Full-fidelity user/assistant/tool/thinking mapping, balanced session events, per-cwd workspace attach. Copy-only: never deletes source files and never deletes/rewrites existing DSH sessions. Re-import appends only new turns; force=true saves a fresh full copy under a new id (import-<src>-<n>) and keeps the old copy. Malformed lines carry line numbers, suspected secrets are reported by position only, permission-class records are counted, not imported. Returns a single-file or per-file batch summary. ' +
+      '（从 Claude Code JSONL transcript 复制导入历史对话为可续聊的 DSH 会话；全保真映射、按 cwd 挂接工作区；复制式迁移，绝不删除源文件或改写既有会话；重复导入增量续写，force=true 另存新 id 完整副本；畸形行报行号、密钥只报位置、权限类记录只统计。）',
     parameters: {
       path: {
         type: 'string',
@@ -1371,7 +1363,7 @@ function registerCommandDefinitions(ctx, config, commands) {
   // F15：一条命令完成 扫描 → 导入 → 注入上下文 → 输出报告。
   commands.register({
     name: 'claude-import-all',
-    description: '一键全量迁移：扫描本机 Claude Code 数据并导入全部会话，输出报告并注入当前会话',
+    description: 'One-shot migration: scan the local Claude Code data and import every session, then report and inject the summary into the current session（一键全量迁移：扫描本机 Claude Code 数据并导入全部会话，输出报告并注入当前会话）',
     handler: async (invocation) => {
       try {
         const fs = requireFs(ctx)
@@ -1403,7 +1395,7 @@ function registerCommandDefinitions(ctx, config, commands) {
   // F17：未导入先导入，再以交接摘要方式在当前会话继续。
   commands.register({
     name: 'resume-claude',
-    description: '继续 Claude Code 会话：latest | 会话ID | 标题关键词；未导入的先导入，再以静态交接摘要继续',
+    description: 'Continue a Claude Code session: latest | session id | title keyword; imports first if needed, then continues via a static handoff summary（继续 Claude Code 会话：latest | 会话ID | 标题关键词；未导入的先导入，再以静态交接摘要继续）',
     input: { hint: 'latest | 会话ID | 标题关键词' },
     handler: async (invocation) => {
       try {
@@ -1476,7 +1468,7 @@ function registerCommandDefinitions(ctx, config, commands) {
   // D5：重置本插件缓存（扫描书签 + 导入映射），保留已导入的 DSH 会话。
   commands.register({
     name: 'claude-move-reset',
-    description: '重置本插件缓存（扫描书签与导入映射），保留已导入的 DSH 会话',
+    description: 'Reset this plugin cache (scan bookmarks and import map); imported DSH sessions are kept（重置本插件缓存：扫描书签与导入映射，保留已导入的 DSH 会话）',
     handler: async () => {
       try {
         await resetCacheFiles(resolveCacheDir())
