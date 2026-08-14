@@ -323,3 +323,21 @@ test('gitStatus：knownBranch 跳过 rev-parse、分支缺失时照常探测', a
   assert.equal(calls.filter((a) => a.includes('rev-parse')).length, 0)
   assert.deepEqual(await gitStatus(repo, { exec }), { isRepo: true, branch: 'main', dirtyCount: 0 })
 })
+
+test('scanClaudeHome：删除文件的书签计数报告（C5）', async (t) => {
+  const home = await makeTempDir(t)
+  const projectDir = path.join(home, 'projects', 'demo-a')
+  await mkdir(projectDir, { recursive: true })
+  const f1 = path.join(projectDir, 'a1.jsonl')
+  await writeFile(f1, claudeLine('user', { sessionId: 'a1', message: { content: 'q' } }) + '\n', 'utf8')
+
+  const first = await scanClaudeHome(home, { scanGit: false })
+  assert.equal(first.index.removedBookmarks, undefined, '首次扫描无删除报告')
+
+  await rm(f1)
+  const second = await scanClaudeHome(home, {
+    scanGit: false, cache: { version: INDEX_VERSION, files: first.files },
+  })
+  assert.equal(second.index.removedBookmarks, 1, '删除的源文件书签计数')
+  assert.deepEqual(second.files, {}, '书签随扫描清理')
+})

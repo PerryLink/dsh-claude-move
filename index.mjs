@@ -213,6 +213,53 @@ export async function runScan(ctx, config, args, signal) {
 
   await annotateImports(ctx, cacheDir, index, target.kind === 'all')
   await annotateSettings(index)
+  trimIndex(index, {
+    ...(Number.isInteger(args?.projectsLimit) && args.projectsLimit > 0 ? { projectsLimit: args.projectsLimit } : {}),
+    ...(Number.isInteger(args?.sessionsLimit) && args.sessionsLimit > 0 ? { sessionsLimit: args.sessionsLimit } : {}),
+    fields: args?.fields === 'brief' ? 'brief' : 'full',
+  })
+  return index
+}
+
+/**
+ * 索引裁剪（C4）：projectsLimit/sessionsLimit 截断项目与会话（超过时打
+ * projectsTruncated/sessionsTruncated 标记）；fields='brief' 只保留定位与
+ * 导入状态字段，减小模型上下文与 tool/result 日志体量。裁剪发生在缓存
+ * 落盘与导入标注之后，不影响增量书签完整性。
+ * @param index - 扫描索引（就地裁剪）。
+ * @param options - `{ projectsLimit, sessionsLimit, fields }`。
+ * @returns 裁剪后的索引。
+ */
+export function trimIndex(index, { projectsLimit, sessionsLimit, fields } = {}) {
+  let projects = index.projects ?? []
+  if (Number.isInteger(projectsLimit) && projectsLimit > 0 && projects.length > projectsLimit) {
+    projects = projects.slice(0, projectsLimit)
+    index.projectsTruncated = true
+  }
+  const sl = Number.isInteger(sessionsLimit) && sessionsLimit > 0 ? sessionsLimit : null
+  index.projects = projects.map((project) => {
+    if (sl === null || (project.sessions ?? []).length <= sl) return project
+    return { ...project, sessions: project.sessions.slice(0, sl), sessionsTruncated: true }
+  })
+  if (fields === 'brief') {
+    index.projects = index.projects.map((project) => {
+      const brief = { slug: project.slug, dir: project.dir, dirExists: project.dirExists }
+      if (project.cwd) brief.cwd = project.cwd
+      if (project.git) brief.git = project.git
+      if (project.sessionsTruncated) brief.sessionsTruncated = true
+      brief.sessions = (project.sessions ?? []).map((s) => ({
+        file: s.file,
+        sessionId: s.sessionId,
+        title: s.title,
+        lastActivity: s.lastActivity,
+        messages: s.messages,
+        toolCalls: s.toolCalls,
+        malformed: s.malformed,
+        import: s.import,
+      }))
+      return brief
+    })
+  }
   return index
 }
 
@@ -332,6 +379,12 @@ export function renderScan(args, value) {
   if (typeof value.importsCleaned === 'number' && value.importsCleaned > 0) {
     lines.push(`- 清理了 ${value.importsCleaned} 条失效导入映射（对应 DSH 会话已被删除）`)
   }
+  if (typeof value.removedBookmarks === 'number' && value.removedBookmarks > 0) {
+    lines.push(`- ${value.removedBookmarks} 个源 transcript 已删除（书签随扫描清理）`)
+  }
+  if (value.projectsTruncated || (value.projects ?? []).some((p) => p.sessionsTruncated)) {
+    lines.push('- 索引已按 projectsLimit/sessionsLimit 裁剪（更多内容请调大上限或 fields=full）')
+  }
   const suggestionCount = value.settingsSuggestions?.suggestions?.length ?? 0
   const unmappedCount = value.settingsSuggestions?.unmapped?.length ?? 0
   if (suggestionCount > 0 || unmappedCount > 0) {
@@ -360,7 +413,8 @@ function makeScanTool(ctx, config, state) {
       '索引全部项目/会话（标题、起止时间、消息与工具调用数）、目录与 git 状态，以及' +
       '记忆、技能、全局 CLAUDE.md 与 settings.json。返回结构化 JSON 索引；' +
       'path 可收窄到 projects 目录、单个项目目录、单个 .jsonl 或任意含 .jsonl 的目录，' +
-      'refresh=true 跳过增量缓存全量重扫。导入历史请用 import_claude。',
+      'refresh=true 跳过增量缓存全量重扫，projectsLimit/sessionsLimit/fields 裁剪输出体量。' +
+      '导入历史请用 import_claude。',
     parameters: {
       path: {
         type: 'string',
@@ -369,6 +423,19 @@ function makeScanTool(ctx, config, state) {
       refresh: {
         type: 'boolean',
         description: '可选：true 时忽略增量缓存，全量重扫（默认 false）。',
+      },
+      projectsLimit: {
+        type: 'integer',
+        description: '可选：最多返回的项目数（按最近活动排序取前 N，默认全量）。',
+      },
+      sessionsLimit: {
+        type: 'integer',
+        description: '可选：每个项目最多返回的会话数（默认全量）。',
+      },
+      fields: {
+        type: 'string',
+        enum: ['brief', 'full'],
+        description: "可选：'brief' 只返回定位与导入状态字段（减小上下文），默认 'full'。",
       },
     },
     output: {

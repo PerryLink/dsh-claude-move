@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, runScan, resolveScanTarget } from '../index.mjs'
+import { apply, runScan, resolveScanTarget, trimIndex } from '../index.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 async function makeTempDir(t) {
@@ -209,4 +209,27 @@ test('annotateImports：listSnapshots 优先 + 失效映射惰性清理（B4）'
   assert.equal(index.importsCleaned, 1, '失效映射清理并报告条数')
   const imports = JSON.parse(await readFile(path.join(dshHome, 'claude-move', 'imports.json'), 'utf8'))
   assert.deepEqual(Object.keys(imports), [file], '映射文件只保留有效记录')
+})
+
+test('trimIndex：projectsLimit/sessionsLimit/brief 裁剪（C4）', () => {
+  const index = {
+    projects: [
+      {
+        slug: 'a',
+        sessions: [
+          { file: 'f1', sessionId: 's1', title: 't1', lastActivity: 2, messages: 1, toolCalls: 0, typeCounts: { user: 1 }, import: { status: 'none' } },
+          { file: 'f2', sessionId: 's2' },
+        ],
+      },
+      { slug: 'b', sessions: [{ file: 'f3', sessionId: 's3' }] },
+    ],
+  }
+  const trimmed = trimIndex(structuredClone(index), { projectsLimit: 1, sessionsLimit: 1, fields: 'brief' })
+  assert.equal(trimmed.projects.length, 1)
+  assert.equal(trimmed.projectsTruncated, true)
+  assert.equal(trimmed.projects[0].sessions.length, 1)
+  assert.equal(trimmed.projects[0].sessionsTruncated, true)
+  assert.equal(trimmed.projects[0].sessions[0].typeCounts, undefined, 'brief 去掉重型字段')
+  assert.deepEqual(trimmed.projects[0].sessions[0].import, { status: 'none' }, '保留导入状态')
+  assert.equal(trimIndex(structuredClone(index), {}).projects.length, 2, '默认不裁剪')
 })
