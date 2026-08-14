@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, resolveResumeTarget, injectContext } from '../index.mjs'
+import { apply, resolveResumeTarget, resolveResumeFast, injectContext } from '../index.mjs'
 
 async function makeTempDir(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'claude-move-cmd-'))
@@ -22,6 +22,7 @@ async function withTempDshHome(t) {
     else process.env.DSH_HOME = prev
     await rm(dir, { recursive: true, force: true })
   })
+  return dir
 }
 
 function claudeLine(type, extra = {}) {
@@ -38,6 +39,7 @@ function claudeLine(type, extra = {}) {
 function makeCtx(tree, { persistedIds = [] } = {}) {
   const commandDefs = []
   const injected = []
+  const reads = []
   const persistence = {
     sessions: new Map(),
     async list() { return [...persistence.sessions.values()].map((s) => s.meta) },
@@ -50,6 +52,11 @@ function makeCtx(tree, { persistedIds = [] } = {}) {
       if (!s) throw new Error('unknown session ' + id)
       s.events.push(...events)
     },
+    async readFrom(id, fromSeq) {
+      const s = persistence.sessions.get(id)
+      if (!s) throw new Error('unknown session ' + id)
+      return { meta: s.meta, events: s.events.slice(fromSeq) }
+    },
   }
   const fs = {
     async resolve(p) { return { targetKey: p, displayPath: p } },
@@ -61,6 +68,7 @@ function makeCtx(tree, { persistedIds = [] } = {}) {
         : { type: 'file', version: 1, size: Buffer.byteLength(v, 'utf8') }
     },
     async readText(target) {
+      reads.push(target.targetKey)
       const v = tree[target.targetKey]
       if (v === undefined || v === 'dir') throw new Error('FS_NOT_FOUND ' + target.targetKey)
       return v
@@ -103,7 +111,7 @@ function makeCtx(tree, { persistedIds = [] } = {}) {
       return undefined
     },
   }
-  return { ctx, commandDefs, injected, persistence, agent }
+  return { ctx, commandDefs, injected, persistence, agent, reads }
 }
 
 const simpleTranscript = [
@@ -212,6 +220,63 @@ test('resume-claude 关键词多候选：列出候选不导入不猜测（F17）
   assert.ok(result.text.includes('sess-1'))
   assert.ok(result.text.includes('sess-2'))
   assert.equal(persistence.sessions.size, 0, '多候选不导入')
+})
+
+test('resume-claude 精确 id 走快路径且只读一次原文（A6）', async (t) => {
+  const dshHome = await withTempDshHome(t)
+  const home = await makeTempDir(t)
+  const projectsDir = path.join(home, 'projects')
+  const projectDir = path.join(projectsDir, 'demo-a')
+  await mkdir(projectDir, { recursive: true })
+  const file = path.join(projectDir, 'sess-1.jsonl')
+  await writeFile(file, simpleTranscript, 'utf8')
+
+  // 预置索引书签：快路径应直接用书签定位，无需扫描 claudeHome（树里不提供 projects 目录条目）。
+  await mkdir(path.join(dshHome, 'claude-move'), { recursive: true })
+  await writeFile(path.join(dshHome, 'claude-move', 'index.json'), JSON.stringify({
+    version: 1, claudeHome: home,
+    files: { [file]: { file, sessionId: 'sess-1', title: '修复登录页', lastActivity: 1 } },
+  }), 'utf8')
+
+  const { ctx, commandDefs, injected, persistence, agent, reads } = makeCtx({
+    [file]: simpleTranscript,
+  })
+  apply(ctx, { claudeHome: home, scanGit: false })
+  const def = commandDefs.find((d) => d.name === 'resume-claude')
+
+  const result = await def.handler({ agent, rawInput: 'sess-1', signal: new AbortController().signal })
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('import-sess-1'))
+  assert.ok(result.text.includes('静态历史'))
+  assert.equal(persistence.sessions.size, 1, '未导入先导入')
+  assert.equal(reads.filter((p) => p === file).length, 1, '同一 transcript 只读一次')
+  assert.equal(injected.length, 1)
+})
+
+test('resolveResumeFast：imports 映射与书签定位 / latest 与未命中回退 null', async (t) => {
+  const dshHome = await withTempDshHome(t)
+  const cacheDir = path.join(dshHome, 'claude-move')
+  await mkdir(cacheDir, { recursive: true })
+  const file = path.resolve('C:\\claude\\projects\\demo-a\\sess-1.jsonl')
+  const cache = {
+    version: 1, claudeHome: path.resolve('C:\\claude'),
+    files: {
+      [file]: { file, sessionId: 'sess-1', title: '修复登录页', lastActivity: 1 },
+    },
+  }
+  await writeFile(path.join(cacheDir, 'index.json'), JSON.stringify(cache), 'utf8')
+
+  const ctx = { get: () => undefined }
+  assert.equal(await resolveResumeFast(ctx, 'latest'), null, 'latest 不走快路径')
+  assert.equal(await resolveResumeFast(ctx, ''), null)
+  assert.deepEqual(await resolveResumeFast(ctx, 'sess-1'), { session: cache.files[file] })
+
+  // imports.json 里的 dshId 反向定位源会话。
+  await writeFile(path.join(cacheDir, 'imports.json'), JSON.stringify({
+    [file]: { dshId: 'import-sess-1', turns: 2, events: 8 },
+  }), 'utf8')
+  assert.deepEqual(await resolveResumeFast(ctx, 'import-sess-1'), { session: cache.files[file] })
+  assert.equal(await resolveResumeFast(ctx, 'sess-999'), null, '缓存未命中返回 null（回退全量扫描）')
 })
 
 test('resume-claude 未命中返回 error', async (t) => {
