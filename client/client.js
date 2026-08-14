@@ -16,14 +16,35 @@
       return {
         name: 'claude-move-panel',
         inject: [],
-        apply: function () { installPanel() },
+        apply: function (ctx) { installPanel(ctx) },
       }
     },
   })
 })()
 
-function installPanel() {
+/**
+ * 特性探测客户端 Cordis 上下文里的官方服务（B1）。老 shell 没有 sessions/
+ * workspaces 服务时不写入 inject（缺服务会导致 boot sweep FAILED），改在
+ * apply 里用 get 探测：有则免刷新更新会话列表、直接打开会话，无则回退整页刷新。
+ * @param ctx - 客户端 Cordis 上下文。
+ * @param name - 服务名。
+ * @returns 服务对象或 undefined。
+ */
+function safeService(ctx, name) {
+  try {
+    const svc = ctx && typeof ctx.get === 'function' ? ctx.get(name) : undefined
+    return svc ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+function installPanel(ctx) {
   if (document.getElementById('claude-move-panel')) return
+
+  // B1：官方客户端服务（sessions.refresh/open、workspaces.refresh）——特性探测 + 回退。
+  const sessions = safeService(ctx, 'sessions')
+  const workspaces = safeService(ctx, 'workspaces')
 
   const style = document.createElement('style')
   style.textContent = `
@@ -176,19 +197,45 @@ function installPanel() {
     if (!found) return
     const { project, session } = found
     const when = session.lastActivity ? new Date(session.lastActivity).toLocaleString() : '未知'
+    const dshId = session.import?.dshSessionId
+    const canOpen = typeof sessions?.open === 'function'
     detail.style.display = 'block'
     detail.innerHTML = `
       <h4>${esc(session.title ?? session.sessionId)}</h4>
       <div class="kv">会话：${esc(session.sessionId)}</div>
       <div class="kv">最近活动：${esc(when)} · ${session.messages ?? 0} 消息 · ${session.toolCalls ?? 0} 工具调用</div>
-      ${session.import?.dshSessionId ? `<div class="kv">DSH 会话：${esc(session.import.dshSessionId)}</div>` : ''}
+      ${dshId ? `<div class="kv">DSH 会话：${esc(dshId)}</div>` : ''}
       <div class="kv">目录：${esc(project.cwd ?? '（未知）')}${project.dirExists ? '' : '（不存在）'}</div>
       <p style="margin-top:8px">
         <button data-act="import">导入并继续</button>
+        ${dshId && canOpen ? '<button data-act="open" title="在当前窗口打开已导入会话">打开会话</button>' : ''}
         <button data-act="reload" title="导入后刷新会话列表以点开续聊">刷新会话列表</button>
       </p>`
     detail.querySelector('[data-act="import"]').addEventListener('click', () => importJob(session.file))
-    detail.querySelector('[data-act="reload"]').addEventListener('click', () => window.location.reload())
+    const openBtn = detail.querySelector('[data-act="open"]')
+    if (openBtn) openBtn.addEventListener('click', () => openSession(dshId))
+    detail.querySelector('[data-act="reload"]').addEventListener('click', () => { void refreshSessions() })
+  }
+
+  /** 官方服务可用时免刷新更新会话/工作区列表；否则回退整页刷新。 */
+  async function refreshSessions() {
+    try {
+      if (typeof sessions?.refresh === 'function') await sessions.refresh()
+      if (typeof workspaces?.refresh === 'function') await workspaces.refresh()
+      return
+    } catch {
+      // 服务异常：回退整页刷新，保证列表一定更新。
+    }
+    window.location.reload()
+  }
+
+  /** 官方服务可用时直接打开已导入会话。 */
+  function openSession(dshId) {
+    if (typeof sessions?.open === 'function') {
+      sessions.open(dshId)
+      return
+    }
+    window.location.reload()
   }
 
   async function importJob(target) {
@@ -210,11 +257,16 @@ function installPanel() {
         const total = job.total ?? 0
         if (total > 0) setBar(((job.imported + job.alreadyImported + job.skipped + job.failed) / total) * 100)
         status.textContent = `导入中：${job.imported}/${total} 新增，${job.appended ?? 0} 追加，${job.failed} 失败`
-        if (job.status === 'done' || job.status === 'error') {
-          status.textContent = job.status === 'done'
-            ? `导入完成：新增 ${job.imported}、已存在 ${job.alreadyImported}、追加 ${job.appended ?? 0}、跳过 ${job.skipped}、失败 ${job.failed}。无需重启 dsh：刷新页面或点击会话详情中的「刷新会话列表」后，即可在会话列表中打开续聊。`
-            : '导入失败：' + (job.error ?? '未知错误')
-          if (job.status === 'done') setBar(100)
+        if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+          if (job.status === 'done') {
+            status.textContent = `导入完成：新增 ${job.imported}、已存在 ${job.alreadyImported}、追加 ${job.appended ?? 0}、跳过 ${job.skipped}、失败 ${job.failed}。会话列表已自动刷新，无需重启 dsh。`
+            setBar(100)
+            await refreshSessions()
+          } else if (job.status === 'cancelled') {
+            status.textContent = '导入已取消。'
+          } else {
+            status.textContent = '导入失败：' + (job.error ?? '未知错误')
+          }
           refresh()
           return
         }

@@ -284,3 +284,16 @@ test('client bundle：面板路由禁用容错与默认收起（A1/A2）', () =>
   assert.ok(source.includes("drawer.style.display = 'none'"), '抽屉默认隐藏')
   assert.ok(!source.includes('show(true)'), '不再启动即自动展开')
 })
+
+test('client bundle：官方 sessions/workspaces 服务特性探测与回退（B1）', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  // 特性探测：不写进 inject（缺服务会让 boot sweep FAILED），apply 里用 get 探测。
+  assert.ok(source.includes("ctx.get(name)"), '经 ctx.get 特性探测服务')
+  assert.ok(source.includes("safeService(ctx, 'sessions')"), '探测 sessions 服务')
+  assert.ok(source.includes("safeService(ctx, 'workspaces')"), '探测 workspaces 服务')
+  assert.ok(source.includes("typeof sessions?.refresh === 'function'"), 'sessions.refresh 能力探测')
+  assert.ok(source.includes("typeof sessions?.open === 'function'"), 'sessions.open 能力探测')
+  assert.ok(source.includes('sessions.open(dshId)'), '打开已导入会话')
+  assert.ok(source.includes('window.location.reload()'), '服务缺失回退整页刷新')
+  assert.ok(source.includes("data-act=\"open\""), '详情区提供打开会话按钮')
+})
