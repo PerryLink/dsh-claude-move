@@ -98,6 +98,7 @@ function installPanel(ctx) {
     <div id="cm-detail" style="display:none"></div>
     <div id="cm-foot">
       <button id="cm-import-all">批量导入全部</button>
+      <button id="cm-cancel" style="display:none" title="取消当前导入">取消</button>
       <div id="cm-progress"><i></i></div>
       <span id="cm-status"></span>
     </div>`
@@ -120,6 +121,8 @@ function installPanel(ctx) {
   drawer.querySelector('#cm-close').addEventListener('click', () => show(false))
   drawer.querySelector('#cm-refresh').addEventListener('click', () => refresh())
   drawer.querySelector('#cm-import-all').addEventListener('click', () => importJob('all'))
+  const cancelBtn = drawer.querySelector('#cm-cancel')
+  cancelBtn.addEventListener('click', () => { void cancelJob() })
   filter.addEventListener('input', () => render())
 
   async function json(url, options) {
@@ -238,6 +241,18 @@ function installPanel(ctx) {
     window.location.reload()
   }
 
+  let currentJobId = null
+
+  async function cancelJob() {
+    if (!currentJobId) return
+    try {
+      await json('/api/claude-move/job?job=' + encodeURIComponent(currentJobId), { method: 'DELETE' })
+      status.textContent = '正在取消…'
+    } catch (err) {
+      status.textContent = '取消失败：' + String(err && err.message)
+    }
+  }
+
   async function importJob(target) {
     if (disabled) {
       status.textContent = '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，导入不可用'
@@ -245,12 +260,16 @@ function installPanel(ctx) {
     }
     status.textContent = '提交导入…'
     setBar(0)
+    cancelBtn.style.display = 'none'
+    currentJobId = null
     try {
       const { jobId } = await json('/api/claude-move/import', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(target === 'all' ? { path: 'all' } : { path: target }),
       })
+      currentJobId = jobId
+      cancelBtn.style.display = ''
       for (;;) {
         await sleep(700)
         const job = await json('/api/claude-move/progress?job=' + encodeURIComponent(jobId))
@@ -267,6 +286,8 @@ function installPanel(ctx) {
           } else {
             status.textContent = '导入失败：' + (job.error ?? '未知错误')
           }
+          cancelBtn.style.display = 'none'
+          currentJobId = null
           refresh()
           return
         }

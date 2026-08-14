@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, requireFs } from '../index.mjs'
+import { apply, requireFs, isTrustedOrigin } from '../index.mjs'
 
 async function makeTempDir(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'claude-move-routes-'))
@@ -96,9 +96,9 @@ function mockRes() {
   return res
 }
 
-function mockReq({ method = 'GET', url = '/api/claude-move/index', body } = {}) {
+function mockReq({ method = 'GET', url = '/api/claude-move/index', body, headers = {} } = {}) {
   const req = {
-    method, url,
+    method, url, headers,
     on(event, cb) {
       if (event === 'data' && body) cb(Buffer.from(body))
       if (event === 'end') cb()
@@ -109,11 +109,11 @@ function mockReq({ method = 'GET', url = '/api/claude-move/index', body } = {}) 
   return req
 }
 
-test('apply 注册面板三路由（webServer 存在时）', () => {
+test('apply 注册面板四路由（webServer 存在时）', () => {
   const { ctx, routes } = makeCtx({})
   apply(ctx)
   assert.deepEqual(routes.map((r) => r.path), [
-    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress',
+    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress', '/api/claude-move/job',
   ])
   assert.ok(routes.every((r) => r.kind === 'exact'))
 })
@@ -253,7 +253,7 @@ test('webServer 后置就绪：经 internal/service 响应式注册路由', () =
   services.webServer = { register: (route) => { routes.push(route); return () => {} } }
   for (const cb of listeners['internal/service'] ?? []) cb('webServer')
   assert.deepEqual(routes.map((r) => r.path), [
-    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress',
+    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress', '/api/claude-move/job',
   ], '服务出现后经 internal/service 注册')
 })
 
@@ -296,4 +296,128 @@ test('client bundle：官方 sessions/workspaces 服务特性探测与回退（B
   assert.ok(source.includes('sessions.open(dshId)'), '打开已导入会话')
   assert.ok(source.includes('window.location.reload()'), '服务缺失回退整页刷新')
   assert.ok(source.includes("data-act=\"open\""), '详情区提供打开会话按钮')
+})
+
+test('client bundle：导入取消按钮与 job 取消面（D4/B5）', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  assert.ok(source.includes("id=\"cm-cancel\""), '取消按钮存在')
+  assert.ok(source.includes("'/api/claude-move/job?job='"), 'DELETE 取消路由调用')
+  assert.ok(source.includes("method: 'DELETE'"), '取消走 DELETE')
+  assert.ok(source.includes('currentJobId'), '跟踪当前 job id')
+})
+
+test('isTrustedOrigin：loopback/同源放行、跨源拒绝、无 Origin 放行（D6）', () => {
+  assert.equal(isTrustedOrigin({ headers: {} }), true, '非浏览器客户端无 Origin 放行')
+  assert.equal(isTrustedOrigin({ headers: { origin: 'http://127.0.0.1:3080' } }), true)
+  assert.equal(isTrustedOrigin({ headers: { origin: 'http://localhost:3080' } }), true)
+  assert.equal(isTrustedOrigin({ headers: { origin: 'http://myhost:3080', host: 'myhost:3080' } }), true, '同源放行')
+  assert.equal(isTrustedOrigin({ headers: { origin: 'http://evil.example', host: 'localhost:3080' } }), false, '跨源拒绝')
+  assert.equal(isTrustedOrigin({ headers: { origin: 'not-a-url' } }), false)
+})
+
+test('POST import：跨源请求 403（D6 状态变更路由加固）', async (t) => {
+  const home = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = await makeTempDir(t)
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+
+  const projectsDir = path.join(home, 'projects')
+  await mkdir(path.join(projectsDir, 'demo-a'), { recursive: true })
+  const file = path.join(projectsDir, 'demo-a', 'sess-1.jsonl')
+  await writeFile(file, simple, 'utf8')
+
+  const { ctx, routes } = makeCtx({ [projectsDir]: 'dir', [path.join(projectsDir, 'demo-a')]: 'dir', [file]: simple })
+  apply(ctx, { claudeHome: home, scanGit: false })
+  const importRoute = routes.find((r) => r.path === '/api/claude-move/import')
+
+  const res = mockRes()
+  await importRoute.handler(mockReq({
+    method: 'POST', url: '/api/claude-move/import',
+    headers: { origin: 'http://evil.example', host: 'localhost:3080' },
+    body: JSON.stringify({ path: 'all' }),
+  }), res)
+  assert.equal(res.status, 403)
+})
+
+test('DELETE /api/claude-move/job：取消运行中导入，job 落为 cancelled（D4）', async (t) => {
+  const home = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = await makeTempDir(t)
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+
+  const projectsDir = path.join(home, 'projects')
+  await mkdir(path.join(projectsDir, 'demo-a'), { recursive: true })
+  const file = path.join(projectsDir, 'demo-a', 'sess-1.jsonl')
+  await writeFile(file, simple, 'utf8')
+
+  // 慢 fs：给 DELETE 留出取消窗口（abort 前 readText 不返回）。
+  const { ctx, routes } = makeCtx({ [projectsDir]: 'dir', [path.join(projectsDir, 'demo-a')]: 'dir', [file]: simple })
+  const slowRead = ctx.fs.readText.bind(ctx.fs)
+  ctx.fs.readText = async (target) => {
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    return slowRead(target)
+  }
+  apply(ctx, { claudeHome: home, scanGit: false })
+
+  const importRoute = routes.find((r) => r.path === '/api/claude-move/import')
+  const postRes = mockRes()
+  await importRoute.handler(mockReq({ method: 'POST', url: '/api/claude-move/import', body: JSON.stringify({ path: 'all' }) }), postRes)
+  const { jobId } = JSON.parse(postRes.body)
+
+  const jobRoute = routes.find((r) => r.path === '/api/claude-move/job')
+  const delRes = mockRes()
+  await jobRoute.handler(mockReq({ method: 'DELETE', url: '/api/claude-move/job?job=' + jobId }), delRes)
+  assert.equal(delRes.status, 200)
+
+  const progressRoute = routes.find((r) => r.path === '/api/claude-move/progress')
+  let job = null
+  for (let i = 0; i < 30 && (!job || job.status === 'running'); i++) {
+    const res = mockRes()
+    await progressRoute.handler(mockReq({ url: '/api/claude-move/progress?job=' + jobId }), res)
+    job = JSON.parse(res.body)
+    if (job.status === 'running') await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  assert.equal(job.status, 'cancelled')
+  assert.equal(job.controller, undefined, 'progress 不透出进程内句柄')
+})
+
+test('面板导入任务接入官方 ctx.jobs：start 与 kill 透传（B5）', async (t) => {
+  const home = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = await makeTempDir(t)
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+
+  const projectsDir = path.join(home, 'projects')
+  await mkdir(path.join(projectsDir, 'demo-a'), { recursive: true })
+  const file = path.join(projectsDir, 'demo-a', 'sess-1.jsonl')
+  await writeFile(file, simple, 'utf8')
+
+  const started = []
+  const killed = []
+  const base = makeCtx({ [projectsDir]: 'dir', [path.join(projectsDir, 'demo-a')]: 'dir', [file]: simple })
+  const originalGet = base.ctx.get.bind(base.ctx)
+  base.ctx.get = (service) => {
+    if (service === 'jobs') {
+      return {
+        start(spec) { started.push(spec); return 'host-job-1' },
+        kill(id) { killed.push(id) },
+      }
+    }
+    return originalGet(service)
+  }
+  apply(base.ctx, { claudeHome: home, scanGit: false })
+
+  const importRoute = base.routes.find((r) => r.path === '/api/claude-move/import')
+  const postRes = mockRes()
+  await importRoute.handler(mockReq({ method: 'POST', url: '/api/claude-move/import', body: JSON.stringify({ path: 'all' }) }), postRes)
+  const { jobId } = JSON.parse(postRes.body)
+  assert.ok(jobId)
+  assert.equal(started.length, 1, '官方 jobs.start 被调用')
+  assert.equal(started[0].kind, 'claude-move-import')
+
+  const jobRoute = base.routes.find((r) => r.path === '/api/claude-move/job')
+  const delRes = mockRes()
+  await jobRoute.handler(mockReq({ method: 'DELETE', url: '/api/claude-move/job?job=' + jobId }), delRes)
+  assert.equal(delRes.status, 200)
+  assert.deepEqual(killed, ['host-job-1'], '取消透传官方 jobs.kill')
 })

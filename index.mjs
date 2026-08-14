@@ -63,6 +63,7 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * @property {string[]} [extraSkillDirs] 额外技能目录（默认空）。
  * @property {boolean} [enableInstructions] 注入全局/项目级 CLAUDE.md 段（默认 true）。
  * @property {number} [resumeMaxChars] 续聊交接摘要字符上限（默认 2048）。
+ * @property {'inject'|'agents'} [resumeMode] /resume-claude 的继续方式：'inject' 在当前会话注入交接摘要（默认），'agents' 尝试经 ctx.agents.resume 打开导入会话（服务缺失/失败回退注入）。
  * @property {boolean} [enableWebPanel] 注册面板 JSON 路由 /api/claude-move/*（默认 true）。
  * @property {number} [importConcurrency] 批量导入读取+转换并发上限（默认 4；落盘串行）。
  */
@@ -82,6 +83,7 @@ export const Config = Schema.object({
   extraSkillDirs: Schema.array(Schema.string()).default([]),
   enableInstructions: Schema.boolean().default(true),
   resumeMaxChars: Schema.number().default(DEFAULT_HANDOFF_MAX_CHARS),
+  resumeMode: Schema.union([Schema.const('inject'), Schema.const('agents')]).default('inject'),
   enableWebPanel: Schema.boolean().default(true),
   importConcurrency: Schema.number().default(DEFAULT_IMPORT_CONCURRENCY),
 })
@@ -1368,6 +1370,22 @@ function registerCommandDefinitions(ctx, config, commands) {
           })
           dshId = single.sessionId
         }
+        // resumeMode='agents'（D2）：尝试经 ctx.agents.resume 真正打开导入会话；
+        // 服务缺失/失败回退到交接摘要注入（导入会话本身已含完整历史）。
+        if (config.resumeMode === 'agents') {
+          const agents = ctx.get('agents')
+          if (agents && typeof agents.resume === 'function') {
+            try {
+              await agents.resume({ resumeSessionId: dshId })
+              return {
+                kind: 'success',
+                text: `已恢复 DSH 会话 ${dshId}（含完整导入历史），可在会话列表中继续。`,
+              }
+            } catch {
+              // agents 不可用/恢复失败：回退注入路径。
+            }
+          }
+        }
         const handoff = buildHandoff(converted, { maxChars: resumeMaxChars, title: session.title })
         const injected = injectContext(invocation.agent, handoff)
         return {
@@ -1414,10 +1432,37 @@ function readJsonBody(req) {
 }
 
 /**
+ * 状态变更路由的 CSRF 加固（D6）：浏览器请求必须来自 loopback 或同源
+ * （Origin 与 Host 一致）；无 Origin 的非浏览器客户端（curl/脚本）放行。
+ * @param req - node:http IncomingMessage。
+ * @returns 是否可信。
+ */
+export function isTrustedOrigin(req) {
+  const origin = req?.headers?.origin
+  if (typeof origin !== 'string' || origin.length === 0) return true
+  let hostname
+  try {
+    hostname = new URL(origin).hostname
+  } catch {
+    return false
+  }
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1') {
+    return true
+  }
+  const host = req?.headers?.host
+  if (typeof host === 'string' && host.length > 0) {
+    const hostNameOnly = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '')
+    if (hostNameOnly.toLowerCase() === hostname.toLowerCase()) return true
+  }
+  return false
+}
+
+/**
  * 注册面板路由（enableWebPanel=false 或 headless 无 webServer 时跳过）：
  * - GET /api/claude-move/index   → 最近扫描索引（含导入状态与 settings 建议）
  * - POST /api/claude-move/import → 启动批量/单文件导入任务，返回 jobId
  * - GET /api/claude-move/progress?job=<id> → 任务进度（面板轮询）
+ * - DELETE /api/claude-move/job?job=<id> → 取消导入任务（B5/D4）
  * 路由随本插件生命周期自动撤销（webServer.register 返回 disposer）。
  * @param ctx - Cordis 上下文。
  * @param config - 插件配置。
@@ -1437,6 +1482,9 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
   const claudeHome = () => config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
   const jobs = new Map()
   const JOB_RETENTION = 20
+
+  // 官方后台任务服务（B5）：特性探测，缺失回退自有 job Map（rc.6 兼容）。
+  const hostJobs = typeof ctx.get === 'function' ? ctx.get('jobs') : undefined
 
   webServer.register({
     kind: 'exact',
@@ -1460,6 +1508,10 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         sendJson(res, 405, { error: 'method not allowed' })
         return
       }
+      if (!isTrustedOrigin(req)) {
+        sendJson(res, 403, { error: 'untrusted origin' })
+        return
+      }
       let body
       try {
         body = await readJsonBody(req)
@@ -1468,12 +1520,33 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         return
       }
       const jobId = randomUUID()
+      const controller = new AbortController()
       const job = {
         jobId, status: 'running', total: 0, imported: 0, alreadyImported: 0, skipped: 0, failed: 0, results: [],
+        controller, hostJobId: null,
       }
       jobs.set(jobId, job)
       while (jobs.size > JOB_RETENTION) jobs.delete(jobs.keys().next().value)
       sendJson(res, 200, { jobId })
+
+      // B5：可选接入官方 ctx.jobs（获得官方 kill/UI 展示），失败回退自有取消面。
+      if (hostJobs && typeof hostJobs.start === 'function') {
+        try {
+          job.hostJobId = hostJobs.start({
+            kind: 'claude-move-import',
+            label: 'claude-move 导入 ' + (body && typeof body.path === 'string' ? body.path : 'all'),
+            run: () => ({
+              cancel() { controller.abort(new Error('claude-move 导入已取消')) },
+              done: new Promise((resolve) => {
+                controller.signal.addEventListener('abort', () => resolve(), { once: true })
+              }),
+            }),
+          })
+        } catch {
+          // 无 serving controller 等：保持自有取消面。
+          job.hostJobId = null
+        }
+      }
 
       void (async () => {
         try {
@@ -1490,7 +1563,7 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
           }
           if (info.type === 'file') {
             const persisted = await listPersistedIds(ctx)
-            const single = await importTranscript(ctx, target, { force: body && body.force === true }, maxBytes, persisted)
+            const single = await importTranscript(ctx, target, { force: body && body.force === true }, maxBytes, persisted, undefined, controller.signal)
             Object.assign(job, {
               status: 'done',
               total: 1,
@@ -1508,11 +1581,15 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
           const done = await importDirectory(ctx, target, {
             recursive: true, force: body && body.force === true,
           }, maxBytes, (progress) => Object.assign(job, progress),
-            config.importConcurrency ?? DEFAULT_IMPORT_CONCURRENCY)
+            config.importConcurrency ?? DEFAULT_IMPORT_CONCURRENCY, controller.signal)
           Object.assign(job, done, { status: 'done' })
         } catch (err) {
-          job.status = 'error'
-          job.error = String((err && err.message) || err)
+          if (controller.signal.aborted) {
+            job.status = 'cancelled'
+          } else {
+            job.status = 'error'
+            job.error = String((err && err.message) || err)
+          }
         }
       })()
     },
@@ -1529,7 +1606,41 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         sendJson(res, 404, { error: 'unknown job' })
         return
       }
-      sendJson(res, 200, job)
+      // 不透出进程内句柄（AbortController/官方 job id）。
+      const { controller: _controller, hostJobId: _hostJobId, ...publicJob } = job
+      sendJson(res, 200, publicJob)
+    },
+  })
+
+  webServer.register({
+    kind: 'exact',
+    path: '/api/claude-move/job',
+    handler: (req, res) => {
+      if (req.method !== 'DELETE') {
+        sendJson(res, 405, { error: 'method not allowed' })
+        return
+      }
+      if (!isTrustedOrigin(req)) {
+        sendJson(res, 403, { error: 'untrusted origin' })
+        return
+      }
+      const url = new URL(req.url ?? '', 'http://localhost')
+      const id = url.searchParams.get('job')
+      const job = id ? jobs.get(id) : undefined
+      if (!job) {
+        sendJson(res, 404, { error: 'unknown job' })
+        return
+      }
+      if (job.hostJobId && hostJobs && typeof hostJobs.kill === 'function') {
+        try {
+          hostJobs.kill(job.hostJobId)
+        } catch {
+          job.controller?.abort(new Error('claude-move 导入已取消'))
+        }
+      } else {
+        job.controller?.abort(new Error('claude-move 导入已取消'))
+      }
+      sendJson(res, 200, { cancelled: true })
     },
   })
 }

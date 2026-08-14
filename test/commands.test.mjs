@@ -290,6 +290,51 @@ test('resume-claude 未命中返回 error', async (t) => {
   assert.ok(result.text.includes('未找到匹配'))
 })
 
+test('resume-claude：resumeMode=agents 经 ctx.agents.resume 打开导入会话（D2）', async (t) => {
+  await withTempDshHome(t)
+  const home = await makeTempDir(t)
+  const projectsDir = path.join(home, 'projects')
+  const projectDir = path.join(projectsDir, 'demo-a')
+  await mkdir(projectDir, { recursive: true })
+  const file = path.join(projectDir, 'sess-1.jsonl')
+  await writeFile(file, simpleTranscript, 'utf8')
+
+  const resumed = []
+  const { ctx, commandDefs, injected, agent } = makeCtx({ [file]: simpleTranscript })
+  const originalGet = ctx.get.bind(ctx)
+  ctx.get = (service) => {
+    if (service === 'agents') return { resume: async (options) => { resumed.push(options); return {} } }
+    return originalGet(service)
+  }
+  apply(ctx, { claudeHome: home, scanGit: false, resumeMode: 'agents' })
+  const def = commandDefs.find((d) => d.name === 'resume-claude')
+
+  const result = await def.handler({ agent, rawInput: 'sess-1', signal: new AbortController().signal })
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('已恢复 DSH 会话'))
+  assert.deepEqual(resumed, [{ resumeSessionId: 'import-sess-1' }])
+  assert.equal(injected.length, 0, 'agents 模式不注入交接摘要')
+})
+
+test('resume-claude：resumeMode=agents 但服务缺失时回退注入（D2 回退）', async (t) => {
+  await withTempDshHome(t)
+  const home = await makeTempDir(t)
+  const projectsDir = path.join(home, 'projects')
+  const projectDir = path.join(projectsDir, 'demo-a')
+  await mkdir(projectDir, { recursive: true })
+  const file = path.join(projectDir, 'sess-1.jsonl')
+  await writeFile(file, simpleTranscript, 'utf8')
+
+  const { ctx, commandDefs, injected, agent } = makeCtx({ [file]: simpleTranscript })
+  apply(ctx, { claudeHome: home, scanGit: false, resumeMode: 'agents' })
+  const def = commandDefs.find((d) => d.name === 'resume-claude')
+
+  const result = await def.handler({ agent, rawInput: 'sess-1', signal: new AbortController().signal })
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('静态历史'))
+  assert.equal(injected.length, 1, 'agents 服务缺失回退交接摘要注入')
+})
+
 test('resolveResumeTarget：latest/精确 id/import id/多候选/未命中', () => {
   const index = {
     projects: [
