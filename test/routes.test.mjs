@@ -272,3 +272,15 @@ test('client bundle：注册协议与零 node 依赖（classic script）', () =>
   assert.ok(!/\bimport\s/.test(source), '无 ES import（classic script）')
   assert.ok(!source.includes('node:'), '无 node 依赖')
 })
+
+test('client bundle：面板路由禁用容错与默认收起（A1/A2）', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  // A1：enableWebPanel=false（或 web 服务缺失）时 index 路由 404 → 明确提示并禁用导入。
+  assert.ok(source.includes("msg === 'HTTP 404'"), '404 探测分支存在')
+  assert.ok(source.includes('enableWebPanel 为 false 或 Web 服务未加载'), '禁用提示文案存在')
+  assert.ok(source.includes('disabled = true'), '404 后进入禁用状态')
+  assert.ok(source.includes('if (disabled)'), '导入入口检查禁用状态')
+  // A2：默认收起——抽屉以 display:none 初始，只显示悬浮按钮。
+  assert.ok(source.includes("drawer.style.display = 'none'"), '抽屉默认隐藏')
+  assert.ok(!source.includes('show(true)'), '不再启动即自动展开')
+})

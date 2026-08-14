@@ -87,6 +87,7 @@ function installPanel() {
   document.body.appendChild(root)
 
   let index = null
+  let disabled = false
   const body = drawer.querySelector('#cm-body')
   const detail = drawer.querySelector('#cm-detail')
   const filter = drawer.querySelector('#cm-filter')
@@ -110,10 +111,17 @@ function installPanel() {
     status.textContent = '扫描中…'
     try {
       index = await json('/api/claude-move/index')
+      disabled = false
       status.textContent = `已扫描：${index.projects?.length ?? 0} 个项目 / ${sessionCount(index)} 个会话`
       render()
     } catch (err) {
-      status.textContent = '扫描失败：' + String(err && err.message)
+      const msg = String(err && err.message)
+      if (msg === 'HTTP 404') {
+        disabled = true
+        status.textContent = '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，面板不可用'
+      } else {
+        status.textContent = '扫描失败：' + msg
+      }
     }
   }
 
@@ -184,6 +192,10 @@ function installPanel() {
   }
 
   async function importJob(target) {
+    if (disabled) {
+      status.textContent = '面板路由未启用：enableWebPanel 为 false 或 Web 服务未加载，导入不可用'
+      return
+    }
     status.textContent = '提交导入…'
     setBar(0)
     try {
@@ -218,5 +230,5 @@ function installPanel() {
     return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
   }
 
-  show(true)
+  // 默认收起：只显示悬浮按钮，用户点击才展开抽屉（不抢占每次页面加载的注意力）。
 }
