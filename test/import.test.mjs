@@ -639,3 +639,16 @@ test('超大 transcript 流式导入：密钥只报位置、无 streamText 时�
     /transcript 过大|流式分块导入/,
   )
 })
+
+test('导入结果携带 typeCounts（summary 统计，D1）', async (t) => {
+  await withTempDshHome(t)
+  const raw = claudeLine('summary', { summary: '压缩摘要', leafUuid: 'x' }) + '\n'
+    + claudeLine('user', { message: { content: 'q' } }) + '\n'
+  const { ctx, registered } = makeCtx({ [P('s.jsonl')]: raw })
+  apply(ctx)
+  const def = registered.find((d) => d.name === 'import_claude')
+  const single = await def.execute({ path: P('s.jsonl') })
+  assert.equal(single.status, 'imported')
+  assert.equal(single.typeCounts.summary, 1, 'typeCounts 暴露 summary 计数')
+  assert.equal(single.permissions.total, 0)
+})

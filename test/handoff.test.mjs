@@ -62,6 +62,12 @@ test('buildHandoff：空会话输出最小骨架', () => {
   assert.ok(handoff.includes('0 轮'))
 })
 
+test('buildHandoff：summary 记录提示未映射为压缩节点（D1）', () => {
+  const handoff = buildHandoff({ turns: [{ prompt: 'q', steps: [] }], typeCounts: { summary: 2, user: 1 } })
+  assert.ok(handoff.includes('2 条 summary'), '提示摘要记录数量')
+  assert.ok(handoff.includes('未映射为压缩节点'), '说明不合成 compaction 节点')
+})
+
 test('textOfStep / fileArgOf / oneLine：纯函数行为', () => {
   const stepObj = step([
     { type: 'text', text: ' a\nb ' },

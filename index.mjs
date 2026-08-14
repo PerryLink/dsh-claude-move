@@ -622,6 +622,7 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
     skipped,
     skippedLines: skippedLines ?? [],
     permissions: summarizePermissions(typeCounts),
+    typeCounts: typeCounts ?? {},
   }
 
   const cacheDir = resolveCacheDir()
@@ -1133,6 +1134,7 @@ const importResultSchema = {
     },
     secrets: { type: 'object', additionalProperties: true },
     permissions: { type: 'object', additionalProperties: true },
+    typeCounts: { type: 'object', additionalProperties: true },
     alreadyImported: { type: 'boolean' },
     status: { type: 'string' },
     appendedTurns: { type: 'integer' },
@@ -1195,6 +1197,9 @@ export function renderImport(args, value) {
     if (value.skipped) {
       lines.push(`跳过 ${value.skipped} 行畸形记录，明细见 skippedLines（前 ${value.skippedLines?.length ?? 0} 条含行号）。`)
     }
+    if ((value.typeCounts?.summary ?? 0) > 0) {
+      lines.push(`源记录含 ${value.typeCounts.summary} 条 summary（Claude 上下文压缩摘要，未映射为压缩节点；完整历史已按原始轮次导入）。`)
+    }
     if (value.workspace && value.workspace.attached === false) {
       lines.push(`未挂接工作区：${value.workspace.reason ?? '未知原因'}（会话仍已导入，可在会话列表中打开）。`)
     }
@@ -1208,6 +1213,12 @@ export function renderImport(args, value) {
       ? (value.results ?? []).flatMap((r) => (r.secrets?.hits ?? []).slice(0, 5).map((h) => `${r.path}:${h.line}（${h.kind}）`))
       : (value.secrets?.hits ?? []).slice(0, 5).map((h) => `${h.line}（${h.kind}）`)
     for (const h of hits.slice(0, 5)) lines.push(`  - ${h}`)
+  }
+  const summaryTotal = value.mode === 'batch'
+    ? (value.results ?? []).reduce((n, r) => n + (r.typeCounts?.summary ?? 0), 0)
+    : 0
+  if (summaryTotal > 0) {
+    lines.push(`批量源记录共含 ${summaryTotal} 条 summary（Claude 上下文压缩摘要，未映射为压缩节点）。`)
   }
   const permTotal = value.mode === 'batch'
     ? (value.results ?? []).reduce((n, r) => n + (r.permissions?.total ?? 0), 0)
