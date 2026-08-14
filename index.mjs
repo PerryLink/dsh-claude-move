@@ -21,6 +21,7 @@ import {
   INDEX_VERSION,
   DEFAULT_MAX_TRANSCRIPT_BYTES,
   DEFAULT_GIT_TIMEOUT_MS,
+  DEFAULT_SCAN_CONCURRENCY,
   locateClaudeHome,
   resolveCacheDir,
   loadCache,
@@ -49,8 +50,9 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * 插件配置（cordis.yml 可覆盖，C4）。
  * @typedef {object} Config
  * @property {string} [claudeHome] Claude 数据根目录；缺省自动定位（$CLAUDE_CONFIG_DIR / ~/.claude）。
- * @property {boolean} [scanGit] 是否探测 git 分支与脏状态（默认 true）。
+ * @property {boolean|'branch'} [scanGit] git 探测级别：true 全量（分支复用 transcript gitBranch，只跑 status 算脏行）、'branch' 零 git 子进程（只用 transcript 字段）、false 关闭（默认 true）。
  * @property {number} [gitTimeoutMs] git 子进程超时毫秒（默认 5000）。
+ * @property {number} [scanConcurrency] 全量扫描的项目并发上限（默认 8）。
  * @property {number} [maxTranscriptBytes] transcript oversized 判定阈值（默认 64 MiB）。
  * @property {string[]} [excludeProjects] 排除的项目 slug（子串匹配，默认空）。
  * @property {boolean} [enableMemory] 注入 Claude memory 上下文段（默认 true）。
@@ -67,8 +69,9 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
 
 export const Config = Schema.object({
   claudeHome: Schema.string(),
-  scanGit: Schema.boolean().default(true),
+  scanGit: Schema.union([Schema.boolean(), Schema.const('branch')]).default(true),
   gitTimeoutMs: Schema.number().default(DEFAULT_GIT_TIMEOUT_MS),
+  scanConcurrency: Schema.number().default(DEFAULT_SCAN_CONCURRENCY),
   maxTranscriptBytes: Schema.number().default(DEFAULT_MAX_TRANSCRIPT_BYTES),
   excludeProjects: Schema.array(Schema.string()).default([]),
   enableMemory: Schema.boolean().default(true),
@@ -162,7 +165,8 @@ export async function runScan(ctx, config, args, signal) {
   const scanOpts = {
     maxBytes: config.maxTranscriptBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES,
     gitTimeoutMs: config.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS,
-    ...(config.scanGit === false ? { scanGit: false } : {}),
+    scanGit: config.scanGit === undefined ? true : config.scanGit,
+    concurrency: config.scanConcurrency ?? DEFAULT_SCAN_CONCURRENCY,
     ...(config.excludeProjects?.length ? { excludeProjects: config.excludeProjects } : {}),
     ...(signal ? { signal } : {}),
   }

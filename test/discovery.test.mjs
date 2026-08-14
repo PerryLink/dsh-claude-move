@@ -240,3 +240,86 @@ test('scanProjectDir：目录不可读时返回 error 条目', async (t) => {
   assert.ok(project.error)
   assert.deepEqual(project.sessions, [])
 })
+
+test('scanClaudeHome：并行项目扫描受并发上限约束且输出确定（C1）', async (t) => {
+  const home = await makeTempDir(t)
+  const projects = path.join(home, 'projects')
+  for (let i = 0; i < 5; i++) {
+    await mkdir(path.join(projects, `demo-${i}`), { recursive: true })
+    await writeFile(path.join(projects, `demo-${i}`, 's.jsonl'), claudeLine('user', {
+      sessionId: `s-${i}`, cwd: `C:\\work\\${i}`,
+      timestamp: `2026-08-0${i + 1}T10:00:00.000Z`, message: { content: `q${i}` },
+    }) + '\n', 'utf8')
+  }
+
+  let running = 0
+  let maxRunning = 0
+  const scanFile = async (file, opts) => {
+    running++
+    maxRunning = Math.max(maxRunning, running)
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    try {
+      return await scanTranscriptFile(file, opts)
+    } finally {
+      running--
+    }
+  }
+  const { index, files } = await scanClaudeHome(home, { scanGit: false, scanFile, concurrency: 3 })
+  assert.ok(maxRunning <= 3, `并发不超过上限（实测 ${maxRunning}）`)
+  assert.ok(maxRunning > 1, '实际并行执行')
+  assert.deepEqual(index.projects.map((p) => p.slug), ['demo-4', 'demo-3', 'demo-2', 'demo-1', 'demo-0'], '按最近活动排序确定性不变')
+  assert.equal(Object.keys(files).length, 5, '书签完整')
+
+  // 串行与并发结果一致。
+  const serial = await scanClaudeHome(home, { scanGit: false, concurrency: 1 })
+  assert.deepEqual(serial.index.projects.map((p) => p.slug), index.projects.map((p) => p.slug))
+})
+
+test('scanTranscriptFile 捕获 gitBranch；scanProjectDir 三级 scanGit（C2）', async (t) => {
+  const home = await makeTempDir(t)
+  const cwd = await makeTempDir(t) // 真实存在的目录：dirExists 才允许 git 探测
+  const projectDir = path.join(home, 'projects', 'demo-a')
+  await mkdir(projectDir, { recursive: true })
+  await writeFile(path.join(projectDir, 's.jsonl'), claudeLine('user', {
+    sessionId: 's-1', cwd, gitBranch: 'feature/x', message: { content: 'q' },
+  }) + '\n', 'utf8')
+
+  const head = await scanTranscriptFile(path.join(projectDir, 's.jsonl'), {})
+  assert.equal(head.gitBranch, 'feature/x', '捕获 transcript 自带分支字段')
+
+  // scanGit=false：不探测 git，也不启动子进程。
+  const off = await scanProjectDir(projectDir, { scanGit: false, gitExec: async () => { throw new Error('不应被调用') } })
+  assert.equal(off.git, undefined)
+
+  // scanGit='branch'：零 git 子进程，只用 transcript 字段。
+  const branchOnly = await scanProjectDir(projectDir, { scanGit: 'branch', gitExec: async () => { throw new Error('不应被调用') } })
+  assert.deepEqual(branchOnly.git, { isRepo: true, branch: 'feature/x', dirtyCount: null })
+
+  // scanGit=true（默认）：复用 gitBranch 跳过 rev-parse，只跑一次 status。
+  await writeFile(path.join(cwd, '.git'), '', 'utf8')
+  const calls = []
+  const exec = async (_cmd, args) => {
+    calls.push([...args])
+    return { stdout: ' M a.txt\n' }
+  }
+  const full = await scanProjectDir(projectDir, { scanGit: true, gitExec: exec })
+  assert.deepEqual(full.git, { isRepo: true, branch: 'feature/x', dirtyCount: 1 })
+  assert.equal(calls.filter((a) => a.includes('rev-parse')).length, 0, '已知分支跳过 rev-parse')
+  assert.equal(calls.filter((a) => a.includes('status')).length, 1, '只跑 status 算脏行')
+})
+
+test('gitStatus：knownBranch 跳过 rev-parse、分支缺失时照常探测', async (t) => {
+  const dir = await makeTempDir(t)
+  const repo = path.join(dir, 'repo')
+  await mkdir(repo)
+  await writeFile(path.join(repo, '.git'), '')
+  const calls = []
+  const exec = async (_cmd, args) => {
+    calls.push([...args])
+    if (args.includes('rev-parse')) return { stdout: 'main\n' }
+    return { stdout: '\n' }
+  }
+  assert.deepEqual(await gitStatus(repo, { exec, knownBranch: 'feature/y' }), { isRepo: true, branch: 'feature/y', dirtyCount: 0 })
+  assert.equal(calls.filter((a) => a.includes('rev-parse')).length, 0)
+  assert.deepEqual(await gitStatus(repo, { exec }), { isRepo: true, branch: 'main', dirtyCount: 0 })
+})
