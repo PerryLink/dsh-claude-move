@@ -30,6 +30,7 @@ import {
   scanClaudeHome,
   scanProjectDir,
   scanTranscriptFile,
+  resetCacheFiles,
 } from './lib/discovery.mjs'
 import { convertClaudeJsonl, mintSessionId, tailSessionEvents } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
@@ -1465,6 +1466,23 @@ function registerCommandDefinitions(ctx, config, commands) {
       }
     },
   })
+
+  // D5：重置本插件缓存（扫描书签 + 导入映射），保留已导入的 DSH 会话。
+  commands.register({
+    name: 'claude-move-reset',
+    description: '重置本插件缓存（扫描书签与导入映射），保留已导入的 DSH 会话',
+    handler: async () => {
+      try {
+        await resetCacheFiles(resolveCacheDir())
+        return {
+          kind: 'success',
+          text: '已重置 claude-move 缓存（扫描书签与导入映射）。下次扫描将全量重建；已导入的 DSH 会话不受影响。',
+        }
+      } catch (err) {
+        return { kind: 'error', text: 'claude-move-reset 失败：' + String((err && err.message) || err) }
+      }
+    },
+  })
 }
 
 // ── 面板 JSON 路由（F16）：ctx.webServer 公开 seam ─────────────────────────────
@@ -1708,6 +1726,28 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         job.controller?.abort(new Error('claude-move 导入已取消'))
       }
       sendJson(res, 200, { cancelled: true })
+    },
+  })
+
+  webServer.register({
+    kind: 'exact',
+    path: '/api/claude-move/reset',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'method not allowed' })
+        return
+      }
+      if (!isTrustedOrigin(req)) {
+        sendJson(res, 403, { error: 'untrusted origin' })
+        return
+      }
+      try {
+        await resetCacheFiles(resolveCacheDir())
+        state.invalidateSkills?.()
+        sendJson(res, 200, { reset: true })
+      } catch (err) {
+        sendJson(res, 500, { error: String((err && err.message) || err) })
+      }
     },
   })
 }

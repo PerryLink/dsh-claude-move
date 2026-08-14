@@ -2,7 +2,7 @@
 // 上下文注入与引用解析。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { apply, resolveResumeTarget, resolveResumeFast, injectContext } from '../index.mjs'
@@ -119,11 +119,29 @@ const simpleTranscript = [
   claudeLine('assistant', { message: { content: [{ type: 'text', text: '已修改登录代码。' }] } }),
 ].join('\n') + '\n'
 
-test('apply 注册 claude-import-all 与 resume-claude 命令', () => {
+test('apply 注册 claude-import-all / resume-claude / claude-move-reset 命令', () => {
   const { ctx, commandDefs } = makeCtx({})
   apply(ctx)
-  assert.deepEqual(commandDefs.map((d) => d.name), ['claude-import-all', 'resume-claude'])
+  assert.deepEqual(commandDefs.map((d) => d.name), ['claude-import-all', 'resume-claude', 'claude-move-reset'])
   assert.equal(commandDefs[1].input.hint, 'latest | 会话ID | 标题关键词')
+})
+
+test('claude-move-reset：清除缓存文件、保留已导入会话（D5）', async (t) => {
+  const dshHome = await withTempDshHome(t)
+  const cacheDir = path.join(dshHome, 'claude-move')
+  await mkdir(cacheDir, { recursive: true })
+  await writeFile(path.join(cacheDir, 'index.json'), '{"version":1}', 'utf8')
+  await writeFile(path.join(cacheDir, 'imports.json'), '{"a":{"dshId":"import-a"}}', 'utf8')
+
+  const { ctx, commandDefs, persistence, agent } = makeCtx({})
+  apply(ctx, {})
+  const def = commandDefs.find((d) => d.name === 'claude-move-reset')
+  const result = await def.handler({ agent, rawInput: '', signal: new AbortController().signal })
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('已重置'))
+  assert.equal(await readFile(path.join(cacheDir, 'index.json')).catch(() => null), null, '书签已清除')
+  assert.equal(await readFile(path.join(cacheDir, 'imports.json')).catch(() => null), null, '映射已清除')
+  assert.equal(persistence.sessions.size, 0, '重置不触碰 DSH 会话库')
 })
 
 test('claude-import-all：批量导入 + 注入报告（F15）', async (t) => {

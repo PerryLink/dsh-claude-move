@@ -91,6 +91,7 @@ function installPanel(ctx) {
   drawer.innerHTML = `
     <div id="cm-head"><b>Claude Code 迁移</b>
       <button id="cm-refresh" title="重新扫描">刷新</button>
+      <button id="cm-reset" title="重置扫描缓存与导入映射（保留已导入会话）">重置缓存</button>
       <button id="cm-close" title="关闭">✕</button>
     </div>
     <input id="cm-filter" placeholder="关键词过滤（标题/会话）…" />
@@ -120,10 +121,21 @@ function installPanel(ctx) {
   openBtn.addEventListener('click', () => show(drawer.style.display === 'none'))
   drawer.querySelector('#cm-close').addEventListener('click', () => show(false))
   drawer.querySelector('#cm-refresh').addEventListener('click', () => refresh())
+  drawer.querySelector('#cm-reset').addEventListener('click', () => { void resetCache() })
   drawer.querySelector('#cm-import-all').addEventListener('click', () => importJob('all'))
   const cancelBtn = drawer.querySelector('#cm-cancel')
   cancelBtn.addEventListener('click', () => { void cancelJob() })
   filter.addEventListener('input', () => render())
+
+  async function resetCache() {
+    try {
+      await json('/api/claude-move/reset', { method: 'POST' })
+      status.textContent = '缓存已重置，正在重新扫描…'
+      await refresh()
+    } catch (err) {
+      status.textContent = '重置失败：' + String(err && err.message)
+    }
+  }
 
   async function json(url, options) {
     const res = await fetch(url, options)

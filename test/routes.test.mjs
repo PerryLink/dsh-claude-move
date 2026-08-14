@@ -109,11 +109,11 @@ function mockReq({ method = 'GET', url = '/api/claude-move/index', body, headers
   return req
 }
 
-test('apply 注册面板四路由（webServer 存在时）', () => {
+test('apply 注册面板五路由（webServer 存在时）', () => {
   const { ctx, routes } = makeCtx({})
   apply(ctx)
   assert.deepEqual(routes.map((r) => r.path), [
-    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress', '/api/claude-move/job',
+    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress', '/api/claude-move/job', '/api/claude-move/reset',
   ])
   assert.ok(routes.every((r) => r.kind === 'exact'))
 })
@@ -253,7 +253,7 @@ test('webServer 后置就绪：经 internal/service 响应式注册路由', () =
   services.webServer = { register: (route) => { routes.push(route); return () => {} } }
   for (const cb of listeners['internal/service'] ?? []) cb('webServer')
   assert.deepEqual(routes.map((r) => r.path), [
-    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress', '/api/claude-move/job',
+    '/api/claude-move/index', '/api/claude-move/import', '/api/claude-move/progress', '/api/claude-move/job', '/api/claude-move/reset',
   ], '服务出现后经 internal/service 注册')
 })
 
@@ -304,6 +304,43 @@ test('client bundle：导入取消按钮与 job 取消面（D4/B5）', () => {
   assert.ok(source.includes("'/api/claude-move/job?job='"), 'DELETE 取消路由调用')
   assert.ok(source.includes("method: 'DELETE'"), '取消走 DELETE')
   assert.ok(source.includes('currentJobId'), '跟踪当前 job id')
+})
+
+test('client bundle：重置缓存按钮（D5）', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  assert.ok(source.includes("id=\"cm-reset\""), '重置按钮存在')
+  assert.ok(source.includes("'/api/claude-move/reset'"), '调用重置路由')
+})
+
+test('POST /api/claude-move/reset：清除缓存文件并返回 reset（D5）', async (t) => {
+  const dshHome = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+
+  const cacheDir = path.join(dshHome, 'claude-move')
+  await mkdir(cacheDir, { recursive: true })
+  await writeFile(path.join(cacheDir, 'index.json'), '{"version":1}', 'utf8')
+  await writeFile(path.join(cacheDir, 'imports.json'), '{"a":{"dshId":"import-a"}}', 'utf8')
+
+  const { ctx, routes } = makeCtx({})
+  apply(ctx, {})
+  const resetRoute = routes.find((r) => r.path === '/api/claude-move/reset')
+  const res = mockRes()
+  await resetRoute.handler(mockReq({ method: 'POST', url: '/api/claude-move/reset' }), res)
+  assert.equal(res.status, 200)
+  assert.deepEqual(JSON.parse(res.body), { reset: true })
+  let deleted = false
+  try {
+    readFileSync(path.join(cacheDir, 'index.json'))
+  } catch {
+    deleted = true
+  }
+  assert.equal(deleted, true, '书签已清除')
+  // 跨源 POST 拒绝。
+  const evil = mockRes()
+  await resetRoute.handler(mockReq({ method: 'POST', url: '/api/claude-move/reset', headers: { origin: 'http://evil.example' } }), evil)
+  assert.equal(evil.status, 403)
 })
 
 test('isTrustedOrigin：loopback/同源放行、跨源拒绝、无 Origin 放行（D6）', () => {
