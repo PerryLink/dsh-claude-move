@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, memoryDirsSync, makeClaudeState, runScan } from '../index.mjs'
+import { apply, memoryDirsSync, makeClaudeState, runScan, cwdMemoryDirSync } from '../index.mjs'
 
 async function makeTempDir(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'claude-move-ctx-reg-'))
@@ -123,4 +123,49 @@ test('runScan 结果携带 settingsSuggestions（F14）', async (t) => {
   assert.ok(suggestions.some((s) => s.kind === 'model' && s.target === 'opus'))
   assert.ok(suggestions.some((s) => s.action === 'deny' && s.target === 'rm -rf *'))
   assert.ok(unmapped.some((u) => u.includes('env')))
+})
+
+test('memory 注入按当前 cwd 优先：memoryScope 语义与 cwd 定位（B3）', async (t) => {
+  const dshHome = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => {
+    if (prev === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prev
+  })
+
+  const home = await makeTempDir(t)
+  const p1 = await makeTempDir(t)
+  const p2 = await makeTempDir(t)
+  await mkdir(path.join(home, 'projects', 'p1', 'memory'), { recursive: true })
+  await mkdir(path.join(home, 'projects', 'p2', 'memory'), { recursive: true })
+  await writeFile(path.join(home, 'projects', 'p1', 'memory', 'a.md'), '---\nmetadata: type: feedback\n---\n\nP1 记忆\n', 'utf8')
+  await writeFile(path.join(home, 'projects', 'p2', 'memory', 'b.md'), '---\nmetadata: type: feedback\n---\n\nP2 记忆\n', 'utf8')
+
+  // 书签缓存：cwd → 项目目录映射（与真实扫描产物同形）。
+  await mkdir(path.join(dshHome, 'claude-move'), { recursive: true })
+  await writeFile(path.join(dshHome, 'claude-move', 'index.json'), JSON.stringify({
+    version: 1, claudeHome: home,
+    files: {
+      [path.join(home, 'projects', 'p1', 's1.jsonl')]: { cwd: p1 },
+      [path.join(home, 'projects', 'p2', 's2.jsonl')]: { cwd: p2 },
+    },
+  }), 'utf8')
+
+  const state = makeClaudeState({ claudeHome: home })
+  assert.equal(cwdMemoryDirSync(state, p1), path.join(home, 'projects', 'p1', 'memory'))
+  assert.equal(cwdMemoryDirSync(state, path.join(home, 'nope')), null, '无对应项目返回 null')
+  assert.equal(cwdMemoryDirSync(state, null), null)
+
+  const { ctx, contextSections } = makeRichCtx()
+  apply(ctx, { claudeHome: home })
+  const text = (cwd) => contextSections[0].text({ agent: { session: { header: { cwd } } } })
+  assert.ok(text(p1).includes('P1 记忆'))
+  assert.ok(!text(p1).includes('P2 记忆'), 'current-project 默认只注入当前项目')
+  assert.ok(text(path.join(home, 'unknown-cwd')).includes('P1 记忆'), '无对应项目回退全部目录')
+
+  const { ctx: ctx2, contextSections: cs2 } = makeRichCtx()
+  apply(ctx2, { claudeHome: home, memoryScope: 'all' })
+  const allText = cs2[0].text({ agent: { session: { header: { cwd: p2 } } } })
+  assert.ok(allText.indexOf('P2 记忆') < allText.indexOf('P1 记忆'), 'all 时当前项目排最前')
 })

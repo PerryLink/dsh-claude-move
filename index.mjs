@@ -12,7 +12,7 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -32,7 +32,7 @@ import {
 } from './lib/discovery.mjs'
 import { convertClaudeJsonl, mintSessionId, tailSessionEvents } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
-import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, DEFAULT_MEMORY_MAX_BYTES } from './lib/context.mjs'
+import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, selectMemoryDirs, DEFAULT_MEMORY_MAX_BYTES, DEFAULT_MEMORY_SCOPE } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
 import { translateSettings } from './lib/settings.mjs'
 import { buildHandoff, DEFAULT_HANDOFF_MAX_CHARS } from './lib/handoff.mjs'
@@ -55,6 +55,7 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * @property {string[]} [excludeProjects] 排除的项目 slug（子串匹配，默认空）。
  * @property {boolean} [enableMemory] 注入 Claude memory 上下文段（默认 true）。
  * @property {number} [memoryMaxBytes] memory 注入字节上限（默认 8192）。
+ * @property {'current-project'|'all'} [memoryScope] memory 注入范围：'current-project' 只注入当前会话 cwd 对应项目的记忆（无对应项目时回退全部），'all' 注入全部项目、当前项目优先（默认 'current-project'）。
  * @property {boolean} [enableSkills] 注册 Claude 技能 provider（默认 true）。
  * @property {number} [maxSkills] 技能目录条目上限（默认 30）。
  * @property {string[]} [extraSkillDirs] 额外技能目录（默认空）。
@@ -72,6 +73,7 @@ export const Config = Schema.object({
   excludeProjects: Schema.array(Schema.string()).default([]),
   enableMemory: Schema.boolean().default(true),
   memoryMaxBytes: Schema.number().default(DEFAULT_MEMORY_MAX_BYTES),
+  memoryScope: Schema.union([Schema.const('current-project'), Schema.const('all')]).default(DEFAULT_MEMORY_SCOPE),
   enableSkills: Schema.boolean().default(true),
   maxSkills: Schema.number().default(30),
   extraSkillDirs: Schema.array(Schema.string()).default([]),
@@ -203,7 +205,7 @@ export async function runScan(ctx, config, args, signal) {
   }
   index.claudeHomeExists = existsSync(claudeHome)
 
-  await annotateImports(ctx, cacheDir, index)
+  await annotateImports(ctx, cacheDir, index, target.kind === 'all')
   await annotateSettings(index)
   return index
 }
@@ -244,19 +246,31 @@ export async function annotateSettings(index) {
 
 /**
  * 用 sessionPersistence 列表 + imports 映射标注每个会话的导入状态（F4 幂等基础）。
+ * 优先 `listSnapshots()`（更便宜的 header+revision 快照），回退 `list()`。
+ * `cleanStale`（全量扫描时）惰性清理「映射指向已不存在会话」的残留记录并
+ * 报告清理条数（B4：用户在 UI 删除导入会话后映射不再残留）。
  * @param ctx - Cordis 上下文。
  * @param cacheDir - 缓存目录。
  * @param index - 扫描索引（就地标注）。
+ * @param cleanStale - 是否清理失效映射（仅全量扫描时信任快照完整性）。
  */
-export async function annotateImports(ctx, cacheDir, index) {
+export async function annotateImports(ctx, cacheDir, index, cleanStale = false) {
   const imports = await loadImports(cacheDir)
   const sp = ctx.get('sessionPersistence')
   const imported = new Set()
-  if (sp && typeof sp.list === 'function') {
+  let listSucceeded = false
+  if (sp) {
     try {
-      for (const header of await sp.list()) imported.add(header.id)
+      if (typeof sp.listSnapshots === 'function') {
+        for (const snap of await sp.listSnapshots()) imported.add(snap.header.id)
+        listSucceeded = true
+      } else if (typeof sp.list === 'function') {
+        for (const header of await sp.list()) imported.add(header.id)
+        listSucceeded = true
+      }
     } catch {
-      // 持久化不可读：全部按未导入处理。
+      // 持久化不可读：全部按未导入处理，也不做清理。
+      listSucceeded = false
     }
   }
   for (const project of index.projects ?? []) {
@@ -273,6 +287,29 @@ export async function annotateImports(ctx, cacheDir, index) {
       }
     }
   }
+  if (cleanStale && listSucceeded) {
+    let cleaned = 0
+    for (const key of Object.keys(imports)) {
+      const dshId = unwrapImport(imports[key])?.dshId
+      if (dshId && !imported.has(dshId)) {
+        delete imports[key]
+        cleaned++
+      }
+    }
+    if (cleaned > 0) {
+      index.importsCleaned = cleaned
+      try {
+        await importsStore.update((current) => {
+          for (const key of Object.keys(current)) {
+            const dshId = unwrapImport(current[key])?.dshId
+            if (dshId && !imported.has(dshId)) delete current[key]
+          }
+        })
+      } catch (err) {
+        console.error('[claude-move] imports cleanup failed:', String((err && err.message) || err))
+      }
+    }
+  }
 }
 
 /** claude_scan 结果的模型可读摘要（中文）。 */
@@ -286,6 +323,9 @@ export function renderScan(args, value) {
   lines.push(`- 项目 ${projects.length} 个、会话 ${sessions.length} 个（已导入 ${imported} 个）、技能 ${skills.length} 个`)
   const malformedTotal = sessions.reduce((sum, s) => sum + (s.malformed ?? 0), 0)
   if (malformedTotal > 0) lines.push(`- 畸形 JSONL 行 ${malformedTotal} 条（导入时逐条报告行号）`)
+  if (typeof value.importsCleaned === 'number' && value.importsCleaned > 0) {
+    lines.push(`- 清理了 ${value.importsCleaned} 条失效导入映射（对应 DSH 会话已被删除）`)
+  }
   const suggestionCount = value.settingsSuggestions?.suggestions?.length ?? 0
   const unmappedCount = value.settingsSuggestions?.unmapped?.length ?? 0
   if (suggestionCount > 0 || unmappedCount > 0) {
@@ -1008,8 +1048,52 @@ export function makeClaudeState(config = {}) {
     claudeHome: config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome(),
     fileCache: makeFileCache(),
     memoryDirCache: null,
+    indexMapCache: null,
     invalidateSkills: null,
   }
+}
+
+/**
+ * 从扫描书签缓存（index.json）定位当前会话 cwd 对应的 memory 目录（B3）。
+ * 书签按 mtime/ctime 缓存，解析出的 cwd→项目目录映射同缓存；无缓存/无
+ * 对应项目返回 null（注入层回退全部目录保底）。Windows 路径大小写不敏感。
+ * @param state - 插件状态。
+ * @param cwd - 当前会话工作目录。
+ * @returns memory 目录绝对路径或 null。
+ */
+export function cwdMemoryDirSync(state, cwd) {
+  if (!state || typeof cwd !== 'string' || cwd.length === 0) return null
+  const cachePath = path.join(resolveCacheDir(), 'index.json')
+  let st
+  try {
+    st = statSync(cachePath)
+    if (!st.isFile()) return null
+  } catch {
+    // 无书签缓存：返回 null（回退全部目录）。
+    return null
+  }
+  if (!state.indexMapCache
+    || state.indexMapCache.mtimeMs !== st.mtimeMs
+    || state.indexMapCache.ctimeMs !== st.ctimeMs) {
+    let parsed
+    try {
+      parsed = JSON.parse(readFileSync(cachePath, 'utf8'))
+    } catch {
+      // 损坏缓存：按无缓存处理。
+      return null
+    }
+    const map = new Map()
+    for (const [file, header] of Object.entries(parsed?.files ?? {})) {
+      if (header && typeof header.cwd === 'string' && typeof file === 'string') {
+        const key = process.platform === 'win32' ? header.cwd.toLowerCase() : header.cwd
+        if (!map.has(key)) map.set(key, path.dirname(file))
+      }
+    }
+    state.indexMapCache = { mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, map }
+  }
+  const key = process.platform === 'win32' ? cwd.toLowerCase() : cwd
+  const dir = state.indexMapCache.map.get(key)
+  return dir ? path.join(dir, 'memory') : null
 }
 
 /**
@@ -1062,9 +1146,12 @@ export function registerContextContributions(ctx, config, state) {
       systemPrompt.context({
         name: 'claude-move:memory',
         order: 120,
-        text: () => {
+        text: (assemble) => {
+          const cwd = assemble?.agent?.session?.header?.cwd
           const dirs = memoryDirsSync(state)
-          const memories = dirs.flatMap((dir) => readMemoriesSync(dir, state.fileCache))
+          const currentDir = typeof cwd === 'string' && cwd.length > 0 ? cwdMemoryDirSync(state, cwd) : null
+          const selected = selectMemoryDirs(dirs, currentDir, config.memoryScope ?? DEFAULT_MEMORY_SCOPE)
+          const memories = selected.flatMap((dir) => readMemoriesSync(dir, state.fileCache))
           return renderMemories(memories, config.memoryMaxBytes ?? DEFAULT_MEMORY_MAX_BYTES)
         },
       })

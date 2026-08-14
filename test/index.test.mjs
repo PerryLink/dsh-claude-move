@@ -3,7 +3,7 @@
 // 与 path 收窄。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { apply, runScan, resolveScanTarget } from '../index.mjs'
@@ -171,4 +171,42 @@ test('runScan：exec.signal 中止时抛出 signal.reason（不再继续扫描�
     () => runScan(ctx, { claudeHome: home }, {}, controller.signal),
     /scan aborted by test/,
   )
+})
+
+test('annotateImports：listSnapshots 优先 + 失效映射惰性清理（B4）', async (t) => {
+  const home = await makeTempDir(t)
+  const dshHome = await makeTempDir(t)
+  const prevDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prevDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevDshHome })
+
+  const projDir = path.join(home, 'projects', 'demo')
+  await mkdir(projDir, { recursive: true })
+  const file = path.join(projDir, 'sess-1.jsonl')
+  await writeFile(file, claudeLine('user', { sessionId: 'sess-1', message: { content: 'q' } }) + '\n', 'utf8')
+
+  // 预置映射：一条有效（会话存在于快照），一条失效（对应 DSH 会话已被删除）。
+  await mkdir(path.join(dshHome, 'claude-move'), { recursive: true })
+  await writeFile(path.join(dshHome, 'claude-move', 'imports.json'), JSON.stringify({
+    [file]: { dshId: 'import-sess-1', turns: 1, events: 3 },
+    [path.join(projDir, 'gone.jsonl')]: { dshId: 'import-gone', turns: 1, events: 3 },
+  }), 'utf8')
+
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return { listSnapshots: async () => [{ header: { id: 'import-sess-1' }, revision: 'r1' }] }
+      }
+      return undefined
+    },
+  }
+  const index = await runScan(ctx, { claudeHome: home, scanGit: false }, {})
+  const session = index.projects[0].sessions[0]
+  assert.equal(session.import.status, 'imported')
+  assert.equal(session.import.dshSessionId, 'import-sess-1')
+  assert.equal(index.importsCleaned, 1, '失效映射清理并报告条数')
+  const imports = JSON.parse(await readFile(path.join(dshHome, 'claude-move', 'imports.json'), 'utf8'))
+  assert.deepEqual(Object.keys(imports), [file], '映射文件只保留有效记录')
 })

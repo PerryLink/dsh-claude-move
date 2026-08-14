@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
   makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists,
+  selectMemoryDirs, DEFAULT_MEMORY_SCOPE,
 } from '../lib/context.mjs'
 
 async function makeTempDir(t) {
@@ -69,4 +70,15 @@ test('fileExists：存在与缺失', async (t) => {
   assert.equal(fileExists(file), true)
   assert.equal(fileExists(path.join(dir, 'nope')), false)
   assert.equal(fileExists(''), false)
+})
+
+test('selectMemoryDirs：current-project 只取当前目录（无匹配回退全部）；all 当前优先（B3）', () => {
+  const dirs = ['/m/a', '/m/b', '/m/c']
+  assert.deepEqual(selectMemoryDirs(dirs, '/m/b'), ['/m/b'], '默认 current-project 只注入当前项目')
+  assert.equal(DEFAULT_MEMORY_SCOPE, 'current-project')
+  assert.deepEqual(selectMemoryDirs(dirs, null), dirs, '无对应项目回退全部目录保底')
+  assert.deepEqual(selectMemoryDirs(dirs, '/m/unknown'), dirs, '不认识的目录按无匹配回退')
+  assert.deepEqual(selectMemoryDirs(dirs, '/m/c', 'all'), ['/m/c', '/m/a', '/m/b'], 'all：当前项目排最前')
+  assert.deepEqual(selectMemoryDirs(dirs, null, 'all'), dirs)
+  assert.deepEqual(selectMemoryDirs([], '/m/a'), [])
 })
