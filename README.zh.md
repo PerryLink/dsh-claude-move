@@ -123,8 +123,8 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
 **不需要重启 DSH。** 导入经公开 `sessionPersistence` 服务即时落盘：
 
 - 服务端列表（`session.list` / `workspace.list` RPC、CLI、任何新打开的页面）立即可见已导入会话及其按项目划分的工作区。
-- 唯一例外：**已打开的 Web 页面**需要刷新一次会话列表，新的会话行才会出现——导入直接写入持久化服务的 cold 会话，不会发 UI 的 `host/session-added` 实时帧；工作区分组则会实时更新（`host/workspace-changed`）。点击面板「刷新会话列表」按钮（或刷新页面）即可，与重启无关。
-- 导入的会话可立即打开、阅读与续聊——`/resume-claude`，或刷新后在会话列表中直接点开。之后随时重跑导入，只会把新增轮次增量续写进同一会话。
+- 面板会经 shell 官方客户端服务（`sessions.refresh`/`workspaces.refresh`，特性探测）自动刷新已打开页面的会话列表，并为每个会话提供「打开会话」按钮；老 shell 无这些服务时回退「刷新会话列表」按钮 / 整页刷新——导入直接写入持久化服务的 cold 会话，不会发 UI 的 `host/session-added` 实时帧；工作区分组则会实时更新（`host/workspace-changed`）。
+- 导入的会话可立即打开、阅读与续聊——`/resume-claude`，或直接在会话列表中点开。之后随时重跑导入，只会把新增轮次增量续写进同一会话。
 
 ## ⚙️ 配置（全部可选，可在 cordis.yml 覆盖）
 
@@ -133,17 +133,20 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
   name: dsh-claude-move
   config:
     claudeHome: null            # 缺省自动定位 $CLAUDE_CONFIG_DIR / ~/.claude
-    scanGit: true               # 探测 git 分支与脏状态
+    scanGit: true               # git 探测级别：true 全量 | 'branch' 零 git 子进程 | false 关闭
     gitTimeoutMs: 5000          # git 子进程超时（毫秒）
+    scanConcurrency: 8          # 全量扫描的项目并发上限
     maxTranscriptBytes: 67108864
     excludeProjects: []         # slug 子串排除，如 ['demo-']
     enableMemory: true
     memoryMaxBytes: 8192
+    memoryScope: current-project  # 'current-project' 只注入当前项目 | 'all' 全部、当前项目优先
     enableSkills: true
     maxSkills: 30
     extraSkillDirs: []
     enableInstructions: true
     resumeMaxChars: 2048      # 交接摘要字符上限
+    resumeMode: inject        # 'inject' 注入交接摘要 | 'agents' 经 ctx.agents.resume 打开会话
     enableWebPanel: true      # 注册 /api/claude-move/* 面板路由
     importConcurrency: 4      # 批量导入「读取+转换」并发上限（落盘保持串行）
 ```
@@ -155,8 +158,17 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
 ## 🧭 兼容性
 
 - 目标 `dsh 0.1.0-rc.6`（web profile）；peer 依赖锁定 rc.6；Node `^22.19 || >=24`。
-- 最后验证 **2026-08-13**（Windows / Node 22，针对 `@deepseek-ai/dsh@0.1.0-rc.6`）：tarball 从零安装、真实扫描（40 项目 / 2387 会话）、真实批量导入 13/13 + 幂等重导入 13/13、工作区挂接与持久化产物确认。macOS/Linux 待验证。
+- 最后验证 **2026-08-13**（Windows / Node 22，针对 `@deepseek-ai/dsh@0.1.0-rc.6`）：tarball 从零安装、真实扫描（40 项目 / 2387 会话）、真实批量导入 13/13 + 幂等重导入 13/13、工作区挂接与持久化产物确认。macOS/Linux 现由 CI 矩阵（linux/macos/windows × Node 22）自动验证。
 - 验证 **2026-08-14**（当前 `deepseek-harness` checkout，web profile / JSONL+zstd 会话后端 / 真实工作区注册表，隔离 DSH_HOME）：挂载插件完整启动 web、经面板路由扫描 + 全量导入、按 `cwd` 创建工作区并挂接会话、对既有导入会话增量续写（seq 连续、可正常 load）、重启后幂等重导入，全程既有 DSH 会话不受影响；任何会话都不会被归档、删除或改写。
+
+### 兼容矩阵（只依赖公开面）
+
+| 面 | 使用 | 缺失时回退 |
+| --- | --- | --- |
+| host 服务（`tools`/`sessionPersistence`/`workspaceRegistry`/`commands`/`systemPrompt`/`skills`/`webServer`） | 按需使用 | 可选服务经 `internal/service` 响应式注册；`fs` 缺失响亮失败 |
+| `sessionPersistence.listSnapshots`/`readFrom`、`fs.streamText`、`ctx.jobs`、`ctx.agents.resume` | 特性探测 | `list()`/整读+响亮拒绝/自有 job 表/交接摘要注入 |
+| 客户端 shell 服务（`sessions.refresh/open`、`workspaces.refresh`） | 面板 apply 时特性探测 | 整页刷新 |
+| 新平台能力一律不是硬依赖——插件在 rc.6 上始终可启动。 | | |
 
 ## 🔐 权限与数据
 
@@ -217,11 +229,13 @@ CI 经 GitHub Actions（[test.yml](.github/workflows/test.yml)）在 Node 22 上
 - 标题只取 `custom-title`/`ai-title`/首问；Claude `summary` 记录不作为标题。
 - `thinking` 块保留在导入日志的 `reasoning` 内容块中，但不进入续聊摘要。
 - 权限类记录只统计不导入；DSH 权限预设建议随报告生成。
-- 超过 `maxTranscriptBytes` 的 transcript 响亮失败而非部分导入（保真优先）；流式分块导入在路线图上。
+- Claude `summary` 记录（上下文压缩摘要）只报告、不映射为 DSH compaction 节点——合成压缩事务需伪造 seq 范围与检查点消息，风险大于收益（见 OPTIMIZATION.md）；完整历史按原始轮次导入。
+- host 无 `fs.streamText` 流式面时，超过 `maxTranscriptBytes` 的 transcript 响亮失败而非部分导入；有流式面的环境自动走分块流式导入。
 - 源目录已删除的会话仍可导入，但工作区挂接失败（留在「未分组」，报告 `workspace.attached: false` 并附 `reason`）。
 - 批量导入中断可安全重跑（幂等、append-only）：已完成文件跳过、已增长文件只续写新轮次。
 - 若源文件被原地重置/截断（轮次少于已导入记录），重导跳过并报 `sourceShrunk`；需要完整副本用 `force: true`。
 - Web 面板为零构建悬浮面板，走插件自注册 JSON 路由；不使用 shell 内部 UI slot（刻意不依赖 rc.6 未文档化内部面）。
+- 流式增量续写时，单次结果的 `messages`/`toolCalls` 只统计本次新增事件（已存储前缀不重读）；`turns` 仍为全量轮次。
 
 ## 🤝 参与贡献与反馈
 

@@ -6,7 +6,7 @@ dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。�
 
 | 官方约束 | 本插件 | 状态 |
 |---|---|---|
-| 一切皆插件；新行为挂已文档化扩展点，不改 agent-loop | 只注册 `ctx.tools`/`ctx.commands`/`ctx.systemPrompt`/`ctx.skills`/`ctx.webServer`，不碰 agent-loop/引擎/apiproxy/官方 UI 包 | ✅ |
+| 一切皆插件；新行为挂已文档化扩展点，不改 agent-loop | 只注册 `ctx.tools`/`ctx.commands`/`ctx.systemPrompt`/`ctx.skills`/`ctx.webServer`，不碰 agent-loop/引擎/apiproxy/官方 UI 包。0.2 起附加消费全部特性探测：`sessionPersistence.listSnapshots/readFrom`、`fs.streamText`、`ctx.jobs`、`ctx.agents.resume`、客户端 shell 的 `sessions.refresh/open`/`workspaces.refresh`（均带缺失回退，rc.6 仍可启动） | ✅ |
 | 注册即 effect：贡献走 `ctx.effect()`/`ctx.on()`/服务 `register()`（返回 disposer） | 工具/命令/路由/提示词段/技能 provider 均经服务 `register()`（返回 disposer）；可选服务经 `ctx.on('internal/service')` 响应式注册（disposer 随插件生命周期撤销） | ✅ |
 | waterfall 监听器必须 `next()` | 不监听任何 waterfall 事件 | N/A（无监听） |
 | 模型可见 ⟺ 已记录 | 工具描述/结果即落盘 `tool/result`；注入走 `ctx.systemPrompt` 组装（可重建）；交接摘要走 `agent.inject`（inbox 持久上下文） | ✅（设计保证） |
@@ -63,5 +63,5 @@ dsh-claude-move 对照五个官方文档源的插件开发约束逐条审计。�
 ## 审计结论
 
 - **无红线违规**；集成验证发现并修复的全为真实运行时语义（未声明服务必须 `ctx.get`、可选服务响应式注册、web profile 需 `dsh-web-app` bundle），已补测试覆盖。
-- 剩余待办集中在 Phase 6：模型驱动续聊回合验收（需 `DEEPSEEK_API_KEY` 的机器）、`npm pack` 发布面核对、`dsh-plugin` topic、面板浏览器端交互演示（GIF）。
-- 面板 JSON 路由绑定 `ctx.webServer`（默认仅 loopback 绑定，与 apiproxy 同机同源，信任模型一致；`enableWebPanel: false` 可整体关闭）。
+- 剩余待办：模型驱动续聊回合验收（需 `DEEPSEEK_API_KEY` 的机器）、0.2 变更后的真实运行时复验（RELEASE.md 待办）、`npm pack` 发布面核对、面板浏览器端交互演示（GIF）。
+- 面板 JSON 路由绑定 `ctx.webServer`（默认仅 loopback 绑定，与 apiproxy 同机同源，信任模型一致；`enableWebPanel: false` 可整体关闭；状态变更路由（POST import/DELETE job/POST reset）额外校验 Origin：loopback/同源放行、跨源 403）。

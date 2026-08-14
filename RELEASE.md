@@ -1,9 +1,16 @@
 # RELEASE.md — 发布与验收清单
 
-## 发布前检查（本机已全部通过）
+## 0.2 变更后的待办（本机已完成的除外）
 
-- [x] `npm test`：**100/100** 用例全绿（convert/discovery/import/context/skills/settings/handoff/commands/routes + 客户端 bundle 契约 + 复制式迁移/增量续写/工作区镜像/轮次内变化 + exec.signal 中止 + 并发确定性）。
-- [x] `npm pack` 发布面：tarball **21 项**（index.mjs、lib/*、client/client.js、assets/social-card.png、cordis.patch.yml、五语 README、CHANGELOG、LICENSE、THIRD_PARTY_NOTICES、package.json），**不含** dev/、test/、node_modules。
+- [ ] **真实运行时复验**（隔离 DSH_HOME，当前 harness checkout）：`--dump-config`、web 启动无 FAILED、面板五路由（index/import/progress/job/reset）、流式导入路径（`streamText` 面）、`ctx.jobs` 接入与取消、客户端 `sessions.refresh/open` 免刷新。单测 143/143 全绿（mock 面），真实运行时证据待有环境的机器补录。
+- [ ] **有 API key 的机器验收**：导入后「点开续聊」的模型回合（步骤不变，见下）。
+- [ ] **npm 发布**：`private: true` 已移除，`npm publish` 可用；发布前跑 `npm pack --dry-run --json` 核对文件清单（新增 `lib/imports-store.mjs` 已含在 `files: ["lib"]`）。
+- [ ] **上游协作提案（B6）**：向 deepseek-harness GitHub Discussions 提 `SessionHeader.origin: 'import'` 提案——让会话列表 UI 可标注「外部导入」来源。草案要点：cold 导入经公开 `sessionPersistence.create` 落盘，目前 UI 无法区分导入会话与原生会话；建议 `origin` 增加 `'import'` 值（现状仅 `'subagent'`），本插件落地后即写入 `meta.origin`。官方未落地前本插件不改引擎、不自行扩展该字段。
+
+## 发布前检查（0.1.0 本机已全部通过）
+
+- [x] `npm test`：**143/143** 用例全绿（0.1.0 的 100 例 + A1-A7/B1-B5/C1-C5/D1-D6 的新增覆盖：并发 imports 串行、半建会话恢复、resume 快路径、skills cwd/signal、memoryScope、listSnapshots 清理、并行扫描确定性、gitBranch 三级、流式转换器分块/续写、CSRF、ctx.jobs 透传、缓存重置、索引裁剪、双语描述与面板字典）。
+- [x] `npm pack` 发布面：tarball 含 index.mjs、lib/*（含 imports-store.mjs）、client/client.js、assets/social-card.png、cordis.patch.yml、五语 README、CHANGELOG、LICENSE、THIRD_PARTY_NOTICES、package.json，**不含** dev/、test/、node_modules。
 - [x] tarball 从零安装：`dsh plugin --profile <p> add -w ./dsh-claude-move-0.1.0.tgz` → `--dump-config` 出现 `# == dsh-claude-move` 层。
 - [x] web 启动无 FAILED；`__DSH_BOOT__` 含客户端条目；`/plugins/dsh-claude-move/client.js` 正常伺服。
 - [x] 真实数据验证（隔离 DSH_HOME）：
@@ -20,8 +27,8 @@
 | 任一会话导入后消息/工具/思考块完整、可续聊、工作区挂接正确 | ⚠️ 导入与挂接已实测 ✅；**「点开续聊」的模型回合需有 API key 的机器验证**（本机无 key，步骤见下） | 平衡事件日志 + `workspace.attached=true` + 持久化产物 |
 | 记忆、技能、CLAUDE.md 在续聊中生效、新记忆即时生效 | ✅（注册与注入已实测；模型回合同上待 key 机器） | systemPrompt 段 + SkillProvider 注册于真实 boot；单测覆盖渲染与缓存 |
 | 重复导入幂等；畸形 JSONL 不中断且报告行号 | ✅ | 真实重导入 13/13 already-imported；`skippedLines[{line,error}]` |
-| Windows/macOS/Linux 各至少一名开发者验证 | ⚠️ Windows 已验证（本机）；macOS/Linux 待验证（纯 Node API，无平台专用依赖） | — |
-| `npm test` 通过；卸载不污染原数据 | ✅ | 100/100；源文件只读、缓存仅 `$DSH_HOME/claude-move/` |
+| Windows/macOS/Linux 各至少一名开发者验证 | ✅ CI 矩阵（`test.yml` linux/macos/windows × Node 22）自动验证；本机 Windows 实测 | 143/143 跨平台用例 |
+| `npm test` 通过；卸载不污染原数据 | ✅ | 143/143；源文件只读、缓存仅 `$DSH_HOME/claude-move/` |
 | 交付物 1-4 | ✅/⚠️ | 仓库 ✅；README（五语）✅；测试与 fixtures ✅；演示 GIF 见 `docs/`（发布时录制） |
 
 ## 待有 key 机器的验收步骤（模型续聊回合）

@@ -21,14 +21,19 @@ flowchart LR
     skills[ctx.skills] --> skp[Claude SkillProvider]
     cmds[ctx.commands] --> c1[/claude-import-all/]
     cmds --> c2[/resume-claude/]
+    cmds --> c3[/claude-move-reset/]
     web[ctx.webServer] --> r1[/api/claude-move/index/]
     web --> r2[/api/claude-move/import/]
     web --> r3[/api/claude-move/progress/]
+    web --> r4[/api/claude-move/job/]
+    web --> r5[/api/claude-move/reset/]
   end
 
   B[浏览器面板<br/>dsh.client 客户端插件] --> r1
   B --> r2
   B --> r3
+  B --> r4
+  B --> r5
 
   T --> scan_t
   T --> import_t
@@ -39,8 +44,8 @@ flowchart LR
   T --> c1
 ```
 
-- **host 插件**（`index.mjs`）：注册两个工具、两组提示词段、一个技能 provider、两个命令、三个面板路由。只消费公开服务，不发布服务，不改引擎。
-- **lib/**（零 DSH 依赖）：`convert`（JSONL→事件，vendored+扩展）、`discovery`（流式扫描+增量缓存）、`frontmatter`、`context`（同步注入）、`skills-provider`、`settings`（翻译建议）、`report`（S4/S5）、`handoff`（交接摘要）。
+- **host 插件**（`index.mjs`）：注册两个工具、两组提示词段、一个技能 provider、三个命令、五个面板路由。只消费公开服务，不发布服务，不改引擎。
+- **lib/**（零 DSH 依赖）：`convert`（JSONL→事件 + 流式转换器）、`discovery`（并行扫描+增量缓存+原子写）、`imports-store`（串行写+in-flight 锁）、`frontmatter`、`context`（同步注入 + memoryScope）、`skills-provider`（cwd/signal/项目技能）、`settings`（翻译建议）、`report`（S4/S5）、`handoff`（交接摘要）。
 - **client/**（零构建 vanilla）：`__ModuleLoader__.load` 注册的面板，只依赖 DOM + 自注册 JSON 路由。
 - **缓存**（`$DSH_HOME/claude-move/`）：`index.json`（扫描书签 mtime+ctime+size）、`imports.json`（**源文件路径 → 导入记录** `{ dshId, turns, events, sizeBytes, mtimeMs }`，幂等 + 增量续写共用）。
 

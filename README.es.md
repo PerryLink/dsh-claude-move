@@ -107,15 +107,16 @@ Comandos (disparados por el usuario, sin turno del modelo):
 /resume-claude latest             # continuar la sesión de Claude más reciente
 /resume-claude <sessionId>        # por id de sesión de origen o id import-<src>
 /resume-claude <palabra clave>    # busca títulos; los múltiples resultados se listan, nunca se adivinan
+/claude-move-reset                # reinicia la caché del plugin (marcadores + mapa de importación); las sesiones importadas se conservan
 ```
 
-Panel web: el botón flotante **🐳 Claude 迁移** (abajo a la derecha) abre el panel — árbol de proyectos/sesiones con insignias de estado (sin importar / importado / origen faltante / directorio inexistente / git sucio), filtro por palabra clave, «Importar y continuar» por sesión + «Refrescar lista de sesiones», e importación por lotes con barra de progreso. Usa las rutas JSON `/api/claude-move/*` propias del plugin, registradas en el seam público `ctx.webServer`.
+Panel web: el botón flotante **🐳 Claude 迁移** (abajo a la derecha) abre el panel — árbol de proyectos/sesiones con insignias de estado (sin importar / importado / importado-con-turnos-nuevos / origen faltante / directorio inexistente / git sucio), filtro por palabra clave, paginación, «Importar y continuar» + «Abrir sesión» + «Refrescar lista de sesiones» por sesión, importación por lotes con barra de progreso y cancelación, y botón de reinicio de caché. Los textos siguen el idioma del navegador (zh/en). Usa las rutas JSON `/api/claude-move/*` propias del plugin, registradas en el seam público `ctx.webServer`.
 
-- **Escaneo**: devuelve un índice JSON estructurado: proyectos (slug/cwd/existencia del directorio/rama de git y archivos modificados), sesiones (título/marcas de tiempo/recuentos/líneas malformadas), memorias, habilidades, CLAUDE.md global y settings.json; cada sesión lleva `import.status` (`none`/`imported`/`source-missing`). `settingsSuggestions` contiene la traducción a DSH del settings.json y las claves no mapeables (ver [COMPLIANCE.md](COMPLIANCE.md)).
+- **Escaneo**: devuelve un índice JSON estructurado: proyectos (slug/cwd/existencia del directorio/rama de git y archivos modificados), sesiones (título/marcas de tiempo/recuentos/líneas malformadas), memorias, habilidades, CLAUDE.md global y settings.json; cada sesión lleva `import.status` (`none`/`imported`/`source-missing`) y `import.updatesPending` cuando hay turnos nuevos sin sincronizar. `settingsSuggestions` contiene la traducción a DSH del settings.json y las claves no mapeables (ver [COMPLIANCE.md](COMPLIANCE.md)).
 - **Importación**: mapea mensajes user/assistant/tool/thinking con fidelidad total; el resultado es una sesión equilibrada y reanudable, vinculada a su espacio de trabajo por `cwd`. Los lotes se resumen archivo por archivo (`imported`/`appended`/`already-imported`/`skipped`/`failed`), las líneas malformadas llevan número de línea, los posibles secretos se informan solo por posición (archivo:línea:tipo) y los registros de permisos se cuentan pero nunca se importan. Importar nunca borra ni reescribe nada: las sesiones existentes de DSH quedan intactas, las copias importadas anteriormente se conservan y los archivos fuente de Claude nunca se escriben.
 - **El contexto personal se aplica automáticamente** (sin acción de importación):
-  - Memorias: todos los `projects/*/memory/*.md` se inyectan como sección dinámica, se releen en cada petición (las memorias nuevas surten efecto al instante), orden `feedback > project > reference > user`, límite de 8 KiB por defecto.
-  - Habilidades: `~/.claude/skills/**/SKILL.md` (más archivos planos `*.md`) se convierten en habilidades de DSH (nombres normalizados a kebab-case, colisiones con sufijo, máximo 30); DSH se encarga del catálogo y de la herramienta `skill`.
+  - Memorias: `projects/*/memory/*.md` se inyectan como sección dinámica, se releen en cada petición (las memorias nuevas surten efecto al instante), orden `feedback > project > reference > user`, límite de 8 KiB por defecto. Con `memoryScope: current-project` (por defecto) solo se inyectan las memorias del proyecto de la sesión actual (se recurre a todos los proyectos cuando el cwd no coincide con ninguno); `all` inyecta todo con el proyecto actual primero.
+  - Habilidades: `~/.claude/skills/**/SKILL.md` (más archivos planos `*.md`) y `.claude/skills/**` del proyecto actual se convierten en habilidades de DSH (nombres normalizados a kebab-case, colisiones con sufijo, máximo 30); DSH se encarga del catálogo y de la herramienta `skill`.
   - Instrucciones: el `~/.claude/CLAUDE.md` global más el `.claude/CLAUDE.md` de la sesión actual se inyectan como una sección temprana (el proyecto gana).
 
 ## ✅ Después de importar
@@ -123,8 +124,8 @@ Panel web: el botón flotante **🐳 Claude 迁移** (abajo a la derecha) abre e
 **No hace falta reiniciar DSH.** Las importaciones se guardan de forma duradera a través del servicio público `sessionPersistence` en cuanto terminan:
 
 - Las listas del servidor (`session.list` / `workspace.list`, la CLI o cualquier página recién abierta) muestran de inmediato las sesiones importadas y sus espacios de trabajo por proyecto.
-- Única excepción: una **página web ya abierta** necesita un refresco de la lista de sesiones para dibujar las nuevas filas — las importaciones escriben sesiones frías directamente en el servicio de persistencia, así que no emiten el frame en vivo `host/session-added`; los grupos de espacios de trabajo sí se actualizan en vivo (`host/workspace-changed`). Pulsa «Refrescar lista de sesiones» del panel (o recarga la página), sin reiniciar el servidor.
-- Las sesiones importadas pueden abrirse, leerse y reanudarse al momento — `/resume-claude`, o pulsa la sesión en la lista tras ese refresco. Reejecutar la importación en cualquier momento solo añade los turnos nuevos a las mismas sesiones.
+- El panel refresca él mismo la lista de sesiones de la página ya abierta (servicios de cliente del shell `sessions`/`workspaces`, detectados por capacidad) y ofrece «Abrir sesión» por cada sesión importada; en shells antiguos sin esos servicios se recurre al botón «Refrescar lista de sesiones» / recarga de página — las importaciones escriben sesiones frías directamente en el servicio de persistencia, así que no emiten el frame en vivo `host/session-added`; los grupos de espacios de trabajo sí se actualizan en vivo (`host/workspace-changed`).
+- Las sesiones importadas pueden abrirse, leerse y reanudarse al momento — `/resume-claude`, o pulsa la sesión en la lista. Reejecutar la importación en cualquier momento solo añade los turnos nuevos a las mismas sesiones.
 
 ## ⚙️ Configuración
 
@@ -135,17 +136,20 @@ Todo opcional y reemplazable en `cordis.yml`:
   name: dsh-claude-move
   config:
     claudeHome: null            # por defecto: $CLAUDE_CONFIG_DIR o ~/.claude
-    scanGit: true               # sondear rama de git y estado de cambios
+    scanGit: true               # nivel de sondeo git: true completo | 'branch' sin subprocesos | false
     gitTimeoutMs: 5000          # tiempo límite del subproceso git
+    scanConcurrency: 8          # límite de concurrencia del escaneo de proyectos
     maxTranscriptBytes: 67108864
     excludeProjects: []         # subcadenas de slug a omitir, p. ej. ['demo-']
     enableMemory: true
     memoryMaxBytes: 8192
+    memoryScope: current-project  # 'current-project' solo el proyecto actual | 'all' todo, actual primero
     enableSkills: true
     maxSkills: 30
     extraSkillDirs: []
     enableInstructions: true
     resumeMaxChars: 2048      # límite de caracteres del resumen de traspaso
+    resumeMode: inject        # 'inject' resumen de traspaso | 'agents' ctx.agents.resume
     enableWebPanel: true      # registrar las rutas del panel /api/claude-move/*
     importConcurrency: 4      # concurrencia de lectura+conversión por lote (el guardado sigue secuencial)
 ```
@@ -157,8 +161,17 @@ Quita la fila `claude-move` de los bundles del perfil y reinicia `dsh`. Las sesi
 ## 🧭 Compatibilidad
 
 - Objetivo: `dsh 0.1.0-rc.6` (perfil web); dependencias peer fijadas a `0.1.0-rc.6`. Node `^22.19 || >=24`.
-- Última verificación **2026-08-13** en Windows (Node 22) contra `@deepseek-ai/dsh@0.1.0-rc.6`: instalación desde cero del tarball, escaneo real (40 proyectos / 2387 sesiones), importación real por lotes 13/13 con reimportación idempotente 13/13, vínculo al espacio de trabajo y artefactos de persistencia confirmados. macOS/Linux pendientes.
+- Última verificación **2026-08-13** en Windows (Node 22) contra `@deepseek-ai/dsh@0.1.0-rc.6`: instalación desde cero del tarball, escaneo real (40 proyectos / 2387 sesiones), importación real por lotes 13/13 con reimportación idempotente 13/13, vínculo al espacio de trabajo y artefactos de persistencia confirmados. macOS/Linux cubiertos por la matriz CI (linux/macos/windows × Node 22).
 - Verificado **2026-08-14** contra el checkout actual de `deepseek-harness` (perfil web, backend de sesiones JSONL+zstd, registro de espacios de trabajo real) en un home aislado: arranque web completo con el plugin montado, escaneo + importación total por las rutas del panel, creación de espacios de trabajo por `cwd` con sesiones vinculadas, anexo incremental a una sesión importada existente (seq contiguo, carga limpia), reimportación segura tras reinicio y sesiones DSH preexistentes intactas durante todo el proceso. Ninguna sesión se archiva, borra o reescribe jamás.
+
+### Matriz de compatibilidad (solo seams públicos)
+
+| Superficie | Uso | Respaldo cuando falta |
+| --- | --- | --- |
+| Servicios host (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | usados donde se listan | los servicios opcionales se registran reactivamente vía `internal/service`; falta de `fs` falla en voz alta |
+| `sessionPersistence.listSnapshots` / `readFrom`, `fs.streamText`, `ctx.jobs`, `ctx.agents.resume` | detectados por capacidad | `list()` / lectura completa con rechazo en voz alta / mapa de trabajos propio / inyección del resumen |
+| Servicios de cliente del shell (`sessions.refresh/open`, `workspaces.refresh`) | detectados en el apply del panel | recarga completa de la página |
+| Las capacidades nuevas de la plataforma nunca son requisitos duros — el plugin siempre arranca en rc.6. | | |
 
 ## 🔐 Permisos y datos
 
@@ -219,7 +232,8 @@ CI ejecuta la suite completa en Node 22 vía GitHub Actions ([test.yml](.github/
 - Los títulos vienen de `custom-title`/`ai-title`/primer prompt; los registros `summary` de Claude no se usan como títulos.
 - Los bloques `thinking` se conservan en el registro importado como contenido `reasoning`, pero nunca entran en el resumen de traspaso.
 - Los registros de permisos se cuentan, no se importan; las sugerencias de presets de permisos de DSH se generan en los informes.
-- Las transcripciones mayores que `maxTranscriptBytes` fallan en voz alta en vez de importarse parcialmente (fidelidad primero); la importación por streaming en fragmentos está en la hoja de ruta.
+- Las transcripciones mayores que `maxTranscriptBytes` se importan por streaming en fragmentos cuando el host ofrece `fs.streamText` (memoria O(fragmento)); sin esa superficie se falla en voz alta en vez de importar parcialmente (fidelidad primero).
+- Los registros `summary` de Claude se informan pero no se mapean a nodos de compresión DSH (ver OPTIMIZATION.md); el historial completo se importa como turnos originales.
 - Las sesiones cuyo directorio de origen se eliminó aún se importan, pero el vínculo al espacio de trabajo falla (quedan sin agrupar; `workspace.attached: false` más un `reason` en el informe).
 - Las importaciones por lotes interrumpidas pueden reejecutarse con seguridad (idempotente, append-only): los archivos terminados se omiten y los que crecieron solo añaden los turnos nuevos.
 - Si una transcripción fue truncada o reiniciada en su lugar (menos turnos que la importación registrada), la reimportación la omite e informa `sourceShrunk`; usa `force: true` para una copia completa nueva.

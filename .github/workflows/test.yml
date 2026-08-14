@@ -8,8 +8,12 @@ on:
 
 jobs:
   test:
-    name: npm test (Node 22)
-    runs-on: ubuntu-latest
+    name: npm test (Node 22, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -64,23 +64,27 @@
 
 ### 3.1 包结构（单包 = host 插件 + 可选 client bundle）
 
+> 落地后的实际结构（与早期规划略有出入：导入编排/命令/路由内联于 index.mjs，
+> 未单独拆 import.mjs/resume.mjs/routes.mjs；新增 imports-store.mjs）。
+
 ```
 dsh-claude-move/
-  index.mjs             # host 入口：注册工具/命令/注入（唯一 host 面）
+  index.mjs             # host 入口（唯一 host 面）：工具/命令/提示词段/技能/路由/导入编排
   lib/
-    convert.mjs         # ← vendor 自 dsh-chat-import（MIT 标注），扩展：行号错误、custom-title、统计
-    discovery.mjs       # F1-F4：扫描 ~/.claude、索引缓存、增量刷新（node:fs，流式读）
-    import.mjs          # F5-F10：单/批量导入编排、幂等、强制重导入、归组
-    context.mjs         # F11-F13：memory/CLAUDE.md 同步注入 + Claude 技能 SkillProvider
-    report.mjs          # F14 + S4/S5：settings 翻译建议、密钥正则、权限类统计
-    resume.mjs          # F17：/resume-claude 命令处理器 + 交接摘要（复用 resume-plugin 安全模型）
-  routes.mjs            # F16：ctx.webServer JSON 路由（scan/import/progress）
-  client/               # F16：浏览器面板（dsh.client，esbuild 构建，__ModuleLoader__）
-  skills/               # 内置 resume-claude 技能体（可选，附 attribution）
+    convert.mjs         # vendor 自 dsh-chat-import（MIT 标注）+ 流式转换器（C3）
+    discovery.mjs       # F1-F4/C1/C2/C5：扫描、增量缓存、并行扫描、gitBranch、原子写
+    imports-store.mjs   # A4：imports.json 串行写 + 源文件 in-flight 锁
+    frontmatter.mjs     # Claude Markdown frontmatter 解析（零依赖）
+    context.mjs         # F11/F13/B3：memory/CLAUDE.md 同步注入 + memoryScope
+    skills-provider.mjs # F12/B2：Claude 技能 SkillProvider（cwd/signal/项目技能）
+    settings.mjs        # F14：settings.json 翻译建议
+    report.mjs          # S4/S5：密钥正则、权限类统计
+    handoff.mjs         # F17/D1：交接摘要（resume-plugin 安全模型）
+  client/client.js      # F16：零构建浏览器面板（dsh.client，__ModuleLoader__，zh/en）
   cordis.patch.yml      # dsh.bundle：insert 行 + 默认 config
   package.json          # dsh.bundle + dsh.client + files + peerDeps(0.1.0-rc.6) + test 脚本
-  test/ + test/fixtures/ # node --test；convert 单测 + mock ctx 集成 + 三平台路径 + 畸形数据
-  README.md             # 架构图、映射表、安装/使用/卸载、安全边界、复用标注、已知局限
+  test/ + test/fixtures/ # node --test：单测 + mock ctx 集成 + 三平台路径 + 畸形数据
+  README.md（五语）      # 架构图、映射表、安装/使用/卸载、安全边界、复用标注、已知局限
 ```
 
 ### 3.2 索引模型（F2/F3/F4）
