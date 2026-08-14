@@ -61,3 +61,40 @@ test('provider.get：归属校验，伪 candidate 返回 undefined', async (t) =
   assert.equal(await provider.get({ ...candidate, provider: 'other' }), undefined)
   assert.equal(await provider.get({ name: 'unknown' }), undefined)
 })
+
+test('provider.list：candidate 携带 path 与 metadata；options.cwd 暴露项目技能（B2）', async (t) => {
+  const root = await makeTempDir(t)
+  const proj = await makeTempDir(t)
+  await writeFile(path.join(root, 'global.md'), '---\nname: global-skill\ndescription: 全局\n---\n\n全局正文\n', 'utf8')
+  await mkdir(path.join(proj, '.claude', 'skills'), { recursive: true })
+  await writeFile(path.join(proj, '.claude', 'skills', 'proj.md'), '---\nname: proj-skill\ndescription: 项目\ncustom: v1\n---\n\n项目正文\n', 'utf8')
+
+  const provider = makeClaudeSkillsProvider({ roots: [root], maxSkills: 30 })
+  const candidates = await provider.list({ cwd: proj })
+  assert.deepEqual(candidates.map((c) => c.name), ['global-skill', 'proj-skill'])
+  const global = candidates.find((c) => c.name === 'global-skill')
+  const project = candidates.find((c) => c.name === 'proj-skill')
+  assert.equal(global.source, 'claude')
+  assert.equal(global.rank, 260)
+  assert.ok(typeof global.path === 'string' && global.path.endsWith('global.md'), 'candidate 携带官方 path 字段')
+  assert.ok(global.metadata && global.metadata.description === '全局', 'candidate 携带 frontmatter metadata')
+  assert.equal(project.source, 'claude-project')
+  assert.equal(project.rank, 280)
+  assert.ok(project.path.includes(path.join('.claude', 'skills')))
+
+  const def = await provider.get(project, { cwd: proj })
+  assert.equal(def.content, '项目正文')
+  assert.equal(def.metadata.custom, 'v1')
+})
+
+test('provider.list：options.signal 已中止立即抛 signal.reason（B2）', async (t) => {
+  const root = await makeTempDir(t)
+  const provider = makeClaudeSkillsProvider({ roots: [root], maxSkills: 30 })
+  const controller = new AbortController()
+  controller.abort(new Error('stop-list'))
+  await assert.rejects(provider.list({ signal: controller.signal }), /stop-list/)
+  await assert.rejects(
+    provider.get({ name: 'x', locator: { path: 'nope' } }, { signal: controller.signal }),
+    /stop-list/,
+  )
+})
