@@ -32,7 +32,7 @@ import {
   scanTranscriptFile,
   resetCacheFiles,
 } from './lib/discovery.mjs'
-import { convertClaudeJsonl, mintSessionId, tailSessionEvents } from './lib/convert.mjs'
+import { convertClaudeJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, selectMemoryDirs, DEFAULT_MEMORY_MAX_BYTES, DEFAULT_MEMORY_SCOPE } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
@@ -770,6 +770,8 @@ export function requireFs(ctx) {
 
 /**
  * 导入单个 transcript（F5-F7/F9/F10）：stat → 大小防护 → 读取 → 转换 → 落盘。
+ * 超过 maxTranscriptBytes 且 fs 提供 streamText 时走流式分块导入（C3），
+ * 内存 O(块) 而非 O(文件)；无流式面的环境保持响亮拒绝。
  * @param ctx - Cordis 上下文。
  * @param target - ctx.fs 目标。
  * @param args - 工具参数 `{ sessionId?, force? }`。
@@ -785,8 +787,12 @@ export async function importTranscript(ctx, target, args, maxBytes, persisted, r
   const sourcePath = target.displayPath || fs.processPath(target)
   const info = await fs.stat(target)
   if (info && typeof info.size === 'number' && info.size > maxBytes) {
+    if (rawOverride === undefined && typeof fs.streamText === 'function') {
+      return importsStore.exclusive(sourcePath, () =>
+        importTranscriptStreamed(ctx, fs, target, args, persisted, sourcePath, info, signal))
+    }
     throw new Error(`transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）：` +
-      '请调高 maxTranscriptBytes 或单独处理该文件（S2 长度防护）')
+      '请调高 maxTranscriptBytes，或改由 /claude-import-all 与面板批量导入（该路径支持流式分块导入超大文件）')
   }
   signal?.throwIfAborted()
   const raw = rawOverride ?? await fs.readText(target)
@@ -798,6 +804,171 @@ export async function importTranscript(ctx, target, args, maxBytes, persisted, r
   })
   result.secrets = scanSecrets(raw)
   return result
+}
+
+/**
+ * 流式分块导入超大 transcript（C3）：fs.streamText 逐块读取 → 转换器按回合
+ * 边界分批合成 → 顺序 append（内存 O(当前回合 + 单批)）。首次导入的 create
+ * 由首个批次触发（id 冲突时后缀避让）；已导入且源增长的按 skipTurns/startSeq
+ * 增量续写同一会话；force 另存新 id 完整副本。中断后重跑天然幂等：imports
+ * 记录只以最终落盘结果为准，重复执行续写从存储长度继续。
+ * @param ctx - Cordis 上下文。
+ * @param fs - FileSystem 服务（已确认含 streamText）。
+ * @param target - ctx.fs 目标。
+ * @param args - 工具参数 `{ sessionId?, force? }`。
+ * @param persisted - 已持久化 id 快照（就地更新）。
+ * @param sourcePath - 源 transcript 绝对路径。
+ * @param info - fs.stat 结果。
+ * @param signal - 可选 AbortSignal。
+ * @returns 单文件统计（status: imported | appended | already-imported）。
+ */
+async function importTranscriptStreamed(ctx, fs, target, args, persisted, sourcePath, info, signal) {
+  const imports = await loadImports(resolveCacheDir())
+  const known = unwrapImport(imports[sourcePath])
+  const knownId = known?.dshId
+  let dshId = null
+  let skipTurns = 0
+  let startSeq = 0
+  if (knownId && persisted.has(knownId)) {
+    if (args.force === true) {
+      dshId = mintForceSessionId(persisted, knownId)
+    } else {
+      const se = typeof known.events === 'number' ? known.events : await storedEventCount(ctx, knownId)
+      const st = typeof known.turns === 'number' ? known.turns : 0
+      if (typeof se !== 'number' || st <= 0) {
+        return {
+          sessionId: knownId, status: 'already-imported', appendedSkipped: 'stored-length-unknown',
+          turns: 0, messages: 0, toolCalls: 0, skipped: 0, skippedLines: [],
+          secrets: { total: 0, hits: [] },
+        }
+      }
+      skipTurns = st
+      startSeq = se
+      dshId = knownId
+    }
+  }
+
+  let chain = Promise.resolve()
+  let created = false
+  let firstError = null
+
+  const settleId = () => {
+    const m = converter.meta()
+    if (dshId) {
+      m.id = dshId
+    } else if (persisted.has(m.id)) {
+      dshId = mintForceSessionId(persisted, m.id)
+      m.id = dshId
+    }
+    return m
+  }
+
+  const converter = createClaudeStreamConverter({
+    sessionId: dshId ?? undefined,
+    fallbackSessionId: mintSessionId(path.basename(sourcePath).replace(/\.jsonl$/i, '')),
+    skipTurns,
+    startSeq,
+    batchEvents: 10000,
+    onBatch: (events) => {
+      if (firstError) return
+      if (skipTurns > 0) {
+        chain = chain.then(() => spAppend(ctx, dshId, events)).catch((err) => { firstError = err })
+        return
+      }
+      if (!created) {
+        const m = settleId()
+        created = true
+        chain = chain
+          .then(() => spPersist(ctx, m, []))
+          .then(() => spAppend(ctx, m.id, events))
+          .catch((err) => { firstError = err })
+        return
+      }
+      chain = chain.then(() => spAppend(ctx, dshId, events)).catch((err) => { firstError = err })
+    },
+  })
+
+  const stream = await fs.streamText(target, signal)
+  const secrets = { total: 0, hits: [] }
+  let lineNo = 0
+  let carryLine = ''
+  const scanLine = (line) => {
+    const hit = scanSecrets(line)
+    if (hit.total <= 0) return
+    secrets.total += hit.total
+    for (const h of hit.hits) {
+      if (secrets.hits.length < 50) secrets.hits.push({ line: lineNo, kind: h.kind })
+    }
+  }
+  for await (const chunk of stream) {
+    signal?.throwIfAborted()
+    const text = carryLine + String(chunk)
+    const lines = text.split('\n')
+    carryLine = lines.pop() ?? ''
+    for (const line of lines) {
+      lineNo++
+      scanLine(line)
+      converter.feed(line + '\n')
+    }
+  }
+  if (carryLine.length > 0) {
+    lineNo++
+    scanLine(carryLine)
+    converter.feed(carryLine + '\n')
+  }
+  const result = converter.end()
+  await chain
+  if (firstError) throw firstError
+  const m = settleId()
+  const source = {
+    sizeBytes: info && typeof info.size === 'number' ? info.size : undefined,
+    mtimeMs: info && typeof info.mtimeMs === 'number' ? info.mtimeMs : undefined,
+  }
+
+  if (skipTurns === 0) {
+    persisted.add(m.id)
+    const attached = await attachToWorkspace(ctx, m)
+    await rememberImport(ctx, sourcePath, {
+      dshId: m.id, turns: result.turns, events: result.emittedEvents,
+      sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+    })
+    return {
+      sessionId: m.id,
+      status: 'imported',
+      turns: result.turns,
+      messages: result.messages,
+      toolCalls: result.toolCalls,
+      skipped: result.skipped,
+      skippedLines: result.skippedLines,
+      secrets,
+      workspace: { ...attached, ...(m.cwd ? { path: m.cwd } : {}) },
+    }
+  }
+  if (result.emittedEvents === 0) {
+    return {
+      sessionId: dshId, status: 'already-imported', alreadyImported: true,
+      turns: skipTurns, messages: 0, toolCalls: 0,
+      skipped: result.skipped, skippedLines: result.skippedLines, secrets,
+    }
+  }
+  // result.turns 为全文件轮次数（含被跳过前缀）；新增轮次 = 总数 - 前缀。
+  const appendedTurns = result.turns - skipTurns
+  await rememberImport(ctx, sourcePath, {
+    dshId, turns: result.turns, events: startSeq + result.emittedEvents,
+    sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+  })
+  return {
+    sessionId: dshId,
+    status: 'appended',
+    appendedTurns,
+    appendedEvents: result.emittedEvents,
+    turns: result.turns,
+    messages: result.messages,
+    toolCalls: result.toolCalls,
+    skipped: result.skipped,
+    skippedLines: result.skippedLines,
+    secrets,
+  }
 }
 
 /** 递归收集目录下 .jsonl（按路径稳定排序），与上游 chat-import 一致。 */
@@ -868,9 +1039,14 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress
       try {
         const info = await fs.stat(target)
         if (info && typeof info.size === 'number' && info.size > maxBytes) {
-          prepared[i] = {
-            pathLabel, status: 'failed',
-            error: `transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）`,
+          if (typeof fs.streamText === 'function') {
+            // 超大文件：阶段二走流式分块导入（C3），内存 O(块)。
+            prepared[i] = { pathLabel, status: 'streamed' }
+          } else {
+            prepared[i] = {
+              pathLabel, status: 'failed',
+              error: `transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）`,
+            }
           }
           continue
         }
@@ -905,6 +1081,17 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress
     } else if (p.status === 'skipped') {
       skipped++
       results[i] = { path: p.pathLabel, status: 'skipped', reason: p.reason }
+    } else if (p.status === 'streamed') {
+      try {
+        const single = await importTranscript(ctx, files[i], { force: args.force }, maxBytes, persisted, undefined, signal)
+        if (single.status === 'imported') imported++
+        else if (single.status === 'appended') appended++
+        else alreadyImported++
+        results[i] = { path: p.pathLabel, ...single }
+      } catch (err) {
+        failed++
+        results[i] = { path: p.pathLabel, status: 'failed', error: String((err && err.message) || err) }
+      }
     } else {
       try {
         const single = await persistConverted(ctx, p.converted, { force: args.force }, persisted, p.pathLabel, p.source)

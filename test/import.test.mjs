@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, resolveImportTarget, mintForceSessionId, importDirectory, persistConverted } from '../index.mjs'
+import { apply, resolveImportTarget, mintForceSessionId, importDirectory, importTranscript, persistConverted } from '../index.mjs'
 import { convertClaudeJsonl } from '../lib/convert.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
@@ -77,6 +77,12 @@ function makeCtx(tree, overrides = {}) {
       const v = tree[target.targetKey]
       if (v === undefined || v === 'dir') throw new Error('FS_NOT_FOUND ' + target.targetKey)
       return v
+    },
+    async *streamText(target) {
+      const v = tree[target.targetKey]
+      if (v === undefined || v === 'dir') throw new Error('FS_NOT_FOUND ' + target.targetKey)
+      // 按 7 字符一块模拟流式读取（跨行边界切分，carry 逻辑全程参与）。
+      for (let i = 0; i < v.length; i += 7) yield v.slice(i, i + 7)
     },
     async listDir(target) {
       if (!entriesCache.has(target.targetKey)) {
@@ -424,14 +430,25 @@ test('源 sessionId 缺失：目标 id 由文件名决定，重复导入幂等',
   assert.equal(persistence.sessions.size, 1)
 })
 
-test('大小防护：超过 maxTranscriptBytes 响亮失败（S2）', async (t) => {
+test('大小防护：超限且无 streamText 时响亮失败；有流式面时走流式导入（S2/C3）', async (t) => {
   await withTempDshHome(t)
   const big = claudeLine('user', { message: { content: 'x'.repeat(5000) } }) + '\n'
-  const { ctx, registered } = makeCtx({ [P('big.jsonl')]: big })
+
+  // 有 streamText：不再拒绝，流式分块导入成功。
+  const { ctx, registered, persistence } = makeCtx({ [P('big.jsonl')]: big })
   apply(ctx, { maxTranscriptBytes: 100 })
   const def = registered.find((d) => d.name === 'import_claude')
+  const single = await def.execute({ path: P('big.jsonl') })
+  assert.equal(single.status, 'imported')
+  assert.ok(persistence.sessions.get('import-sess-1').events.length > 0)
+
+  // 无流式面的环境（或旧版 fs）：保持响亮拒绝。
+  const { ctx: ctx2, registered: reg2 } = makeCtx({ [P('big.jsonl')]: big })
+  ctx2.fs.streamText = undefined
+  apply(ctx2, { maxTranscriptBytes: 100 })
+  const def2 = reg2.find((d) => d.name === 'import_claude')
   await assert.rejects(
-    () => def.execute({ path: P('big.jsonl') }),
+    () => def2.execute({ path: P('big.jsonl') }),
     /transcript 过大/,
   )
 })
@@ -555,4 +572,70 @@ test('半建残留：readFrom 不可用时保守后缀避让（A5 保守路径�
   assert.equal(result.sessionId, 'import-sess-1-1', '后缀避让保留双方历史')
   assert.equal(result.recoveredHalfCreated, undefined)
   assert.equal(persistence.sessions.size, 2)
+})
+
+test('超大 transcript 流式分块导入：创建、幂等、增量续写、force 新副本（C3）', async (t) => {
+  await withTempDshHome(t)
+  const turn = (q) => claudeLine('user', { sessionId: 'big-1', message: { content: q } }) + '\n'
+    + claudeLine('assistant', { sessionId: 'big-1', message: { content: [{ type: 'text', text: '回答' }] } }) + '\n'
+  const bigText = turn('q1') + turn('q2') + turn('q3')
+
+  const tree = { [P('big.jsonl')]: bigText }
+  const { ctx, persistence } = makeCtx(tree)
+  const target = { targetKey: P('big.jsonl'), displayPath: P('big.jsonl') }
+  const persisted = new Set()
+  const signal = () => new AbortController().signal
+
+  // 首导：maxBytes 传 64（文件远超）→ 触发流式路径。
+  const first = await importTranscript(ctx, target, {}, 64, persisted, undefined, signal())
+  assert.equal(first.status, 'imported')
+  assert.equal(first.turns, 3)
+  assert.equal(first.messages, 6)
+  const firstLength = persistence.sessions.get('import-big-1').events.length
+  assert.ok(firstLength > 0)
+  const firstEvents = persistence.sessions.get('import-big-1').events.map((e) => ({ ...e }))
+  for (let i = 0; i < firstEvents.length; i++) assert.equal(firstEvents[i].seq, i, '首导 seq 连续')
+
+  // 幂等重导：无新增 → already-imported。
+  const again = await importTranscript(ctx, target, {}, 64, persisted, undefined, signal())
+  assert.equal(again.status, 'already-imported')
+  assert.equal(persistence.sessions.get('import-big-1').events.length, firstLength)
+
+  // 源增长：追加两轮 → appended，同一会话只 append 新事件、seq 连续。
+  tree[P('big.jsonl')] = bigText + turn('q4') + turn('q5')
+  const third = await importTranscript(ctx, target, {}, 64, persisted, undefined, signal())
+  assert.equal(third.status, 'appended')
+  assert.equal(third.appendedTurns, 2)
+  assert.equal(third.turns, 5)
+  const secondEvents = persistence.sessions.get('import-big-1').events.map((e) => ({ ...e }))
+  assert.ok(secondEvents.length > firstLength)
+  for (let i = 0; i < secondEvents.length; i++) assert.equal(secondEvents[i].seq, i, '续写 seq 连续')
+  assert.equal(secondEvents[firstLength].type, 'turn/start')
+  assert.equal(secondEvents[firstLength].data.turn, 4, '续写从第 4 轮起')
+
+  // force：另存新 id 完整副本，旧副本原样保留。
+  const forced = await importTranscript(ctx, target, { force: true }, 64, persisted, undefined, signal())
+  assert.equal(forced.status, 'imported')
+  assert.equal(forced.sessionId, 'import-big-1-1')
+  assert.equal(persistence.sessions.size, 2)
+})
+
+test('超大 transcript 流式导入：密钥只报位置、无 streamText 时响亮拒绝（C3）', async (t) => {
+  await withTempDshHome(t)
+  const bigText = claudeLine('user', { sessionId: 'sec-1', message: { content: 'key ghp_abcdefghijklmnopqrstuvwxyz0123456789AB' } }) + '\n'
+  const { ctx } = makeCtx({ [P('sec.jsonl')]: bigText })
+  const target = { targetKey: P('sec.jsonl'), displayPath: P('sec.jsonl') }
+
+  const single = await importTranscript(ctx, target, {}, 64, new Set(), undefined, new AbortController().signal)
+  assert.equal(single.status, 'imported')
+  assert.ok(single.secrets.total >= 1, '流式路径逐行密钥扫描')
+  assert.equal(single.secrets.hits[0].line, 1)
+
+  // 无流式面的 fs：超限响亮拒绝并指向批量路径。
+  const { ctx: ctx2 } = makeCtx({ [P('sec.jsonl')]: bigText })
+  ctx2.fs.streamText = undefined
+  await assert.rejects(
+    () => importTranscript(ctx2, target, {}, 64, new Set(), undefined, new AbortController().signal),
+    /transcript 过大|流式分块导入/,
+  )
 })
