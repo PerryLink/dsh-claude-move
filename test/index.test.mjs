@@ -84,12 +84,13 @@ test('workspaceModeOf/resolveClaudecodeDir：默认 claudecode，目录取 $DSH_
   assert.equal(workspaceModeOf({}), 'claudecode')
   assert.equal(workspaceModeOf({ workspaceMode: 'per-project' }), 'per-project')
   assert.equal(workspaceModeOf({ workspaceMode: 'bogus' }), 'claudecode', '未知值保守回退 claudecode')
-  const dir = resolveClaudecodeDir({}, { DSH_HOME: 'C:\\home\\.dsh' })
-  assert.equal(dir, path.join('C:', 'home', '.dsh', 'claudecode'))
+  const fakeHome = 'C:\\home\\.dsh'
+  const dir = resolveClaudecodeDir({}, { DSH_HOME: fakeHome })
+  assert.equal(dir, path.join(fakeHome, 'claudecode'), '跨平台：与 path.join 结果一致')
   const custom = resolveClaudecodeDir({ claudecodeDir: 'D:\\my\\cc' }, {})
   assert.equal(custom, path.resolve('D:\\my\\cc'))
-  const customEmpty = resolveClaudecodeDir({ claudecodeDir: '   ' }, { DSH_HOME: 'C:\\h\\.dsh' })
-  assert.equal(customEmpty, path.join('C:', 'h', '.dsh', 'claudecode'), '空白配置视为未配置')
+  const customEmpty = resolveClaudecodeDir({ claudecodeDir: '   ' }, { DSH_HOME: fakeHome })
+  assert.equal(customEmpty, path.join(fakeHome, 'claudecode'), '空白配置视为未配置')
 })
 
 test('applyWorkspaceCwd：claudecode 模式覆写 cwd 并返回源 cwd（E2）', () => {
