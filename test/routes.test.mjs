@@ -322,7 +322,8 @@ test('client bundle：有新增徽标与分页渲染（D4）', () => {
 })
 
 test('client bundle：面板文案 zh/en 双语字典（D3）', () => {
-  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  // Windows 上 checkout 可能把源文件转成 CRLF，先归一化再断言换行相关文案。
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.ok(source.includes('const PANEL_STRINGS'), '文案字典存在')
   assert.ok(source.includes("en: {\n    panelTitle: 'Claude Code Migration'"), '英文文案存在')
   assert.ok(source.includes("zh: {\n    panelTitle: 'Claude Code 迁移'"), '中文文案存在')
