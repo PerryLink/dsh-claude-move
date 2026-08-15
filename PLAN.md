@@ -52,7 +52,7 @@
 1. **systemPrompt 同步**：rc.6 不 await 提供者（见 1.3）。
 2. **persistence 无 delete**：复制式强制重导入 = 以新 id（`import-<src>-<n>`）另存一份完整副本，旧副本原样保留；**不归档**（归档会从全部界面隐藏会话）。只 append 不改写（S1）。
 2b. **源文件持续增长**：imports.json 记录 `{ dshId, turns, events }`；重导时 turns 变多则按 turn/start 边界截取新增轮次、seq 续写同一 DSH 会话（增量同步，与运行中的 Claude Code 一致）；源文件被截断（turns 变少）报 `sourceShrunk` 并跳过。
-3. **attachSession 要求 header.cwd 的 realpath 存在**：源目录已删除的会话跳过归组（留在「未分组」），索引打「目录不存在」徽标，导入不失败。
+3. **attachSession 要求 header.cwd 的 realpath 与工作区路径严格相等**（workspace.md 实测）：per-project 归组下源目录已删除的会话跳过归组（留在「未分组」），索引打「目录不存在」徽标，导入不失败。默认 `workspaceMode: 'claudecode'`（E2）改为把全部导入会话 cwd 覆写为独立目录 `claudecodeDir`（默认 `$DSH_HOME/claudecode`，插件只在此 mkdir），统一挂到标题「claudecode」的单一工作区；源项目 cwd 保真记录进 imports.json `sourceCwd`，memory/CLAUDE.md 注入按 `sourceCwdSync` 找回。
 4. **SessionHeader.version** 必须等于运行构建的 `SESSION_FORMAT_VERSION`（rc.6 为 0，与 chat-import 一致）。
 5. **事件纪律**：seq 连续；surface 事件 `surfaceOp:'append'`；`tool/result.sourceEventSeqs` 指向 `tool/call`；模型可见 ⟺ 落盘。
 6. **命令 ≠ 模型回合**：`command/run`/`command/done` 只写日志、结果直接渲染 UI，不产生模型消息。F17 的「在当前会话以交接摘要继续」= 命令 handler 内先确保导入，再 `agent.inject({content: 摘要, source:{kind:'plugin',...}})` 把摘要注入下一次请求（inject 不是唤醒，用户随后发消息即生效）。
@@ -101,10 +101,10 @@ dsh-claude-move/
 | F1/F2 | `discovery.mjs` 扫描 + 每行解析头部元数据（流式，`readline` 风格手写分块，避免整文件进内存） |
 | F3 | `claude_scan` 工具（`defineTool`，结构化 JSON 输出）；面板展示 |
 | F4 | 索引缓存 mtime/size 增量；`scan_all`/`scan <path>` 参数 |
-| F5-F6 | 扩展 vendored `convert.mjs`；产出平衡事件日志 → `create+append`；点开即 resume（事件平衡 + 标题 + cwd） |
+| F5-F6 | 扩展 vendored `convert.mjs`；产出平衡事件日志 → `create+append`；点开即 resume（事件平衡 + 标题 + cwd）。**issue#1 修复**：每个 tool_use 恰好一条 tool/result（中断补合成错误结果、重复去重、孤儿丢弃），`validateSessionEvents` 自校验 |
 | F7 | `list()` 判重跳过；源文件增长 → 增量续写新轮次到同一会话；`force: true` → 以 `import-<src>-<n>` 另存完整副本（复制式，绝不归档） |
 | F8 | `import_claude { path: "~/.claude/projects" \| "all" \| 具体路径 }` 批量汇总 |
-| F9 | meta：`id: import-<src>`、`cwd`、`createdAt`；`session/title` 钉标题；按 cwd 建/归工作区 |
+| F9 | meta：`id: import-<src>`、`cwd`、`createdAt`；`session/title` 钉标题；工作区归组：默认 `workspaceMode: 'claudecode'`（E2）挂到 claudecode 工作区（`claudecodeDir` 默认 `$DSH_HOME/claudecode`），`'per-project'` 按 cwd 各建工作区 |
 | F10 | convert 扩展：`skippedLines: [{line, error}]`（截断上限）；批量报告逐文件 |
 | F11 | `ctx.systemPrompt.context`（同步提供者+缓存；agent cwd 定位 slug；feedback>project>reference>user；默认 8KB） |
 | F12 | `ctx.skills.registerProvider`：`~/.claude/skills` + `extraSkillDirs`，名称 kebab 化（冲突加后缀），`level`→排序，上限 30；catalog 注入与 `skill` 工具由 DSH 负责 |
@@ -114,13 +114,13 @@ dsh-claude-move/
 | F16 | `dsh.client` 面板 + `/api/claude-move/*`（`ctx.webServer`）；导入进度用插件内 job 状态 + 轮询 |
 | F17 | `/resume-claude [latest\|id\|关键词]` 命令：未导入先导入 → `agent.inject` 交接摘要（安全模型复用） |
 | F18 | 导入后 `session.list` 应可见（apiproxy 有 `host/session-added` 帧/重连基线）；面板导入完成后刷新并跳转（spike 确认跳转 API，兜底提示刷新） | ✅ 已核实（当前 harness）：导入即时落盘，服务端 `session.list`/`workspace.list` 立即可见，**无需重启 dsh**；`host/session-added` 只对 live 会话（`session/created`）发射，cold 导入不发 → 已打开的 Web 页面需刷新一次会话列表（面板「刷新会话列表」按钮/F5）；工作区分组经 `domain/changed` → `host/workspace-changed` 实时更新。README 已新增「导入之后」章节 |
-| S1 | 源文件只读；只 `create`+`append`；不碰引擎/apiproxy/官方包 |
+| S1 | 源文件只读；只 `create`+`append`；不碰引擎/apiproxy/官方包；发布面静态审计测试（`test/safety.test.mjs`）钉住「无 rm/unlink/truncate/archiveSession，recursive 仅 mkdir/readdir/importDirectory」 |
 | S2 | 不执行任何 transcript 内容；system/developer/summary/permission/progress 等记录跳过并计数；thinking 只入日志不进摘要；摘要长度截断 |
 | S4 | 正则（AKIA/ghp_/sk-/BEGIN PRIVATE KEY 等）只报 `文件:行:类型` |
 | S5 | `permission`/`queue-operation` 等只统计不导入，报告给迁移建议 |
 | C1/C2 | 纯 ESM、无构建的 host 面（同 chat-import）；client 用 esbuild 单文件构建；peerDeps 锁 rc.6 |
 | C3 | README 三种安装（`github:`/`link:`/本地路径，`dsh plugin --profile web add -w ...`）+ 卸载说明 |
-| C4 | Config：`claudeHome/scanGit/gitTimeoutMs/maxTranscriptBytes/excludeProjects/enable*/maxSkills/extraSkillDirs/resumeMaxChars/enableWebPanel/importConcurrency` 全可 cordis.yml 覆盖 |
+| C4 | Config：`claudeHome/scanGit/gitTimeoutMs/maxTranscriptBytes/excludeProjects/enable*/maxSkills/extraSkillDirs/resumeMaxChars/enableWebPanel/importConcurrency/workspaceMode/claudecodeDir` 全可 cordis.yml 覆盖 |
 | N1 | 流式解析、批量「读取+转换」并发上限（`importConcurrency` 默认 4，落盘串行保证幂等确定性）、`exec.signal` 全程可中止、`list()` 快照缓存、UI 不阻塞（面板轮询） |
 | N2/N3/N4 | `node --test`；fixtures：正常/含 tool/畸形 + 三平台路径用例；README 含架构图、映射表、复用标注（三个 MIT 出处 + resume-plugin 的 Apache-2.0 传递标注） |
 
@@ -132,7 +132,8 @@ dsh-claude-move/
 | `{type:'assistant', content:[{type:'text'}]}` | `assistant/message`（text 块） |
 | `{type:'assistant', content:[{type:'thinking'}]}` | `assistant/message` 内 `reasoning` 块 |
 | `{type:'assistant', content:[{type:'tool_use'}]}` | `assistant/message` 内 `tool-call` 块 + `tool/call` 事件 |
-| `{type:'user', content:[{type:'tool_result'}]}` | `tool/result`（`sourceEventSeqs`→`tool/call`，`is_error` 保留） |
+| `{type:'user', content:[{type:'tool_result'}]}` | `tool/result`（`sourceEventSeqs`→`tool/call`，`is_error` 保留；重复去重、孤儿丢弃） |
+| 被中断的 `tool_use`（无结果） | 合成一条 `tool/result`（`isError` + 标记文案），保证每个 tool_call_id 恰好一条结果（issue#1） |
 | `{type:'ai-title' \| 'custom-title'}` | `session/title`（钉住） |
 | `sessionId/cwd/timestamp/message.model` | `SessionHeader`（id=`import-<src>`、cwd、createdAt）+ assistant `source.model` |
 | `{type:'summary'}` | 跳过（计数；未来可映射 compaction 事件） |

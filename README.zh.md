@@ -1,6 +1,6 @@
 # dsh-claude-move
 
-**迁移到 DeepSeek Harness，不丢 Claude Code 历史。** 一次安装，把 Claude 的全部会话、记忆、技能与 `CLAUDE.md` **复制**进 DSH，生成可续聊的会话——并按 Claude 项目逐一归入对应工作区。
+**迁移到 DeepSeek Harness，不丢 Claude Code 历史。** 一次安装，把 Claude 的全部会话、记忆、技能与 `CLAUDE.md` **复制**进 DSH，生成可续聊的会话——并归入专用 `claudecode` 工作区（按项目各建工作区为可选配置）。
 
 `复制式迁移` · `无缝续聊` · `按项目划分工作区` · `与 Claude Code 实时同步`
 
@@ -20,9 +20,10 @@
 ## ✨ 特性
 
 - 🔍 **自动发现** —— 定位 Claude 数据根目录（`$CLAUDE_CONFIG_DIR`，缺省 `~/.claude`），索引全部项目/会话（标题、起止时间、消息与工具调用数）、目录与 git 状态、记忆、技能、全局 `CLAUDE.md` 与 `settings.json`；增量缓存只重读变化文件。
-- 📥 **全保真历史导入** —— 平衡、可继续（resume）的 DSH 会话（`turn/start → step/start → user/message → assistant/message → tool/call → tool/result → step/end → turn/end`），按 Claude 项目逐一生成工作区，畸形行带行号。
+- 📥 **全保真历史导入** —— 平衡、可继续（resume）的 DSH 会话（`turn/start → step/start → user/message → assistant/message → tool/call → tool/result → step/end → turn/end`），畸形行带行号；中断的工具调用会被修复，保证每个 `tool_use` 恰好对应一个结果（续聊不再永久 400）。
+- 🗂 **单个 `claudecode` 工作区（默认）** —— 每个导入会话都落到专用 "claudecode" 工作区，根目录是新建文件夹（默认 `$DSH_HOME/claudecode`；这是插件唯一会创建的东西）。`workspaceMode: 'per-project'` 可恢复按项目各建工作区的分组方式。
 - 🔁 **复制式 + 增量** —— 两边都不移动、不改写、不删除任何内容；重跑导入只把新增轮次续写进同一 DSH 会话；`force: true` 以新 id 另存一份完整副本。
-- 🧠 **个人上下文持续生效** —— 记忆注入为动态提示词段、Claude 技能注册为真正的 DSH 技能、全局 + 项目级 `CLAUDE.md` 前置注入。
+- 🧠 **个人上下文持续生效** —— 记忆注入为动态提示词段、Claude 技能注册为真正的 DSH 技能（技能发现会跳过 `README.md` 等非技能文档）、全局 + 项目级 `CLAUDE.md` 前置注入。即便在 `claudecode` 工作区内，也会记住原始项目目录用于记忆/`CLAUDE.md` 解析。
 - ⚡ **与运行中的 Claude Code 实时同步** —— 两个工具并行使用，每次重跑只同步变化部分。
 - 🖥 **Web 面板与一键命令** —— `/claude-import-all`、`/resume-claude` 与带进度的悬浮迁移面板。
 - 🛡 **安全优先** —— 源文件严格只读、DSH 日志 append-only、疑似凭据只报位置、权限类记录只统计不导入。
@@ -54,7 +55,7 @@ import_claude { path: "all" }                   # 全量
 
 ```
 ~/.claude（只读）
- ├─ projects/*/*.jsonl  ──→  可续聊的 DSH 会话，按项目（cwd）各归一个工作区
+ ├─ projects/*/*.jsonl  ──→  可续聊的 DSH 会话，归入同一个 "claudecode" 工作区（默认）
  ├─ projects/*/memory/  ──→  动态系统提示词记忆段（每次请求重读）
  ├─ skills/**           ──→  真正的 DSH 技能
  └─ CLAUDE.md + settings ──→  前置提示词段 + 配置建议（绝不代写）
@@ -62,12 +63,12 @@ import_claude { path: "all" }                   # 全量
 
 | Claude Code 里 | 落到 DSH 成为 |
 | --- | --- |
-| 会话 transcript（`projects/*/*.jsonl`） | 平衡、可继续（resume）的 DSH 会话——user/assistant/tool/thinking 全保真映射——按项目（`cwd`）各归一个工作区 |
-| 记忆文件（`projects/*/memory/*.md`） | 动态系统提示词上下文段，每次请求重读（`feedback > project > reference > user`） |
-| 技能（`~/.claude/skills/**`） | 真正的 DSH 技能（kebab 命名、冲突加后缀、默认上限 30） |
+| 会话 transcript（`projects/*/*.jsonl`） | 平衡、可继续（resume）的 DSH 会话——user/assistant/tool/thinking 全保真映射，含中断工具调用修复——归入同一个 **`claudecode` 工作区**（默认 `$DSH_HOME/claudecode`）或按项目各建工作区（`workspaceMode: 'per-project'`） |
+| 记忆文件（`projects/*/memory/*.md`） | 动态系统提示词上下文段，每次请求重读（`feedback > project > reference > user`）——即便在 `claudecode` 工作区内也记住原始项目目录 |
+| 技能（`~/.claude/skills/**`） | 真正的 DSH 技能（kebab 命名、冲突加后缀、默认上限 30；`README.md`/`MEMORY.md` 与无描述的文件会被跳过） |
 | `CLAUDE.md`（全局 + 项目级） | 前置提示词段；项目级优先 |
 | `settings.json` | DSH 配置建议 + 显式的无法映射键清单 |
-| 项目状态（目录、git 分支与脏行数） | 展示在扫描索引与 Web 面板徽标里 |
+| 项目状态（目录、git 分支与脏行数） | 展示在扫描索引、Web 面板徽标与 `/resume-claude` 交接摘要里 |
 
 ## 📦 安装
 
@@ -112,19 +113,19 @@ import_claude { path: "...", force: true }          # 以 import-<src>-<n> 另�
 Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项目/会话树（状态徽标：未导入/已导入/源缺失/目录不存在/git 脏）、关键词过滤、单会话「导入并继续」与「刷新会话列表」、批量导入实时进度条。数据走插件自注册的 `/api/claude-move/*` JSON 路由（公开 `ctx.webServer` seam）。
 
 - **扫描**返回结构化 JSON 索引：项目（slug/cwd/目录存在性/git 分支与脏行数）、会话（标题/起止时间/消息与工具调用数/畸形行数）、记忆、技能、全局 CLAUDE.md 与 settings.json；每个会话带 `import.status`（`none`/`imported`/`source-missing`）；`settingsSuggestions` 是 settings.json 的 DSH 翻译建议与无法映射项（见 [COMPLIANCE.md](COMPLIANCE.md)）。
-- **导入**全保真映射 user/assistant/tool/thinking，产物是可继续的平衡会话并按 cwd 挂接工作区；批量逐文件汇总（`imported`/`appended`/`already-imported`/`skipped`/`failed`），畸形行带行号、疑似凭据只报位置（文件:行:类型）、权限类记录只统计不导入。导入绝不删除/改写任何东西：DSH 既有会话原样不动、旧导入副本保留、Claude 源文件从不写入。
+- **导入**全保真映射 user/assistant/tool/thinking，中断的工具调用会被修复（每个 `tool_use` 恰好一个结果），产物是可继续的平衡会话，默认挂接到 `claudecode` 工作区（或按项目各建工作区）；批量逐文件汇总（`imported`/`appended`/`already-imported`/`skipped`/`failed`），畸形行带行号、疑似凭据只报位置（文件:行:类型）、权限类记录只统计不导入。导入绝不删除/改写任何东西：DSH 既有会话原样不动、旧导入副本保留、Claude 源文件从不写入。
 - **个人上下文自动生效（无需导入动作）**：
-  - 记忆：全部 `projects/*/memory/*.md` 注入动态上下文段，每次请求按 mtime 重读（新记忆即时生效），`feedback > project > reference > user` 排序，默认 8KB 上限；
-  - 技能：`~/.claude/skills/**/SKILL.md`（+ 扁平 `*.md`）注册为 DSH 技能（kebab 归一化、冲突加后缀、上限 30），catalog 注入与 `skill` 工具由 DSH 负责；
-  - 指令：全局 `~/.claude/CLAUDE.md` + 当前会话 cwd 的 `.claude/CLAUDE.md` 注入前置段（项目优先）。
+  - 记忆：全部 `projects/*/memory/*.md` 注入动态上下文段，每次请求按 mtime 重读（新记忆即时生效），`feedback > project > reference > user` 排序，默认 8KB 上限；在 `claudecode` 工作区内，插件会从记录的 `sourceCwd` 解析出原始项目。
+  - 技能：`~/.claude/skills/**/SKILL.md`（+ 扁平 `*.md`）注册为 DSH 技能（kebab 归一化、冲突加后缀、上限 30；`README.md`/`MEMORY.md` 与无描述的文件会被跳过，绝不破坏技能加载），catalog 注入与 `skill` 工具由 DSH 负责；
+  - 指令：全局 `~/.claude/CLAUDE.md` + 当前会话 cwd 的 `.claude/CLAUDE.md` 注入前置段（项目优先；在 `claudecode` 工作区内经 `sourceCwd` 解析）。
 
 ## ✅ 导入之后
 
 **不需要重启 DSH。** 导入经公开 `sessionPersistence` 服务即时落盘：
 
-- 服务端列表（`session.list` / `workspace.list` RPC、CLI、任何新打开的页面）立即可见已导入会话及其按项目划分的工作区。
+- 服务端列表（`session.list` / `workspace.list` RPC、CLI、任何新打开的页面）立即可见已导入会话，归入 **`claudecode` 工作区**（`workspaceMode: 'per-project'` 时按项目各建工作区）。
 - 面板会经 shell 官方客户端服务（`sessions.refresh`/`workspaces.refresh`，特性探测）自动刷新已打开页面的会话列表，并为每个会话提供「打开会话」按钮；老 shell 无这些服务时回退「刷新会话列表」按钮 / 整页刷新——导入直接写入持久化服务的 cold 会话，不会发 UI 的 `host/session-added` 实时帧；工作区分组则会实时更新（`host/workspace-changed`）。
-- 导入的会话可立即打开、阅读与续聊——`/resume-claude`，或直接在会话列表中点开。之后随时重跑导入，只会把新增轮次增量续写进同一会话。
+- 导入的会话可立即打开、阅读与续聊——`/resume-claude`，或直接在会话列表中点开。交接摘要会标明原始项目目录。之后随时重跑导入，只会把新增轮次增量续写进同一会话。
 
 ## ⚙️ 配置（全部可选，可在 cordis.yml 覆盖）
 
@@ -133,6 +134,8 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
   name: dsh-claude-move
   config:
     claudeHome: null            # 缺省自动定位 $CLAUDE_CONFIG_DIR / ~/.claude
+    workspaceMode: claudecode   # 'claudecode'（默认：全部导入挂到一个专用工作区）| 'per-project'（按源 cwd 各建工作区）
+    claudecodeDir: null         # claudecode 工作区目录；默认 $DSH_HOME/claudecode（插件唯一会创建的文件夹）
     scanGit: true               # git 探测级别：true 全量 | 'branch' 零 git 子进程 | false 关闭
     gitTimeoutMs: 5000          # git 子进程超时（毫秒）
     scanConcurrency: 8          # 全量扫描的项目并发上限
@@ -153,13 +156,13 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
 
 ## 🗑 卸载
 
-从 profile 的 bundles 移除 `claude-move` 行并重启 dsh。已导入会话保留在 DSH 数据目录；本插件只在 `$DSH_HOME/claude-move/` 写索引缓存与导入映射，绝不触碰 Claude 源数据。
+从 profile 的 bundles 移除 `claude-move` 行并重启 dsh。已导入会话保留在 DSH 数据目录；本插件只在 `$DSH_HOME/claude-move/` 写索引缓存与导入映射、还会写 `claudecode` 工作区文件夹，绝不触碰 Claude 源数据。
 
 ## 🧭 兼容性
 
 - 目标 `dsh 0.1.0-rc.6`（web profile）；peer 依赖锁定 rc.6；Node `^22.19 || >=24`。
 - 最后验证 **2026-08-13**（Windows / Node 22，针对 `@deepseek-ai/dsh@0.1.0-rc.6`）：tarball 从零安装、真实扫描（40 项目 / 2387 会话）、真实批量导入 13/13 + 幂等重导入 13/13、工作区挂接与持久化产物确认。macOS/Linux 现由 CI 矩阵（linux/macos/windows × Node 22）自动验证。
-- 验证 **2026-08-14**（当前 `deepseek-harness` checkout，web profile / JSONL+zstd 会话后端 / 真实工作区注册表，隔离 DSH_HOME）：挂载插件完整启动 web、经面板路由扫描 + 全量导入、按 `cwd` 创建工作区并挂接会话、对既有导入会话增量续写（seq 连续、可正常 load）、重启后幂等重导入，全程既有 DSH 会话不受影响；任何会话都不会被归档、删除或改写。
+- 验证 **2026-08-14**（当前 `deepseek-harness` checkout，web profile / JSONL+zstd 会话后端 / 真实工作区注册表，隔离 DSH_HOME）：挂载插件完整启动 web、经面板路由扫描 + 全量导入、创建 `claudecode` 工作区并挂接会话、对既有导入会话增量续写（seq 连续、可正常 load）、重启后幂等重导入，全程既有 DSH 会话不受影响；任何会话都不会被归档、删除或改写。
 
 ### 兼容矩阵（只依赖公开面）
 
@@ -172,8 +175,8 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
 
 ## 🔐 权限与数据
 
-- **读取** `~/.claude`（transcript、记忆、技能、CLAUDE.md、settings.json）——严格只读——以及导入目标项目目录（工作区挂接）。
-- **写入** 经公开 `sessionPersistence` 服务的 DSH 会话日志——只 `create` + `append`，绝不删除、改写或归档既有会话——工作区注册表记录，以及插件自有缓存 `$DSH_HOME/claude-move/`（扫描书签 + 导入映射）。
+- **读取** `~/.claude`（transcript、记忆、技能、CLAUDE.md、settings.json）——严格只读——以及导入目标项目目录（`per-project` 模式下工作区挂接）。
+- **写入** 经公开 `sessionPersistence` 服务的 DSH 会话日志——只 `create` + `append`，绝不删除、改写或归档既有会话——工作区注册表记录、插件自有缓存 `$DSH_HOME/claude-move/`（扫描书签 + 导入映射），以及 `claudecode` 工作区文件夹（默认 `$DSH_HOME/claudecode`；仅一次 `mkdir`，绝不删除任何内容）。
 - **绝不** 改写 Claude 源文件、触碰其它应用数据、访问网络。
 - **不读取、不传输任何凭据**；transcript 中的疑似密钥只报告位置。
 
@@ -228,10 +231,11 @@ CI 经 GitHub Actions（[test.yml](.github/workflows/test.yml)）在 Node 22 上
 
 - 标题只取 `custom-title`/`ai-title`/首问；Claude `summary` 记录不作为标题。
 - `thinking` 块保留在导入日志的 `reasoning` 内容块中，但不进入续聊摘要。
+- 中断的工具调用会被修复为合成的错误结果（绝不丢弃），因此中途中断的会话仍可续聊——修复会报告为 `repaired.synthesized`。
 - 权限类记录只统计不导入；DSH 权限预设建议随报告生成。
 - Claude `summary` 记录（上下文压缩摘要）只报告、不映射为 DSH compaction 节点——合成压缩事务需伪造 seq 范围与检查点消息，风险大于收益（见 OPTIMIZATION.md）；完整历史按原始轮次导入。
 - host 无 `fs.streamText` 流式面时，超过 `maxTranscriptBytes` 的 transcript 响亮失败而非部分导入；有流式面的环境自动走分块流式导入。
-- 源目录已删除的会话仍可导入，但工作区挂接失败（留在「未分组」，报告 `workspace.attached: false` 并附 `reason`）。
+- 在 `workspaceMode: 'per-project'` 下，源目录已删除的会话仍可导入，但工作区挂接失败（留在「未分组」，报告 `workspace.attached: false` 并附 `reason`）；默认的 `claudecode` 工作区不依赖源目录，因此此类会话在其中正常挂接。
 - 批量导入中断可安全重跑（幂等、append-only）：已完成文件跳过、已增长文件只续写新轮次。
 - 若源文件被原地重置/截断（轮次少于已导入记录），重导跳过并报 `sourceShrunk`；需要完整副本用 `force: true`。
 - Web 面板为零构建悬浮面板，走插件自注册 JSON 路由；不使用 shell 内部 UI slot（刻意不依赖 rc.6 未文档化内部面）。

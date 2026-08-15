@@ -11,6 +11,10 @@
 5. ✅ **增量缓存 + ctime**：mtime+ctime+size 书签，同毫秒等尺寸重写也能检出（文件缓存与扫描书签同步加固）。
 6. ✅ **单读批量导入**：批量路径 stat→read→convert 一次完成，不双读大文件。
 7. ✅ **面板任务化 + 进度轮询**：导入异步 job + `/api/claude-move/progress` 轮询，UI 不阻塞主循环。
+8. ✅ **issue#1 工具调用平衡修复**：每个 tool_use 恰好一条 tool/result（中断补合成错误结果、重复去重、孤儿丢弃），`validateSessionEvents` 自校验 + fixture 测试；否则导入会话续聊永久 400。
+9. ✅ **issue#1 技能候选硬化**：README.md/MEMORY.md 排除，缺失/空白 name/description 的技能跳过（DSH 硬性契约，空 description 令技能加载整体失败）；frontmatter 标量解引用。
+10. ✅ **claudecode 工作区（E2，默认）**：`workspaceMode: 'claudecode'` 统一挂到 `claudecodeDir`（默认 `$DSH_HOME/claudecode`，唯一 mkdir 写入）；源 cwd 保真（imports.json `sourceCwd` + `sourceCwdSync` 同步找回），memory/CLAUDE.md 注入与交接摘要不丢项目上下文。
+11. ✅ **发布面安全 tripwire**（`test/safety.test.mjs`）：静态审计发布源码，白名单外任何 rm/unlink/truncate/writeFileSync/archiveSession 判失败——防「研发过程把破坏性命令带进发布面」类事故回归。
 
 ## B. 高价值候选（P0：性能/响应性，建议 Phase 3 内完成）
 
