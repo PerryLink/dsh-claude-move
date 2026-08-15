@@ -6,7 +6,8 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { apply, runScan, resolveScanTarget, trimIndex } from '../index.mjs'
+import { apply, runScan, resolveScanTarget, trimIndex, workspaceModeOf, resolveClaudecodeDir, applyWorkspaceCwd, sourceCwdSync, makeClaudeState } from '../index.mjs'
+import { loadImportsSync, saveImports } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 async function makeTempDir(t) {
@@ -77,6 +78,48 @@ test('resolveScanTarget：all/文件/目录收窄', () => {
   assert.deepEqual(resolveScanTarget(path.join(home, 'projects', 'demo'), home), {
     kind: 'dir', target: path.resolve(path.join(home, 'projects', 'demo')),
   })
+})
+
+test('workspaceModeOf/resolveClaudecodeDir：默认 claudecode，目录取 $DSH_HOME/claudecode（E2）', () => {
+  assert.equal(workspaceModeOf({}), 'claudecode')
+  assert.equal(workspaceModeOf({ workspaceMode: 'per-project' }), 'per-project')
+  assert.equal(workspaceModeOf({ workspaceMode: 'bogus' }), 'claudecode', '未知值保守回退 claudecode')
+  const dir = resolveClaudecodeDir({}, { DSH_HOME: 'C:\\home\\.dsh' })
+  assert.equal(dir, path.join('C:', 'home', '.dsh', 'claudecode'))
+  const custom = resolveClaudecodeDir({ claudecodeDir: 'D:\\my\\cc' }, {})
+  assert.equal(custom, path.resolve('D:\\my\\cc'))
+  const customEmpty = resolveClaudecodeDir({ claudecodeDir: '   ' }, { DSH_HOME: 'C:\\h\\.dsh' })
+  assert.equal(customEmpty, path.join('C:', 'h', '.dsh', 'claudecode'), '空白配置视为未配置')
+})
+
+test('applyWorkspaceCwd：claudecode 模式覆写 cwd 并返回源 cwd（E2）', () => {
+  const dir = resolveClaudecodeDir({})
+  const meta = { id: 'import-x', cwd: 'D:\\repo\\proj' }
+  assert.equal(applyWorkspaceCwd(meta, {}), 'D:\\repo\\proj', '返回覆写前的源 cwd')
+  assert.equal(meta.cwd, dir, 'cwd 已覆写为工作区目录')
+  const meta2 = { id: 'import-y', cwd: 'D:\\repo\\proj' }
+  assert.equal(applyWorkspaceCwd(meta2, { workspaceMode: 'per-project' }), 'D:\\repo\\proj')
+  assert.equal(meta2.cwd, 'D:\\repo\\proj', 'per-project 模式不改动')
+})
+
+test('sourceCwdSync：imports.json 的 sourceCwd 字段直接命中（E2 保真映射）', async (t) => {
+  const home = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  t.after(() => {
+    if (prev === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prev
+  })
+  await saveImports(path.join(home, 'claude-move'), {
+    'D:\\claude\\projects\\p\\s.jsonl': {
+      dshId: 'import-sess-1', turns: 2, events: 10, sourceCwd: 'D:\\repo\\one',
+    },
+  })
+  const state = makeClaudeState({})
+  assert.equal(sourceCwdSync(state, 'import-sess-1'), 'D:\\repo\\one')
+  assert.equal(sourceCwdSync(state, 'unknown-session'), null, '未知会话返回 null')
+  assert.equal(sourceCwdSync(makeClaudeState({ workspaceMode: 'per-project' }), 'import-sess-1'), null,
+    'per-project 模式恒 null（header.cwd 即源目录）')
 })
 
 test('runScan 全量：扫描、导入状态标注、缓存落盘、输出通过 schema 校验', async (t) => {

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { apply, resolveImportTarget, mintForceSessionId, importDirectory, importTranscript, persistConverted } from '../index.mjs'
 import { convertClaudeJsonl } from '../lib/convert.mjs'
+import { loadImportsSync } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
 function claudeLine(type, extra = {}) {
@@ -169,7 +170,7 @@ test('mintForceSessionId：取现有后缀最大值 +1', () => {
 test('单文件导入：落盘、归组、来源映射、输出 schema 校验', async (t) => {
   await withTempDshHome(t)
   const { ctx, persistence, attached, registered } = makeCtx({ [P('sess-1.jsonl')]: simple })
-  apply(ctx)
+  apply(ctx, { workspaceMode: 'per-project' })
   const def = registered.find((d) => d.name === 'import_claude')
   const value = await def.execute({ path: P('sess-1.jsonl') })
 
@@ -186,7 +187,7 @@ test('单文件导入：落盘、归组、来源映射、输出 schema 校验', 
   assert.equal(saved.events.at(-1).type, 'turn/end')
   assert.ok(saved.events.every((e, i) => e.seq === i))
   assert.deepEqual(attached, [{ ws: 'D:\\demo\\proj', id: 'import-sess-1' }])
-  assert.deepEqual(value.workspace, { attached: true, path: 'D:\\demo\\proj' })
+  assert.deepEqual(value.workspace, { attached: true, path: 'D:\\demo\\proj', mode: 'per-project' })
 })
 
 test('无 cwd 的 transcript：正常导入但不挂接工作区（F9）', async (t) => {
@@ -196,11 +197,11 @@ test('无 cwd 的 transcript：正常导入但不挂接工作区（F9）', async
     message: { content: '无目录的会话' },
   }) + '\n'
   const { ctx, registered } = makeCtx({ [P('nocwd.jsonl')]: noCwd })
-  apply(ctx)
+  apply(ctx, { workspaceMode: 'per-project' })
   const def = registered.find((d) => d.name === 'import_claude')
   const value = await def.execute({ path: P('nocwd.jsonl') })
   assert.equal(value.status, 'imported')
-  assert.deepEqual(value.workspace, { attached: false, reason: 'no-cwd' })
+  assert.deepEqual(value.workspace, { attached: false, reason: 'no-cwd', mode: 'per-project' })
 })
 
 test('幂等：重复导入 already-imported 且不重复落盘（F7）', async (t) => {
@@ -317,7 +318,7 @@ test('复制式迁移：导入前后源文件内容不变（绝不删除/改写 
   assert.equal(tree[file], before, 'force 也不动源文件')
 })
 
-test('工作区镜像：不同 cwd 的会话各自挂接到对应工作区（参考 Claude 项目布局）', async (t) => {
+test('工作区镜像：不同 cwd 的会话各自挂接到对应工作区（per-project 模式）', async (t) => {
   await withTempDshHome(t)
   const tree = {
     [PC('projects')]: 'dir',
@@ -327,13 +328,57 @@ test('工作区镜像：不同 cwd 的会话各自挂接到对应工作区（参
     [PC('projects', 'p2', 'b.jsonl')]: claudeLine('user', { sessionId: 'sess-b', cwd: 'D:\\repo\\two', message: { content: 'q2' } }) + '\n',
   }
   const { ctx, attached, registered } = makeCtx(tree)
-  apply(ctx)
+  apply(ctx, { workspaceMode: 'per-project' })
   const def = registered.find((d) => d.name === 'import_claude')
   const batch = await def.execute({ path: PC('projects'), recursive: true })
   assert.equal(batch.imported, 2)
   assert.equal(batch.failed, 0)
   assert.ok(attached.some((a) => a.ws === 'D:\\repo\\one' && a.id === 'import-sess-a'), '会话 A 挂到 cwd 对应工作区')
   assert.ok(attached.some((a) => a.ws === 'D:\\repo\\two' && a.id === 'import-sess-b'), '会话 B 挂到 cwd 对应工作区')
+})
+
+test('claudecode 模式（默认）：全部会话挂到独立 claudecode 工作区，源 cwd 保真记录（E2）', async (t) => {
+  const home = await withTempDshHome(t)
+  const claudecodeDir = path.join(home, 'claudecode')
+  const tree = {
+    [PC('projects')]: 'dir',
+    [PC('projects', 'p1')]: 'dir',
+    [PC('projects', 'p1', 'a.jsonl')]: claudeLine('user', { sessionId: 'sess-a', cwd: 'D:\\repo\\one', message: { content: 'q1' } }) + '\n',
+    [PC('projects', 'p2')]: 'dir',
+    [PC('projects', 'p2', 'b.jsonl')]: claudeLine('user', { sessionId: 'sess-b', cwd: 'D:\\repo\\two', message: { content: 'q2' } }) + '\n',
+  }
+  const { ctx, attached, persistence, registered } = makeCtx(tree)
+  apply(ctx)   // 缺省配置 → claudecode 模式
+  const def = registered.find((d) => d.name === 'import_claude')
+  const batch = await def.execute({ path: PC('projects'), recursive: true })
+  assert.equal(batch.imported, 2)
+  assert.equal(batch.failed, 0)
+  // 两个不同源 cwd 的会话都挂到同一个 claudecode 工作区。
+  assert.equal(attached.length, 2)
+  assert.ok(attached.every((a) => a.ws === claudecodeDir))
+  for (const id of ['import-sess-a', 'import-sess-b']) {
+    assert.equal(persistence.sessions.get(id).meta.cwd, claudecodeDir, '会话 cwd 覆写为工作区目录')
+  }
+  const workspace = batch.results.find((r) => r.sessionId === 'import-sess-a').workspace
+  assert.equal(workspace.attached, true)
+  assert.equal(workspace.mode, 'claudecode')
+  assert.equal(workspace.path, claudecodeDir)
+
+  // imports.json 保真记录源项目 cwd（供 memory/CLAUDE.md 注入找回）。
+  const imports = loadImportsSync(path.join(home, 'claude-move'))
+  const aRecord = Object.values(imports).find((r) => r.dshId === 'import-sess-a')
+  assert.equal(aRecord.sourceCwd, 'D:\\repo\\one', '源 cwd 随 imports 记录落盘')
+})
+
+test('claudecode 模式：显式 claudecodeDir 覆盖默认目录（E2）', async (t) => {
+  await withTempDshHome(t)
+  const customDir = path.join(tmpdir(), 'claude-move-custom-' + Date.now())
+  t.after(async () => { await rm(customDir, { recursive: true, force: true }) })
+  const { ctx, persistence, registered } = makeCtx({ [P('sess-1.jsonl')]: simple })
+  apply(ctx, { claudecodeDir: customDir })
+  const def = registered.find((d) => d.name === 'import_claude')
+  await def.execute({ path: P('sess-1.jsonl') })
+  assert.equal(persistence.sessions.get('import-sess-1').meta.cwd, customDir)
 })
 
 test('畸形行行号上报 + 密钥只报位置（F10/S4）', async (t) => {

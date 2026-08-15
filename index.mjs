@@ -13,7 +13,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -27,6 +27,7 @@ import {
   loadCache,
   saveCache,
   loadImports,
+  loadImportsSync,
   scanClaudeHome,
   scanProjectDir,
   scanTranscriptFile,
@@ -67,6 +68,8 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * @property {'inject'|'agents'} [resumeMode] /resume-claude 的继续方式：'inject' 在当前会话注入交接摘要（默认），'agents' 尝试经 ctx.agents.resume 打开导入会话（服务缺失/失败回退注入）。
  * @property {boolean} [enableWebPanel] 注册面板 JSON 路由 /api/claude-move/*（默认 true）。
  * @property {number} [importConcurrency] 批量导入读取+转换并发上限（默认 4；落盘串行）。
+ * @property {'claudecode'|'per-project'} [workspaceMode] 工作区归组方式：'claudecode'（默认）把全部导入会话挂到独立的 claudecode 工作区（claudecodeDir 目录）；'per-project' 按源项目 cwd 各建一个工作区。
+ * @property {string} [claudecodeDir] claudecode 工作区目录；缺省 `$DSH_HOME/claudecode`（DSH_HOME 缺失时 `~/.dsh/claudecode`）。插件只会在此目录下创建文件夹（迁移唯一的有意写入），绝不触碰其它路径。
  */
 
 export const Config = Schema.object({
@@ -87,6 +90,8 @@ export const Config = Schema.object({
   resumeMode: Schema.union([Schema.const('inject'), Schema.const('agents')]).default('inject'),
   enableWebPanel: Schema.boolean().default(true),
   importConcurrency: Schema.number().default(DEFAULT_IMPORT_CONCURRENCY),
+  workspaceMode: Schema.union([Schema.const('claudecode'), Schema.const('per-project')]).default('claudecode'),
+  claudecodeDir: Schema.string(),
 })
 
 const sessionImportSchema = {
@@ -526,6 +531,95 @@ export async function attachToWorkspace(ctx, meta) {
 }
 
 /**
+ * 工作区归组模式（E2）：'claudecode'（默认，全部导入会话挂到独立 claudecode
+ * 工作区）或 'per-project'（按源项目 cwd 各建工作区）。未知值一律按
+ * 'claudecode' 处理，保持「只新建、不打扰既有目录」的默认安全语义。
+ * @param config - 插件配置。
+ * @returns 'claudecode' | 'per-project'。
+ */
+export function workspaceModeOf(config) {
+  return config?.workspaceMode === 'per-project' ? 'per-project' : 'claudecode'
+}
+
+/**
+ * claudecode 工作区目录：配置显式给出则按绝对路径解析，否则
+ * `$DSH_HOME/claudecode`（DSH_HOME 缺失时 `~/.dsh/claudecode`）。
+ * @param config - 插件配置。
+ * @param env - 环境对象，缺省 process.env。
+ * @returns 目录绝对路径。
+ */
+export function resolveClaudecodeDir(config, env = process.env) {
+  if (typeof config?.claudecodeDir === 'string' && config.claudecodeDir.trim().length > 0) {
+    return path.resolve(config.claudecodeDir)
+  }
+  const base = env.DSH_HOME || path.join(homedir(), '.dsh')
+  return path.join(base, 'claudecode')
+}
+
+/**
+ * 应用工作区 cwd 策略：claudecode 模式下把会话 cwd 覆写为 claudecodeDir
+ * （工作区注册表要求 header.cwd 与工作区路径严格相等），并返回覆写前的
+ * 源项目 cwd 供 imports 记录保真；per-project 模式不改动。
+ * @param meta - SessionHeader（就地修改）。
+ * @param config - 插件配置。
+ * @returns 覆写前的 cwd（无覆写时返回当前 cwd）。
+ */
+export function applyWorkspaceCwd(meta, config) {
+  if (!meta) return undefined
+  if (workspaceModeOf(config) !== 'claudecode') return meta.cwd
+  const original = meta.cwd
+  meta.cwd = resolveClaudecodeDir(config)
+  return original
+}
+
+/**
+ * 把导入会话挂到工作区（E2）：
+ * - per-project：复用 attachToWorkspace（按源 cwd 归组）。
+ * - claudecode：确保 claudecodeDir 目录存在（迁移唯一的有意写入，绝不
+ *   递归删除任何内容），把该目录注册为标题「claudecode」的工作区并挂接；
+ *   标题冲突时依次退回目录名 / 'claude-code' 标题，仍失败则报告原因。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ * @param meta - SessionHeader（cwd 已按 applyWorkspaceCwd 覆写）。
+ * @returns `{ attached, mode, path?, reason? }`。
+ */
+export async function attachImportedSession(ctx, config, meta) {
+  if (workspaceModeOf(config) === 'per-project') {
+    const result = await attachToWorkspace(ctx, meta)
+    return { ...result, mode: 'per-project' }
+  }
+  const dir = resolveClaudecodeDir(config)
+  const wr = ctx.get('workspaceRegistry')
+  if (!wr || typeof wr.resolveByPath !== 'function' || typeof wr.create !== 'function') {
+    return { attached: false, mode: 'claudecode', path: dir, reason: 'workspace-registry-unavailable' }
+  }
+  try {
+    await mkdir(dir, { recursive: true })
+    let ws = await wr.resolveByPath(dir)
+    if (!ws) {
+      for (const title of ['claudecode', undefined, 'claude-code']) {
+        try {
+          ws = title === undefined ? await wr.create(dir) : await wr.create(dir, title)
+          break
+        } catch (err) {
+          const text = String((err && err.name) || '') + ' ' + String((err && err.message) || '')
+          if (/conflict/i.test(text)) continue
+          throw err
+        }
+      }
+    }
+    if (!ws) {
+      return { attached: false, mode: 'claudecode', path: dir, reason: 'workspace-title-conflict' }
+    }
+    await ws.attachSession(meta.id)
+    return { attached: true, mode: 'claudecode', path: dir }
+  } catch (err) {
+    console.error('[claude-move] workspace attach failed:', String((err && err.message) || err))
+    return { attached: false, mode: 'claudecode', path: dir, reason: String((err && err.message) || err) }
+  }
+}
+
+/**
  * 记录 源文件路径 → 导入记录（增量缓存目录 imports.json，F4/F7 基础）。
  * 记录形如 `{ dshId, turns, events, sizeBytes, mtimeMs }`：幂等跳过与增量续写
  * 都依赖它；按文件路径为键：多个源文件可能共享同一源 sessionId（Claude
@@ -582,13 +676,14 @@ async function storedEventCount(ctx, dshId) {
  * @param persisted - 已持久化 id 快照（就地更新）。
  * @param sourcePath - 源 transcript 绝对路径（幂等键 + 报告用）。
  * @param source - 源文件本次 stat 信息 `{ sizeBytes?, mtimeMs? }`。
+ * @param config - 插件配置（工作区归组策略）。
  * @returns 单文件统计。
  */
-export async function persistConverted(ctx, converted, args, persisted, sourcePath, source = {}) {
+export async function persistConverted(ctx, converted, args, persisted, sourcePath, source = {}, config = {}) {
   // 同一源文件并发导入互斥：后到者等先行者落盘后重跑，按幂等路径复用结果
   // （否则 create duplicate 会被记为 failed，且 imports.json 会被并发覆盖）。
   return importsStore.exclusive(sourcePath, () =>
-    persistConvertedInner(ctx, converted, args, persisted, sourcePath, source))
+    persistConvertedInner(ctx, converted, args, persisted, sourcePath, source, config))
 }
 
 /** 探测同名持久化会话是否为空日志（上次 create 成功、append 失败残留）；无法确定返回 false。 */
@@ -604,14 +699,17 @@ async function isEmptyStoredSession(ctx, dshId) {
   }
 }
 
-async function persistConvertedInner(ctx, converted, args, persisted, sourcePath, source = {}) {
-  const { meta, events, turns, messages, toolCalls, skipped, skippedLines, typeCounts, sourceId } = converted
+async function persistConvertedInner(ctx, converted, args, persisted, sourcePath, source = {}, config = {}) {
+  const { meta, events, turns, messages, toolCalls, skipped, skippedLines, typeCounts, repaired, sourceId } = converted
 
   // 源 sessionId 缺失时用文件名 slug 保证目标 id 跨运行稳定（否则 mintSessionId
   // 回退 Date.now，重复导入不再幂等）。
   if (!args?.sessionId && !sourceId) {
     meta.id = mintSessionId(path.basename(sourcePath).replace(/\.jsonl$/i, ''))
   }
+
+  // 工作区 cwd 策略：claudecode 模式覆写 cwd，保真记录源项目 cwd（E2）。
+  const sourceCwd = applyWorkspaceCwd(meta, config)
 
   const base = {
     sessionId: meta.id,
@@ -623,6 +721,7 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
     skippedLines: skippedLines ?? [],
     permissions: summarizePermissions(typeCounts),
     typeCounts: typeCounts ?? {},
+    repaired: repaired ?? { synthesized: 0, duplicateResults: 0, orphanResults: 0 },
   }
 
   const cacheDir = resolveCacheDir()
@@ -638,10 +737,11 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
       const nextMeta = { ...meta, id: nextId }
       await spPersist(ctx, nextMeta, events)
       persisted.add(nextId)
-      const attached = await attachToWorkspace(ctx, nextMeta)
+      const attached = await attachImportedSession(ctx, config, nextMeta)
       await rememberImport(ctx, sourcePath, {
         dshId: nextId, turns: turns.length, events: events.length,
         sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+        ...(typeof sourceCwd === 'string' ? { sourceCwd } : {}),
       })
       return {
         ...base,
@@ -670,6 +770,7 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
       await rememberImport(ctx, sourcePath, {
         dshId: knownId, turns: turns.length, events: fromSeq + tail.events.length,
         sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+        ...(typeof sourceCwd === 'string' ? { sourceCwd } : {}),
       })
       return {
         ...base,
@@ -704,10 +805,11 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
     if (await isEmptyStoredSession(ctx, meta.id)) {
       await spAppend(ctx, meta.id, events)
       persisted.add(meta.id)
-      const attached = await attachToWorkspace(ctx, meta)
+      const attached = await attachImportedSession(ctx, config, meta)
       await rememberImport(ctx, sourcePath, {
         dshId: meta.id, turns: turns.length, events: events.length,
         sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+        ...(typeof sourceCwd === 'string' ? { sourceCwd } : {}),
       })
       return {
         ...base,
@@ -722,10 +824,11 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
   }
   await spPersist(ctx, meta, events)
   persisted.add(meta.id)
-  const attached = await attachToWorkspace(ctx, meta)
+  const attached = await attachImportedSession(ctx, config, meta)
   await rememberImport(ctx, sourcePath, {
     dshId: meta.id, turns: turns.length, events: events.length,
     sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+    ...(typeof sourceCwd === 'string' ? { sourceCwd } : {}),
   })
   return {
     ...base,
@@ -780,9 +883,10 @@ export function requireFs(ctx) {
  * @param persisted - 已持久化 id 快照。
  * @param rawOverride - 已读取的原文（批量路径复用，避免双读）。
  * @param signal - 可选 AbortSignal（工具 exec.signal）；中止时抛出 signal.reason。
+ * @param config - 插件配置（工作区归组策略）。
  * @returns 单文件统计。
  */
-export async function importTranscript(ctx, target, args, maxBytes, persisted, rawOverride, signal) {
+export async function importTranscript(ctx, target, args, maxBytes, persisted, rawOverride, signal, config = {}) {
   const fs = requireFs(ctx)
   signal?.throwIfAborted()
   const sourcePath = target.displayPath || fs.processPath(target)
@@ -790,7 +894,7 @@ export async function importTranscript(ctx, target, args, maxBytes, persisted, r
   if (info && typeof info.size === 'number' && info.size > maxBytes) {
     if (rawOverride === undefined && typeof fs.streamText === 'function') {
       return importsStore.exclusive(sourcePath, () =>
-        importTranscriptStreamed(ctx, fs, target, args, persisted, sourcePath, info, signal))
+        importTranscriptStreamed(ctx, fs, target, args, persisted, sourcePath, info, signal, config))
     }
     throw new Error(`transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）：` +
       '请调高 maxTranscriptBytes，或改由 /claude-import-all 与面板批量导入（该路径支持流式分块导入超大文件）')
@@ -802,7 +906,7 @@ export async function importTranscript(ctx, target, args, maxBytes, persisted, r
   const result = await persistConverted(ctx, converted, args, persisted, sourcePath, {
     sizeBytes: info && typeof info.size === 'number' ? info.size : undefined,
     mtimeMs: info && typeof info.mtimeMs === 'number' ? info.mtimeMs : undefined,
-  })
+  }, config)
   result.secrets = scanSecrets(raw)
   return result
 }
@@ -821,9 +925,10 @@ export async function importTranscript(ctx, target, args, maxBytes, persisted, r
  * @param sourcePath - 源 transcript 绝对路径。
  * @param info - fs.stat 结果。
  * @param signal - 可选 AbortSignal。
+ * @param config - 插件配置（工作区归组策略）。
  * @returns 单文件统计（status: imported | appended | already-imported）。
  */
-async function importTranscriptStreamed(ctx, fs, target, args, persisted, sourcePath, info, signal) {
+async function importTranscriptStreamed(ctx, fs, target, args, persisted, sourcePath, info, signal, config = {}) {
   const imports = await loadImports(resolveCacheDir())
   const known = unwrapImport(imports[sourcePath])
   const knownId = known?.dshId
@@ -841,6 +946,7 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
           sessionId: knownId, status: 'already-imported', appendedSkipped: 'stored-length-unknown',
           turns: 0, messages: 0, toolCalls: 0, skipped: 0, skippedLines: [],
           secrets: { total: 0, hits: [] },
+          repaired: { synthesized: 0, duplicateResults: 0, orphanResults: 0 },
         }
       }
       skipTurns = st
@@ -852,15 +958,18 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
   let chain = Promise.resolve()
   let created = false
   let firstError = null
+  let originalCwd
 
   const settleId = () => {
     const m = converter.meta()
+    if (originalCwd === undefined) originalCwd = m.cwd
     if (dshId) {
       m.id = dshId
     } else if (persisted.has(m.id)) {
       dshId = mintForceSessionId(persisted, m.id)
       m.id = dshId
     }
+    applyWorkspaceCwd(m, config)
     return m
   }
 
@@ -928,10 +1037,11 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
 
   if (skipTurns === 0) {
     persisted.add(m.id)
-    const attached = await attachToWorkspace(ctx, m)
+    const attached = await attachImportedSession(ctx, config, m)
     await rememberImport(ctx, sourcePath, {
       dshId: m.id, turns: result.turns, events: result.emittedEvents,
       sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+      ...(typeof originalCwd === 'string' ? { sourceCwd: originalCwd } : {}),
     })
     return {
       sessionId: m.id,
@@ -941,6 +1051,7 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
       toolCalls: result.toolCalls,
       skipped: result.skipped,
       skippedLines: result.skippedLines,
+      repaired: result.repaired,
       secrets,
       workspace: { ...attached, ...(m.cwd ? { path: m.cwd } : {}) },
     }
@@ -949,7 +1060,8 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
     return {
       sessionId: dshId, status: 'already-imported', alreadyImported: true,
       turns: skipTurns, messages: 0, toolCalls: 0,
-      skipped: result.skipped, skippedLines: result.skippedLines, secrets,
+      skipped: result.skipped, skippedLines: result.skippedLines,
+      repaired: result.repaired, secrets,
     }
   }
   // result.turns 为全文件轮次数（含被跳过前缀）；新增轮次 = 总数 - 前缀。
@@ -957,6 +1069,7 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
   await rememberImport(ctx, sourcePath, {
     dshId, turns: result.turns, events: startSeq + result.emittedEvents,
     sizeBytes: source.sizeBytes, mtimeMs: source.mtimeMs,
+    ...(typeof originalCwd === 'string' ? { sourceCwd: originalCwd } : {}),
   })
   return {
     sessionId: dshId,
@@ -968,6 +1081,7 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
     toolCalls: result.toolCalls,
     skipped: result.skipped,
     skippedLines: result.skippedLines,
+    repaired: result.repaired,
     secrets,
   }
 }
@@ -1003,9 +1117,10 @@ async function runPool(workerCount, worker) {
  * @param onProgress - 每个文件处理完后的进度回调（面板轮询用），可选。
  * @param concurrency - 读取+转换并发上限（默认 DEFAULT_IMPORT_CONCURRENCY）。
  * @param signal - 可选 AbortSignal（工具 exec.signal）。
+ * @param config - 插件配置（工作区归组策略）。
  * @returns `{ total, imported, alreadyImported, appended, skipped, failed, results }`。
  */
-export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress, concurrency = DEFAULT_IMPORT_CONCURRENCY, signal) {
+export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress, concurrency = DEFAULT_IMPORT_CONCURRENCY, signal, config = {}) {
   const fs = requireFs(ctx)
   const files = []
   await collectJsonlFiles(ctx, dirTarget, files, args.recursive !== false)
@@ -1084,7 +1199,7 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress
       results[i] = { path: p.pathLabel, status: 'skipped', reason: p.reason }
     } else if (p.status === 'streamed') {
       try {
-        const single = await importTranscript(ctx, files[i], { force: args.force }, maxBytes, persisted, undefined, signal)
+        const single = await importTranscript(ctx, files[i], { force: args.force }, maxBytes, persisted, undefined, signal, config)
         if (single.status === 'imported') imported++
         else if (single.status === 'appended') appended++
         else alreadyImported++
@@ -1095,7 +1210,7 @@ export async function importDirectory(ctx, dirTarget, args, maxBytes, onProgress
       }
     } else {
       try {
-        const single = await persistConverted(ctx, p.converted, { force: args.force }, persisted, p.pathLabel, p.source)
+        const single = await persistConverted(ctx, p.converted, { force: args.force }, persisted, p.pathLabel, p.source, config)
         if (single.status === 'imported') imported++
         else if (single.status === 'appended') appended++
         else alreadyImported++
@@ -1135,6 +1250,7 @@ const importResultSchema = {
     secrets: { type: 'object', additionalProperties: true },
     permissions: { type: 'object', additionalProperties: true },
     typeCounts: { type: 'object', additionalProperties: true },
+    repaired: { type: 'object', additionalProperties: true },
     alreadyImported: { type: 'boolean' },
     status: { type: 'string' },
     appendedTurns: { type: 'integer' },
@@ -1226,6 +1342,16 @@ export function renderImport(args, value) {
   if (permTotal > 0) {
     lines.push(`权限类记录 ${permTotal} 条未导入（permission/queue-operation）：见报告中的 DSH 权限迁移建议（S5）。`)
   }
+  const repairedTotal = value.mode === 'batch'
+    ? (value.results ?? []).reduce((n, r) => n + ((r.repaired?.synthesized ?? 0) + (r.repaired?.duplicateResults ?? 0) + (r.repaired?.orphanResults ?? 0)), 0)
+    : ((value.repaired?.synthesized ?? 0) + (value.repaired?.duplicateResults ?? 0) + (value.repaired?.orphanResults ?? 0))
+  if (repairedTotal > 0) {
+    const synth = value.mode === 'batch'
+      ? (value.results ?? []).reduce((n, r) => n + (r.repaired?.synthesized ?? 0), 0)
+      : value.repaired?.synthesized ?? 0
+    lines.push(`工具调用平衡修复：${synth} 处被中断的调用补为合成错误结果，` +
+      `${repairedTotal - synth} 处重复/孤儿结果被丢弃（保证会话可继续对话）。`)
+  }
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
@@ -1270,13 +1396,13 @@ function makeImportTool(ctx, config) {
         const batch = await importDirectory(
           ctx, target, args, maxBytes, undefined,
           config.importConcurrency ?? DEFAULT_IMPORT_CONCURRENCY,
-          exec?.signal,
+          exec?.signal, config,
         )
         return { mode: 'batch', ...batch }
       }
       exec?.signal?.throwIfAborted()
       const persisted = await listPersistedIds(ctx)
-      const single = await importTranscript(ctx, target, args, maxBytes, persisted, undefined, exec?.signal)
+      const single = await importTranscript(ctx, target, args, maxBytes, persisted, undefined, exec?.signal, config)
       return { mode: 'single', ...single }
     },
   })
@@ -1315,12 +1441,82 @@ export function withService(ctx, name, fn) {
  */
 export function makeClaudeState(config = {}) {
   return {
+    config,
     claudeHome: config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome(),
     fileCache: makeFileCache(),
     memoryDirCache: null,
     indexMapCache: null,
+    sourceCwdCache: null,
     invalidateSkills: null,
   }
+}
+
+/**
+ * 同步解析导入会话的源 Claude 项目 cwd（E2 保真映射）：claudecode 模式下
+ * 会话 header.cwd 是工作区目录，这里经 imports.json（dshId → sourcePath，
+ * 记录含 sourceCwd 字段时直接用）+ index.json 书签（sourcePath → cwd）找回
+ * 原项目目录。两个缓存文件按 mtime/ctime 失效；缺失/损坏时回退 null（注入层
+ * 按无项目处理）。per-project 模式恒返回 null（header.cwd 即源目录）。
+ * @param state - 插件状态。
+ * @param sessionId - 当前会话 id。
+ * @returns 源项目 cwd 或 null。
+ */
+export function sourceCwdSync(state, sessionId) {
+  if (!state || workspaceModeOf(state.config) !== 'claudecode') return null
+  if (typeof sessionId !== 'string' || sessionId.length === 0) return null
+  const cacheDir = resolveCacheDir()
+  const importsPath = path.join(cacheDir, 'imports.json')
+  const indexPath = path.join(cacheDir, 'index.json')
+  let importsStat = null
+  let indexStat = null
+  try {
+    const st = statSync(importsPath)
+    if (st.isFile()) importsStat = st
+  } catch { /* 无 imports.json */ }
+  try {
+    const st = statSync(indexPath)
+    if (st.isFile()) indexStat = st
+  } catch { /* 无 index.json */ }
+
+  const c = state.sourceCwdCache ?? (state.sourceCwdCache = {})
+  if (!c.byDshId || c.importsMtimeMs !== importsStat?.mtimeMs || c.importsCtimeMs !== importsStat?.ctimeMs) {
+    let imports = {}
+    if (importsStat) {
+      try {
+        const parsed = JSON.parse(readFileSync(importsPath, 'utf8'))
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) imports = parsed
+      } catch { /* 损坏：空映射 */ }
+    }
+    const byDshId = new Map()
+    for (const [sourcePath, entry] of Object.entries(imports)) {
+      const rec = unwrapImport(entry)
+      if (rec && typeof rec.dshId === 'string') {
+        byDshId.set(rec.dshId, { sourcePath, sourceCwd: typeof rec.sourceCwd === 'string' ? rec.sourceCwd : null })
+      }
+    }
+    c.byDshId = byDshId
+    c.importsMtimeMs = importsStat?.mtimeMs
+    c.importsCtimeMs = importsStat?.ctimeMs
+  }
+  const rec = c.byDshId.get(sessionId)
+  if (!rec) return null
+  if (rec.sourceCwd) return rec.sourceCwd
+  // 旧版 imports 记录无 sourceCwd：用 index.json 书签兜底。
+  if (!c.byFile || c.indexMtimeMs !== indexStat?.mtimeMs || c.indexCtimeMs !== indexStat?.ctimeMs) {
+    const byFile = new Map()
+    if (indexStat) {
+      try {
+        const parsed = JSON.parse(readFileSync(indexPath, 'utf8'))
+        for (const [file, header] of Object.entries(parsed?.files ?? {})) {
+          if (header && typeof header.cwd === 'string') byFile.set(file, header.cwd)
+        }
+      } catch { /* 损坏：无兜底 */ }
+    }
+    c.byFile = byFile
+    c.indexMtimeMs = indexStat?.mtimeMs
+    c.indexCtimeMs = indexStat?.ctimeMs
+  }
+  return c.byFile.get(rec.sourcePath) ?? null
 }
 
 /**
@@ -1417,9 +1613,13 @@ export function registerContextContributions(ctx, config, state) {
         name: 'claude-move:memory',
         order: 120,
         text: (assemble) => {
-          const cwd = assemble?.agent?.session?.header?.cwd
+          const header = assemble?.agent?.session?.header
+          const cwd = header?.cwd
           const dirs = memoryDirsSync(state)
-          const currentDir = typeof cwd === 'string' && cwd.length > 0 ? cwdMemoryDirSync(state, cwd) : null
+          // claudecode 模式下 header.cwd 是工作区目录，按 imports/index 找回
+          // 源项目 cwd 做 current-project 匹配；找不到时回退全部项目。
+          const srcCwd = sourceCwdSync(state, header?.id) ?? cwd
+          const currentDir = typeof srcCwd === 'string' && srcCwd.length > 0 ? cwdMemoryDirSync(state, srcCwd) : null
           const selected = selectMemoryDirs(dirs, currentDir, config.memoryScope ?? DEFAULT_MEMORY_SCOPE)
           const memories = selected.flatMap((dir) => readMemoriesSync(dir, state.fileCache))
           return renderMemories(memories, config.memoryMaxBytes ?? DEFAULT_MEMORY_MAX_BYTES)
@@ -1433,11 +1633,14 @@ export function registerContextContributions(ctx, config, state) {
         name: 'claude-move:instructions',
         order: -90,
         text: (assemble) => {
-          const cwd = assemble?.agent?.session?.header?.cwd
+          const header = assemble?.agent?.session?.header
+          const cwd = header?.cwd
           const globalPath = path.join(state.claudeHome, 'CLAUDE.md')
           const globalText = fileExists(globalPath) ? state.fileCache.read(globalPath) : null
-          const projectPath = typeof cwd === 'string' && cwd.length > 0
-            ? path.join(cwd, '.claude', 'CLAUDE.md')
+          // 同上：claudecode 模式先找回源项目 cwd 再定位项目级 CLAUDE.md。
+          const srcCwd = sourceCwdSync(state, header?.id) ?? cwd
+          const projectPath = typeof srcCwd === 'string' && srcCwd.length > 0
+            ? path.join(srcCwd, '.claude', 'CLAUDE.md')
             : null
           const projectText = projectPath && fileExists(projectPath) ? state.fileCache.read(projectPath) : null
           return renderClaudeMd(projectText, globalText)
@@ -1573,7 +1776,7 @@ function registerCommandDefinitions(ctx, config, commands) {
         const batch = await importDirectory(
           ctx, target, { recursive: true }, maxBytes, undefined,
           config.importConcurrency ?? DEFAULT_IMPORT_CONCURRENCY,
-          invocation.signal,
+          invocation.signal, config,
         )
         const lines = renderImport({}, { mode: 'batch', ...batch }).map((b) => b.text)
         const summaryText = 'Claude 全量迁移完成。\n\n' + lines.join('\n')
@@ -1631,7 +1834,7 @@ function registerCommandDefinitions(ctx, config, commands) {
           const single = await persistConverted(ctx, converted, {}, persisted, session.file, {
             sizeBytes: info && typeof info.size === 'number' ? info.size : undefined,
             mtimeMs: info && typeof info.mtimeMs === 'number' ? info.mtimeMs : undefined,
-          })
+          }, config)
           dshId = single.sessionId
         }
         // resumeMode='agents'（D2）：尝试经 ctx.agents.resume 真正打开导入会话；
@@ -1650,7 +1853,12 @@ function registerCommandDefinitions(ctx, config, commands) {
             }
           }
         }
-        const handoff = buildHandoff(converted, { maxChars: resumeMaxChars, title: session.title })
+        const handoff = buildHandoff(converted, {
+          maxChars: resumeMaxChars,
+          title: session.title,
+          ...(typeof session.cwd === 'string' ? { sourceCwd: session.cwd } : {}),
+          ...(workspaceModeOf(config) === 'claudecode' ? { workspaceCwd: resolveClaudecodeDir(config) } : {}),
+        })
         const injected = injectContext(invocation.agent, handoff)
         return {
           kind: 'success',
@@ -1844,7 +2052,7 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
           }
           if (info.type === 'file') {
             const persisted = await listPersistedIds(ctx)
-            const single = await importTranscript(ctx, target, { force: body && body.force === true }, maxBytes, persisted, undefined, controller.signal)
+            const single = await importTranscript(ctx, target, { force: body && body.force === true }, maxBytes, persisted, undefined, controller.signal, config)
             Object.assign(job, {
               status: 'done',
               total: 1,
@@ -1862,7 +2070,7 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
           const done = await importDirectory(ctx, target, {
             recursive: true, force: body && body.force === true,
           }, maxBytes, (progress) => Object.assign(job, progress),
-            config.importConcurrency ?? DEFAULT_IMPORT_CONCURRENCY, controller.signal)
+            config.importConcurrency ?? DEFAULT_IMPORT_CONCURRENCY, controller.signal, config)
           Object.assign(job, done, { status: 'done' })
         } catch (err) {
           if (controller.signal.aborted) {
