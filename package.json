@@ -1,7 +1,7 @@
 {
   "name": "dsh-claude-move",
   "description": "Copy Claude Code transcripts, memories, skills and CLAUDE.md into DeepSeek Harness as resumable sessions — one workspace per project, copy-only, seamlessly resumable",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./index.mjs",
   "exports": {
