@@ -111,7 +111,22 @@ test('scanSkills：目录束 + 扁平文件 + frontmatter；缺失目录为空',
   const list = await scanSkills(skills)
   assert.deepEqual(list.map((s) => s.name), ['bundle-skill', 'flat-skill'])
   assert.equal(list[0].level, 2)
+  assert.ok(list.every((s) => typeof s.description === 'string' && s.description.length > 0))
   assert.equal(await (await scanSkills(path.join(dir, 'nope'))).length, 0)
+})
+
+test('scanSkills：README/MEMORY 与缺失 name/description 的文件不列为技能（issue#1）', async (t) => {
+  const dir = await makeTempDir(t)
+  const skills = path.join(dir, 'skills')
+  await mkdir(skills, { recursive: true })
+  await mkdir(path.join(skills, 'real'), { recursive: true })
+  await writeFile(path.join(skills, 'real', 'SKILL.md'), '---\nname: real-skill\ndescription: 真实技能\n---\n\n正文\n', 'utf8')
+  await writeFile(path.join(skills, 'README.md'), '# 索引\n', 'utf8')
+  await writeFile(path.join(skills, 'MEMORY.md'), '记忆\n', 'utf8')
+  await writeFile(path.join(skills, 'no-desc.md'), '---\nname: no-desc\n---\n\n正文\n', 'utf8')
+
+  const list = await scanSkills(skills)
+  assert.deepEqual(list.map((s) => s.name), ['real-skill'], 'README/MEMORY/无描述文件全部跳过')
 })
 
 test('gitStatus：非 git 目录不启动 git；git 目录读分支与脏行数；git 失败降级', async (t) => {

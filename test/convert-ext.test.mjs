@@ -2,8 +2,13 @@
 // 类型计数、非对象行。上游行为由 vendored convert.test.mjs 覆盖。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { convertClaudeJsonl, createClaudeStreamConverter, MALFORMED_REPORT_CAP } from '../lib/convert.mjs'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import { convertClaudeJsonl, createClaudeStreamConverter, validateSessionEvents, SYNTHETIC_TOOL_RESULT_TEXT, MALFORMED_REPORT_CAP } from '../lib/convert.mjs'
 import { summarizePermissions } from '../lib/report.mjs'
+
+const fixture = (name) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url))
 
 function claudeLine(type, extra = {}) {
   return JSON.stringify({
@@ -148,4 +153,87 @@ test('createClaudeStreamConverter：skipTurns/startSeq 续写前缀（C3）', ()
   assert.equal(tail[0].data.turn, 3, '续写从第 3 轮起')
   assert.equal(result.turns, 3, 'turns 为轮次数')
   for (let i = 0; i < tail.length; i++) assert.equal(tail[i].seq, prefixEvents + i, '续写 seq 连续')
+})
+
+test('convertClaudeJsonl：中断工具调用补为恰好一条合成 tool/result（issue#1）', () => {
+  const raw = readFileSync(fixture('interrupted-tool.jsonl'), 'utf8')
+  const out = convertClaudeJsonl(raw)
+  // toolu_int_1 无结果 → 合成 1 条；toolu_dup 两条结果 → 丢弃 1 条；
+  // toolu_orphan 无声明 → 丢弃。
+  assert.deepEqual(out.repaired, { synthesized: 1, duplicateResults: 1, orphanResults: 1 })
+
+  const byCallId = new Map()
+  for (const ev of out.events) {
+    if (ev.type === 'tool/result') {
+      const id = ev.data.message.content[0].toolCallId
+      byCallId.set(id, (byCallId.get(id) ?? 0) + 1)
+    }
+  }
+  assert.equal(byCallId.get('toolu_int_1'), 1, '被中断的调用恰好一条结果')
+  assert.equal(byCallId.get('toolu_int_2'), 1, '正常调用一条结果')
+  assert.equal(byCallId.get('toolu_dup'), 1, '重复结果去重为一条')
+  assert.equal(byCallId.has('toolu_orphan'), false, '孤儿结果被丢弃')
+
+  const synth = out.events.find((e) => e.type === 'tool/result'
+    && e.data.message.content[0].toolCallId === 'toolu_int_1')
+  assert.equal(synth.data.message.content[0].isError, true, '合成结果标记 isError')
+  assert.equal(synth.data.message.content[0].content[0].text, SYNTHETIC_TOOL_RESULT_TEXT)
+  assert.deepEqual(synth.sourceEventSeqs, [out.events.find((e) => e.type === 'tool/call'
+    && e.data.callId === 'toolu_int_1').seq], '合成结果关联声明的 tool/call')
+
+  assert.deepEqual(validateSessionEvents(out.events), [], '合成日志满足续聊协议不变式')
+})
+
+test('convertClaudeJsonl：流式路径同样修复中断工具调用（issue#1）', () => {
+  const raw = readFileSync(fixture('interrupted-tool.jsonl'), 'utf8')
+  const batches = []
+  const converter = createClaudeStreamConverter({ onBatch: (events) => batches.push(events) })
+  converter.feed(raw)
+  const result = converter.end()
+  assert.deepEqual(result.repaired, { synthesized: 1, duplicateResults: 1, orphanResults: 1 })
+  assert.deepEqual(validateSessionEvents(batches.flat()), [], '流式路径输出同样平衡')
+})
+
+test('validateSessionEvents：不平衡日志被逐条报出（issue#1 自校验）', () => {
+  const meta = { version: 0, id: 'import-x', createdAt: 1 }
+  const mk = (type, seq, data) => ({ type, seq, time: 1, data })
+  const missingResult = [
+    mk('turn/start', 0, { turn: 1 }),
+    mk('user/message', 1, { role: 'user' }),
+    mk('assistant/message', 2, { message: { role: 'assistant', content: [{ type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{}' }] } }),
+    mk('tool/call', 3, { callId: 'c1', name: 'Bash', arguments: '{}' }),
+    mk('turn/end', 4, { turn: 1 }),
+  ]
+  const issues = validateSessionEvents(missingResult)
+  assert.ok(issues.some((i) => i.includes('tool/call c1 has no tool/result')), issues)
+
+  const orphan = [
+    mk('turn/start', 0, { turn: 1 }),
+    mk('tool/result', 1, { message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'ghost', content: [] }] } }),
+    mk('turn/end', 2, { turn: 1 }),
+  ]
+  const issues2 = validateSessionEvents(orphan)
+  assert.ok(issues2.some((i) => i.includes("tool/result ghost has no tool/call")), issues2)
+
+  const duplicate = [
+    mk('turn/start', 0, { turn: 1 }),
+    mk('tool/call', 1, { callId: 'c1', name: 'Bash', arguments: '{}' }),
+    mk('tool/result', 2, { message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', content: [] }] } }),
+    mk('tool/result', 3, { message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', content: [] }] } }),
+    mk('turn/end', 4, { turn: 1 }),
+  ]
+  const issues3 = validateSessionEvents(duplicate)
+  assert.ok(issues3.some((i) => i.includes('tool/call c1 has 2 tool/result events')), issues3)
+})
+
+test('validateSessionEvents：seq 断档与 step 未闭合被报出', () => {
+  const mk = (type, seq, data) => ({ type, seq, time: 1, data })
+  const issues = validateSessionEvents([
+    mk('turn/start', 0, { turn: 1 }),
+    mk('user/message', 2, { role: 'user' }),
+    mk('step/start', 3, { turn: 1, step: 1 }),
+    mk('turn/end', 4, { turn: 1 }),
+  ])
+  assert.ok(issues.some((i) => i.includes('seq gap at 1')), issues)
+  assert.ok(issues.some((i) => i.includes('turn ended with 1 open steps')), issues)
 })

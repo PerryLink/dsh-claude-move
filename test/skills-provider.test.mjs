@@ -36,10 +36,10 @@ test('provider.list：目录束 + 扁平文件 + frontmatter + 缺失目录', as
 
 test('provider.list：名称冲突追加 -2/-3 后缀；maxSkills 截断', async (t) => {
   const root = await makeTempDir(t)
-  await writeFile(path.join(root, 'a.md'), '---\nname: dup\n---\n\none\n', 'utf8')
-  await writeFile(path.join(root, 'b.md'), '---\nname: DUP\n---\n\ntwo\n', 'utf8')
-  await writeFile(path.join(root, 'c.md'), '---\nname: dup-2\n---\n\nthree\n', 'utf8')
-  await writeFile(path.join(root, 'd.md'), '---\nname: other\n---\n\nfour\n', 'utf8')
+  await writeFile(path.join(root, 'a.md'), '---\nname: dup\ndescription: one\n---\n\none\n', 'utf8')
+  await writeFile(path.join(root, 'b.md'), '---\nname: DUP\ndescription: two\n---\n\ntwo\n', 'utf8')
+  await writeFile(path.join(root, 'c.md'), '---\nname: dup-2\ndescription: three\n---\n\nthree\n', 'utf8')
+  await writeFile(path.join(root, 'd.md'), '---\nname: other\ndescription: four\n---\n\nfour\n', 'utf8')
 
   const provider = makeClaudeSkillsProvider({ roots: [root], maxSkills: 3 })
   const names = (await provider.list()).map((c) => c.name)
@@ -49,7 +49,7 @@ test('provider.list：名称冲突追加 -2/-3 后缀；maxSkills 截断', async
 
 test('provider.get：归属校验，伪 candidate 返回 undefined', async (t) => {
   const root = await makeTempDir(t)
-  await writeFile(path.join(root, 's.md'), '---\nname: s\n---\n\n正文\n', 'utf8')
+  await writeFile(path.join(root, 's.md'), '---\nname: s\ndescription: s desc\n---\n\n正文\n', 'utf8')
   const provider = makeClaudeSkillsProvider({ roots: [root], maxSkills: 30 })
   const [candidate] = await provider.list()
 
@@ -97,4 +97,32 @@ test('provider.list：options.signal 已中止立即抛 signal.reason（B2）', 
     provider.get({ name: 'x', locator: { path: 'nope' } }, { signal: controller.signal }),
     /stop-list/,
   )
+})
+
+test('provider.list：README.md 与 MEMORY.md 不注册为技能（issue#1）', async (t) => {
+  const root = await makeTempDir(t)
+  await mkdir(path.join(root, 'skill-bundle'), { recursive: true })
+  await writeFile(path.join(root, 'skill-bundle', 'SKILL.md'), '---\nname: real-skill\ndescription: 真实技能\n---\n\n正文\n', 'utf8')
+  await writeFile(path.join(root, 'README.md'), '# Skills index\n\n没有 frontmatter 的索引文件\n', 'utf8')
+  await writeFile(path.join(root, 'readme.md'), '小写变体，同样忽略\n', 'utf8')
+  await writeFile(path.join(root, 'MEMORY.md'), '记忆文件，忽略\n', 'utf8')
+
+  const provider = makeClaudeSkillsProvider({ roots: [root], maxSkills: 30 })
+  const candidates = await provider.list()
+  assert.deepEqual(candidates.map((c) => c.name), ['real-skill'], 'README/MEMORY 均被排除')
+})
+
+test('provider.list：缺失 name/description frontmatter 的技能文件被跳过（issue#1）', async (t) => {
+  const root = await makeTempDir(t)
+  await writeFile(path.join(root, 'good.md'), '---\nname: good\ndescription: 有效技能\n---\n\n正文\n', 'utf8')
+  await writeFile(path.join(root, 'no-description.md'), '---\nname: no-description\n---\n\n有名字没描述\n', 'utf8')
+  await writeFile(path.join(root, 'empty-description.md'), '---\nname: empty\ndescription: "  "\n---\n\n空描述\n', 'utf8')
+  await mkdir(path.join(root, 'no-frontmatter'), { recursive: true })
+  await writeFile(path.join(root, 'no-frontmatter', 'SKILL.md'), '# 无 frontmatter\n\n正文\n', 'utf8')
+
+  const provider = makeClaudeSkillsProvider({ roots: [root], maxSkills: 30 })
+  const candidates = await provider.list()
+  assert.deepEqual(candidates.map((c) => c.name), ['good'], '非法候选全部跳过，绝不产出空描述技能')
+  assert.ok(candidates.every((c) => typeof c.description === 'string' && c.description.length > 0),
+    '每个候选 description 非空（DSH 硬性契约）')
 })
