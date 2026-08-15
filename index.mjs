@@ -33,7 +33,7 @@ import {
   scanTranscriptFile,
   resetCacheFiles,
 } from './lib/discovery.mjs'
-import { convertClaudeJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents } from './lib/convert.mjs'
+import { convertClaudeJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents, validateSessionEvents } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, selectMemoryDirs, DEFAULT_MEMORY_MAX_BYTES, DEFAULT_MEMORY_SCOPE } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
@@ -702,6 +702,13 @@ async function isEmptyStoredSession(ctx, dshId) {
 async function persistConvertedInner(ctx, converted, args, persisted, sourcePath, source = {}, config = {}) {
   const { meta, events, turns, messages, toolCalls, skipped, skippedLines, typeCounts, repaired, sourceId } = converted
 
+  // 落盘前自校验（issue#1）：不平衡的日志会让会话在续聊时永久 400，宁可
+  // 大声失败也不把非法消息流写进持久层（转换器按构造保证通过）。
+  const issues = validateSessionEvents(events)
+  if (issues.length > 0) {
+    throw new Error('claude-move 拒绝落盘：转换结果不满足续聊协议不变式 —— ' + issues.slice(0, 3).join('；'))
+  }
+
   // 源 sessionId 缺失时用文件名 slug 保证目标 id 跨运行稳定（否则 mintSessionId
   // 回退 Date.now，重复导入不再幂等）。
   if (!args?.sessionId && !sourceId) {
@@ -981,6 +988,12 @@ async function importTranscriptStreamed(ctx, fs, target, args, persisted, source
     batchEvents: 10000,
     onBatch: (events) => {
       if (firstError) return
+      // 落盘前自校验（issue#1）：批次是完整回合边界，seq 从批次首事件起。
+      const issues = validateSessionEvents(events, events[0]?.seq ?? 0)
+      if (issues.length > 0) {
+        firstError = new Error('claude-move 拒绝落盘：转换结果不满足续聊协议不变式 —— ' + issues.slice(0, 3).join('；'))
+        return
+      }
       if (skipTurns > 0) {
         chain = chain.then(() => spAppend(ctx, dshId, events)).catch((err) => { firstError = err })
         return
