@@ -28,6 +28,7 @@ English | [中文](README.zh.md) | [Español](README.es.md) | [Português](READM
 - 🧠 **Personal context, always fresh** — memories injected as a live prompt section (current project first, `memoryScope`), Claude skills registered as real DSH skills (global **and project-level** `.claude/skills`, non-skill docs like `README.md` skipped), global + project `CLAUDE.md` injected early. Even with the `claudecode` workspace, the original project directory is remembered for memory/`CLAUDE.md` resolution.
 - ⚡ **Live sync with a running Claude Code** — keep using Claude Code side by side; each re-run brings only what changed.
 - 🖥 **Web panel & one-shot commands** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset`, and a floating migration panel with progress, cancel, paging, "open session", automatic session-list refresh (no page reload on current shells) and zh/en texts.
+- 🪄 **Four-source migration wizard (0.2.1)** — one `/move` wizard plus `move_detect` / `move_preview` / `move_run` tools migrate Claude Code, Codex, OpenCode and Hermes: memories/instructions become managed `AGENTS.md` sections, skills become real DSH skills, slash commands become DSH commands, sessions become resumable DSH sessions — approval-gated, idempotent (`move.json`), conflicts shown as diffs instead of guessed.
 - 🛡 **Safety first** — source files strictly read-only, DSH logs append-only, secrets reported by position only, permission-class records counted but never imported.
 
 ## 🚀 Quick start
@@ -52,6 +53,21 @@ claude_scan                                     # structured index of all projec
 import_claude { path: "~/.claude/projects" }    # one project directory (recursive)
 import_claude { path: "all" }                   # everything
 ```
+
+## 🪄 Four-source migration wizard
+
+```text
+/move              # one-shot wizard: detect → preview → execute → report (all four sources)
+move_detect        # scan Claude Code / Codex / OpenCode / Hermes
+move_preview       # per-item plan: new | unchanged | changed | conflict (with diff) | unsupported
+move_run           # execute behind the approval gate; conflict resolution:
+                   #   skip | overwrite | rename | merge  (default skip — never guesses)
+```
+
+- **Sources** — Claude Code (`~/.claude`), Codex (`~/.codex`), OpenCode (data + config roots), Hermes (skills/memory roots); each source has its own parser + mapper.
+- **Mapping** — memories/instructions → append-only managed sections in the DSH global `AGENTS.md` (one marked section per item); skills → real DSH skills (`SKILL.md` bundles copied verbatim, other formats converted); slash commands → registered DSH commands (their prompts are rebuilt from `move.json` after a restart); sessions → resumable DSH sessions (the same importers as phase 1).
+- **Idempotent** — every applied plan is recorded in `$DSH_HOME/claude-move/move.json` (`digest` / `targetDigest` / `appliedAt`); re-runs skip unchanged items and `force` re-applies them.
+- **Approval-gated** — a run that would write anything asks `ctx.approval` first; anything but `allowed-once` means zero writes.
 
 ## 🗂 What gets migrated
 
@@ -159,6 +175,15 @@ All optional, overridable in `cordis.yml`:
     resumeMode: inject        # 'inject' (handoff summary) | 'agents' (ctx.agents.resume)
     enableWebPanel: true      # register the /api/claude-move/* panel routes
     importConcurrency: 4      # parallel read+convert per batch (persisting stays sequential)
+    # Four-source wizard (0.2.1+):
+    requireApproval: true     # wizard writes ask ctx.approval (allowed-once only)
+    codexHome: null           # default: $CODEX_HOME or ~/.codex
+    opencodeDataHome: null    # default: the platform XDG data dir/opencode
+    opencodeConfigHome: null  # default: the platform XDG config dir/opencode
+    hermesHome: null          # default: $HERMES_HOME or ~/.hermes
+    skillsDir: null           # wizard skill target; default $DSH_HOME/skills
+    agentsMdPath: null        # wizard memory/instruction target; default $DSH_HOME/AGENTS.md
+    moveWorkspaceMode: per-source  # 'per-source' | 'single' workspace grouping for wizard imports
 ```
 
 ## 🗑 Uninstall

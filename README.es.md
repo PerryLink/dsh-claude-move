@@ -28,6 +28,7 @@
 - 🧠 **Contexto personal siempre actualizado** — memorias inyectadas como sección en vivo (proyecto actual primero, `memoryScope`), habilidades de Claude registradas como habilidades reales de DSH (global **y de proyecto** `.claude/skills`, se omiten documentos que no son habilidades como `README.md`), `CLAUDE.md` global + de proyecto inyectado temprano. Incluso con el espacio de trabajo `claudecode`, se recuerda el directorio del proyecto original para resolver memory/`CLAUDE.md`.
 - ⚡ **Sincronización en vivo con Claude Code** — sigue usando Claude Code en paralelo; cada reejecución trae solo lo que cambió.
 - 🖥 **Panel web y comandos de un paso** — `/claude-import-all`, `/resume-claude` y un panel de migración flotante con progreso.
+- 🪄 **Asistente de migración de cuatro fuentes (0.2.1)** — un asistente `/move` más las herramientas `move_detect` / `move_preview` / `move_run` migran Claude Code, Codex, OpenCode y Hermes: memorias/instrucciones se convierten en secciones gestionadas de `AGENTS.md`, las skills en skills reales de DSH, los comandos slash en comandos de DSH y las sesiones en sesiones reanudables — con puerta de aprobación, idempotente (`move.json`) y conflictos mostrados como diff, sin adivinar.
 - 🛡 **Seguridad primero** — archivos fuente estrictamente de solo lectura, logs de DSH append-only, secretos informados solo por posición, registros de permisos contados pero nunca importados.
 
 ## 🚀 Inicio rápido
@@ -52,6 +53,20 @@ claude_scan                                     # índice estructurado de todos 
 import_claude { path: "~/.claude/projects" }    # un directorio de proyecto (recursivo)
 import_claude { path: "all" }                   # todo
 ```
+
+## 🪄 Asistente de migración de cuatro fuentes
+
+```text
+/move              # asistente en un paso: detectar → previsualizar → ejecutar → informar (las cuatro fuentes)
+move_detect        # escanea Claude Code / Codex / OpenCode / Hermes
+move_preview       # plan por elemento: new | unchanged | changed | conflict (con diff) | unsupported
+move_run           # ejecuta tras la puerta de aprobación; resolución: skip | overwrite | rename | merge (skip por defecto, nunca adivina)
+```
+
+- **Fuentes** — Claude Code (`~/.claude`), Codex (`~/.codex`), OpenCode (raíces de datos + configuración), Hermes (raíces de skills/memoria); cada fuente tiene su propio parser y mapper.
+- **Mapeo** — memorias/instrucciones → secciones gestionadas de solo anexado en el `AGENTS.md` global de DSH (una sección marcada por elemento); skills → skills reales de DSH (bundles `SKILL.md` copiados tal cual, otros formatos convertidos); comandos slash → comandos registrados de DSH (sus prompts se reconstruyen desde `move.json` tras reiniciar); sesiones → sesiones reanudables de DSH (los mismos importadores de la fase 1).
+- **Idempotente** — cada plan aplicado se registra en `$DSH_HOME/claude-move/move.json` (`digest` / `targetDigest` / `appliedAt`); las reejecuciones omiten lo que no cambió y `force` lo vuelve a aplicar.
+- **Puerta de aprobación** — una ejecución que vaya a escribir algo pregunta primero a `ctx.approval`; cualquier cosa distinta de `allowed-once` significa cero escrituras.
 
 ## 🗂 Qué se migra
 
@@ -157,6 +172,15 @@ Todo opcional y reemplazable en `cordis.yml`:
     resumeMode: inject        # 'inject' resumen de traspaso | 'agents' ctx.agents.resume
     enableWebPanel: true      # registrar las rutas del panel /api/claude-move/*
     importConcurrency: 4      # concurrencia de lectura+conversión por lote (el guardado sigue secuencial)
+    # Asistente de cuatro fuentes (0.2.1+):
+    requireApproval: true     # las escrituras del asistente preguntan a ctx.approval (solo allowed-once)
+    codexHome: null           # por defecto: $CODEX_HOME o ~/.codex
+    opencodeDataHome: null    # por defecto: directorio de datos XDG de la plataforma/opencode
+    opencodeConfigHome: null  # por defecto: directorio de configuración XDG de la plataforma/opencode
+    hermesHome: null          # por defecto: $HERMES_HOME o ~/.hermes
+    skillsDir: null           # destino de skills del asistente; por defecto $DSH_HOME/skills
+    agentsMdPath: null        # destino de memorias/instrucciones; por defecto $DSH_HOME/AGENTS.md
+    moveWorkspaceMode: per-source  # 'per-source' | 'single' agrupación de espacios de trabajo
 ```
 
 ## 🗑 Desinstalación

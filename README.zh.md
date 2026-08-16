@@ -28,6 +28,7 @@
 - 🧠 **个人上下文持续生效** —— 记忆注入为动态提示词段、Claude 技能注册为真正的 DSH 技能（技能发现会跳过 `README.md` 等非技能文档）、全局 + 项目级 `CLAUDE.md` 前置注入。即便在 `claudecode` 工作区内，也会记住原始项目目录用于记忆/`CLAUDE.md` 解析。
 - ⚡ **与运行中的 Claude Code 实时同步** —— 两个工具并行使用，每次重跑只同步变化部分。
 - 🖥 **Web 面板与一键命令** —— `/claude-import-all`、`/resume-claude` 与带进度的悬浮迁移面板。
+- 🪄 **四合一迁移向导（0.2.1）** —— 一条 `/move` 向导加 `move_detect` / `move_preview` / `move_run` 三个工具，迁移 Claude Code、Codex、OpenCode 与 Hermes：记忆/指令变成带标记的 `AGENTS.md` 管理段，技能变成真正的 DSH 技能，斜杠命令变成 DSH 命令，会话变成可续聊的 DSH 会话——审批门 + 幂等（`move.json`）+ 冲突出 diff 不猜。
 - 🛡 **安全优先** —— 源文件严格只读、DSH 日志 append-only、疑似凭据只报位置、权限类记录只统计不导入。
 
 ## 🚀 快速开始
@@ -52,6 +53,20 @@ claude_scan                                     # 全部项目/会话的结构�
 import_claude { path: "~/.claude/projects" }    # 单个项目目录（递归）
 import_claude { path: "all" }                   # 全量
 ```
+
+## 🪄 四合一迁移向导
+
+```text
+/move              # 一键向导：检测 → 预览 → 执行 → 报告（四源全部）
+move_detect        # 扫描 Claude Code / Codex / OpenCode / Hermes
+move_preview       # 逐项计划：new | unchanged | changed | conflict（带 diff）| unsupported
+move_run           # 审批门后执行；冲突解法：skip | overwrite | rename | merge（默认 skip，绝不猜测）
+```
+
+- **四源** —— Claude Code（`~/.claude`）、Codex（`~/.codex`）、OpenCode（数据 + 配置根）、Hermes（技能/记忆根）；每源独立解析器 + 映射器。
+- **映射** —— 记忆/指令 → DSH 全局 `AGENTS.md` 的只追加管理段（每条一个带标记段）；技能 → 真正的 DSH 技能（`SKILL.md` 目录束原样复制，其他格式转换）；斜杠命令 → 注册为 DSH 命令（重启后按 `move.json` 重建提示词）；会话 → 可续聊 DSH 会话（复用一期导入器）。
+- **幂等** —— 每项已执行计划记录在 `$DSH_HOME/claude-move/move.json`（`digest` / `targetDigest` / `appliedAt`）；重跑跳过未变项，`force` 重新应用。
+- **审批门** —— 任何将产生写入的执行先问 `ctx.approval`；非 `allowed-once` 一律零写入。
 
 ## 🗂 迁移内容对照
 
@@ -154,6 +169,15 @@ Web 面板：右下角悬浮「🐳 Claude 迁移」按钮打开面板——项�
     resumeMode: inject        # 'inject' 注入交接摘要 | 'agents' 经 ctx.agents.resume 打开会话
     enableWebPanel: true      # 注册 /api/claude-move/* 面板路由
     importConcurrency: 4      # 批量导入「读取+转换」并发上限（落盘保持串行）
+    # 四合一迁移向导（0.2.1+）：
+    requireApproval: true     # 向导写入先问 ctx.approval（仅 allowed-once）
+    codexHome: null           # 缺省：$CODEX_HOME 或 ~/.codex
+    opencodeDataHome: null    # 缺省：平台 XDG 数据目录/opencode
+    opencodeConfigHome: null  # 缺省：平台 XDG 配置目录/opencode
+    hermesHome: null          # 缺省：$HERMES_HOME 或 ~/.hermes
+    skillsDir: null           # 向导技能落点；缺省 $DSH_HOME/skills
+    agentsMdPath: null        # 向导记忆/指令落点；缺省 $DSH_HOME/AGENTS.md
+    moveWorkspaceMode: per-source  # 'per-source' | 'single' 向导导入工作区分组
 ```
 
 ## 🗑 卸载

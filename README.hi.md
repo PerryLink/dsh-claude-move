@@ -28,6 +28,7 @@
 - 🧠 **व्यक्तिगत संदर्भ हमेशा ताज़ा** — यादें लाइव प्रॉम्प्ट खंड के रूप में, Claude के कौशल असली DSH कौशल के रूप में (कौशल खोज में `README.md` जैसे गैर-कौशल दस्तावेज़ छोड़ दिए जाते हैं), वैश्विक + प्रोजेक्ट `CLAUDE.md` शुरुआती खंड के रूप में। `claudecode` वर्कस्पेस में भी memory/`CLAUDE.md` समाधान के लिए मूल प्रोजेक्ट डायरेक्टरी याद रखी जाती है।
 - ⚡ **चल रहे Claude Code के साथ लाइव तालमेल** — दोनों टूल साथ-साथ चलाएँ; हर री-रन सिर्फ़ बदलाव लाता है।
 - 🖥 **वेब पैनल और एक-चरण कमांड** — `/claude-import-all`, `/resume-claude` और प्रोग्रेस वाला तैरता माइग्रेशन पैनल।
+- 🪄 **चार-स्रोत माइग्रेशन विज़ार्ड (0.2.1)** — एक `/move` विज़ार्ड और `move_detect` / `move_preview` / `move_run` टूल Claude Code, Codex, OpenCode और Hermes को माइग्रेट करते हैं: यादें/निर्देश प्रबंधित `AGENTS.md` अनुभाग बनते हैं, skills असली DSH skills बनते हैं, slash कमांड DSH कमांड बनते हैं और सत्र फिर से शुरू होने योग्य DSH सत्र बनते हैं — अनुमोदन द्वार, idempotent (`move.json`), विरोध diff के रूप में, अनुमान नहीं।
 - 🛡 **सुरक्षा सबसे पहले** — स्रोत फ़ाइलें सख़्ती से केवल-पठन, DSH लॉग append-only, सीक्रेट केवल स्थान से, अनुमति-रिकॉर्ड गिने जाते हैं पर आयात कभी नहीं होते।
 
 ## 🚀 त्वरित शुरुआत
@@ -52,6 +53,20 @@ claude_scan                                     # सभी प्रोजे�
 import_claude { path: "~/.claude/projects" }    # एक प्रोजेक्ट डायरेक्टरी (पुनरावर्ती)
 import_claude { path: "all" }                   # सब कुछ
 ```
+
+## 🪄 चार-स्रोत माइग्रेशन विज़ार्ड
+
+```text
+/move              # एक-चरण विज़ार्ड: पता लगाएँ → पूर्वावलोकन → निष्पादन → रिपोर्ट (चारों स्रोत)
+move_detect        # Claude Code / Codex / OpenCode / Hermes स्कैन करता है
+move_preview       # प्रति-आइटम योजना: new | unchanged | changed | conflict (diff सहित) | unsupported
+move_run           # अनुमोदन द्वार के बाद निष्पादन; समाधान: skip | overwrite | rename | merge (डिफ़ॉल्ट skip, कभी अनुमान नहीं)
+```
+
+- **स्रोत** — Claude Code (`~/.claude`), Codex (`~/.codex`), OpenCode (डेटा + कॉन्फ़िग रूट), Hermes (skills/मेमोरी रूट); हर स्रोत का अपना parser और mapper है।
+- **मैपिंग** — यादें/निर्देश → DSH वैश्विक `AGENTS.md` में केवल-जोड़ प्रबंधित अनुभाग (हर आइटम का एक चिह्नित अनुभाग); skills → असली DSH skills (`SKILL.md` बंडल जैसे-के-तैसे कॉपी, अन्य प्रारूप परिवर्तित); slash कमांड → पंजीकृत DSH कमांड (रीस्टार्ट के बाद `move.json` से प्रॉम्प्ट फिर बनते हैं); सत्र → फिर से शुरू होने योग्य DSH सत्र (चरण 1 वाले ही आयातक)।
+- **Idempotent** — हर लागू योजना `$DSH_HOME/claude-move/move.json` में दर्ज होती है (`digest` / `targetDigest` / `appliedAt`); दोबारा चलाने पर अपरिवर्तित आइटम छूटते हैं और `force` फिर लागू करता है।
+- **अनुमोदन द्वार** — जो निष्पादन कुछ भी लिखेगा वह पहले `ctx.approval` से पूछता है; `allowed-once` के अलावा कुछ भी = शून्य लेखन।
 
 ## 🗂 क्या माइग्रेट होता है
 
@@ -157,6 +172,15 @@ import_claude { path: "...", force: true }          # import-<src>-<n> के �
     resumeMode: inject        # 'inject' हैंडऑफ़ सारांश | 'agents' ctx.agents.resume
     enableWebPanel: true      # /api/claude-move/* पैनल रूट्स पंजीकृत करें
     importConcurrency: 4      # प्रति बैच पढ़ना+रूपांतरण समानांतर सीमा (सहेजना क्रमिक रहता है)
+    # चार-स्रोत विज़ार्ड (0.2.1+):
+    requireApproval: true     # विज़ार्ड लेखन पहले ctx.approval से पूछता है (केवल allowed-once)
+    codexHome: null           # डिफ़ॉल्ट: $CODEX_HOME या ~/.codex
+    opencodeDataHome: null    # डिफ़ॉल्ट: प्लेटफ़ॉर्म XDG डेटा निर्देशिका/opencode
+    opencodeConfigHome: null  # डिफ़ॉल्ट: प्लेटफ़ॉर्म XDG कॉन्फ़िग निर्देशिका/opencode
+    hermesHome: null          # डिफ़ॉल्ट: $HERMES_HOME या ~/.hermes
+    skillsDir: null           # विज़ार्ड skills लक्ष्य; डिफ़ॉल्ट $DSH_HOME/skills
+    agentsMdPath: null        # विज़ार्ड यादें/निर्देश लक्ष्य; डिफ़ॉल्ट $DSH_HOME/AGENTS.md
+    moveWorkspaceMode: per-source  # 'per-source' | 'single' वर्कस्पेस समूहन
 ```
 
 ## 🗑 अनइंस्टॉल

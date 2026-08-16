@@ -28,6 +28,7 @@
 - 🧠 **Contexto pessoal sempre atualizado** — memórias injetadas como seção ao vivo (projeto atual primeiro, `memoryScope`), habilidades do Claude como habilidades reais do DSH (global **e por projeto** `.claude/skills`, documentos que não são habilidades como `README.md` são ignorados), `CLAUDE.md` global + de projeto injetado cedo. Mesmo no workspace `claudecode`, o diretório original do projeto é lembrado para a resolução de memória/`CLAUDE.md`.
 - ⚡ **Sincronização ao vivo com o Claude Code** — continue usando o Claude Code em paralelo; cada reexecução traz apenas o que mudou.
 - 🖥 **Painel web e comandos de um passo** — `/claude-import-all`, `/resume-claude` e um painel de migração flutuante com progresso.
+- 🪄 **Assistente de migração de quatro fontes (0.2.1)** — um assistente `/move` mais as ferramentas `move_detect` / `move_preview` / `move_run` migram Claude Code, Codex, OpenCode e Hermes: memórias/instruções viram seções gerenciadas do `AGENTS.md`, skills viram skills reais do DSH, comandos slash viram comandos do DSH e sessões viram sessões retomáveis — com porta de aprovação, idempotente (`move.json`) e conflitos exibidos como diff, sem adivinhar.
 - 🛡 **Segurança em primeiro lugar** — arquivos fonte estritamente somente leitura, logs do DSH append-only, segredos informados apenas por posição, registros de permissão contados mas nunca importados.
 
 ## 🚀 Início rápido
@@ -52,6 +53,20 @@ claude_scan                                     # índice estruturado de todos o
 import_claude { path: "~/.claude/projects" }    # um diretório de projeto (recursivo)
 import_claude { path: "all" }                   # tudo
 ```
+
+## 🪄 Assistente de migração de quatro fontes
+
+```text
+/move              # assistente em um passo: detectar → pré-visualizar → executar → relatar (as quatro fontes)
+move_detect        # escaneia Claude Code / Codex / OpenCode / Hermes
+move_preview       # plano por item: new | unchanged | changed | conflict (com diff) | unsupported
+move_run           # executa após a porta de aprovação; resolução: skip | overwrite | rename | merge (skip por padrão, nunca adivinha)
+```
+
+- **Fontes** — Claude Code (`~/.claude`), Codex (`~/.codex`), OpenCode (raízes de dados + configuração), Hermes (raízes de skills/memória); cada fonte tem seu próprio parser e mapper.
+- **Mapeamento** — memórias/instruções → seções gerenciadas somente de acréscimo no `AGENTS.md` global do DSH (uma seção marcada por item); skills → skills reais do DSH (bundles `SKILL.md` copiados como estão, outros formatos convertidos); comandos slash → comandos registrados do DSH (os prompts são reconstruídos do `move.json` após reiniciar); sessões → sessões retomáveis do DSH (os mesmos importadores da fase 1).
+- **Idempotente** — cada plano aplicado é registrado em `$DSH_HOME/claude-move/move.json` (`digest` / `targetDigest` / `appliedAt`); reexecuções pulam o que não mudou e `force` reaplica.
+- **Porta de aprovação** — uma execução que for escrever algo pergunta primeiro ao `ctx.approval`; qualquer coisa diferente de `allowed-once` significa zero escritas.
 
 ## 🗂 O que é migrado
 
@@ -157,6 +172,15 @@ Tudo opcional e substituível no `cordis.yml`:
     resumeMode: inject        # 'inject' resumo de transição | 'agents' ctx.agents.resume
     enableWebPanel: true      # registrar as rotas do painel /api/claude-move/*
     importConcurrency: 4      # concorrência de leitura+conversão por lote (o salvamento segue sequencial)
+    # Assistente de quatro fontes (0.2.1+):
+    requireApproval: true     # as escritas do assistente perguntam ao ctx.approval (apenas allowed-once)
+    codexHome: null           # por padrão: $CODEX_HOME ou ~/.codex
+    opencodeDataHome: null    # por padrão: diretório de dados XDG da plataforma/opencode
+    opencodeConfigHome: null  # por padrão: diretório de configuração XDG da plataforma/opencode
+    hermesHome: null          # por padrão: $HERMES_HOME ou ~/.hermes
+    skillsDir: null           # destino de skills do assistente; por padrão $DSH_HOME/skills
+    agentsMdPath: null        # destino de memórias/instruções; por padrão $DSH_HOME/AGENTS.md
+    moveWorkspaceMode: per-source  # 'per-source' | 'single' agrupamento de espaços de trabalho
 ```
 
 ## 🗑 Desinstalação

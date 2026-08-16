@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.2.1] - 2026-08-16
+
+### Added
+
+- Four-source migration wizard (`/move` command + `move_detect` / `move_preview` / `move_run` tools): Claude Code, Codex, OpenCode and Hermes, each with its own parser + mapper.
+- Mapping: memories/instructions → append-only managed sections in the DSH global `AGENTS.md`; skills → real DSH skills (`SKILL.md` bundles copied verbatim, other formats converted); slash commands → registered DSH commands rebuilt from the manifest after a restart; sessions → resumable DSH sessions (phase-1 importers reused).
+- Idempotency: every applied plan is recorded in `$DSH_HOME/claude-move/move.json` (`digest` / `targetDigest` / `appliedAt`); re-runs skip unchanged items, `force` re-applies, conflicts surface as diffs with explicit resolution (`skip` / `overwrite` / `rename` / `merge`, default skip).
+- Approval gate: any run that would write asks `ctx.approval` first (`allowed-once` only; otherwise zero writes).
+- New config: `requireApproval` / `codexHome` / `opencodeDataHome` / `opencodeConfigHome` / `hermesHome` / `skillsDir` / `agentsMdPath` / `moveWorkspaceMode`.
+
+### Fixed
+
+- The wizard's managed-section markers now accept path-shaped plan keys (Windows backslashes included), so `AGENTS.md` sections keyed by source paths stay idempotent.
+- The migration manifest store resolves `$DSH_HOME` lazily per operation instead of binding it at module import (isolated tests and temporary profiles no longer share the default home).
+- Converted skills record the source digest as `digest`, so re-runs recognize them as unchanged.
+
 ## [0.2.0] - 2026-08-15
 
 ### Added
