@@ -1,6 +1,6 @@
 {
   "name": "dsh-claude-move",
-  "description": "Copy Claude Code transcripts, memories, skills and CLAUDE.md into DeepSeek Harness as resumable sessions 閳?one workspace per project, copy-only, seamlessly resumable",
+  "description": "Four-source migration wizard: copy Claude Code, Codex, OpenCode and Hermes sessions, memories, skills, instructions and slash commands into DeepSeek Harness as resumable sessions — copy-only, approval-gated, idempotent",
   "version": "0.2.2",
   "type": "module",
   "main": "./index.mjs",
@@ -41,6 +41,45 @@
     "client": {
       "platform": "web",
       "immediately": true
+    }
+  },
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "cordis.patch.yml"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-profile",
+      "dispose": "supported"
+    },
+    "permissions": [
+      "filesystem:read",
+      "filesystem:write"
+    ],
+    "compatibility": {
+      "dshVersions": [
+        "0.1.0-rc.6"
+      ]
+    },
+    "capability": {
+      "id": "move-wizard",
+      "kind": "command",
+      "invocation": "/move",
+      "expected": "detects the four sources, renders the migration preview, and with approval applies the plans and records them in move.json (re-runs skip unchanged items)"
+    },
+    "evidence": {
+      "install": null,
+      "failureIsolation": null,
+      "hotReload": null,
+      "remove": null
     }
   },
   "peerDependencies": {
