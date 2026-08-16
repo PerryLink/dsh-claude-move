@@ -231,7 +231,8 @@ test('全链路：detect → preview → run → 幂等重跑 → force', async 
   assert.ok(Object.keys(manifest).length >= 10)
 
   // 幂等重跑：全部跳过。
-  const again = await run.execute({})
+  const again = await run.execute({});
+  console.log('DEBUG-AGAIN', JSON.stringify(again.results.map(function (r) { return r.key + ':' + r.status })))
   assert.equal(again.applied, 0)
   assert.equal(again.skipped, 14)
 
