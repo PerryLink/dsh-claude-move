@@ -1,6 +1,7 @@
 // skill-migrate.test.mjs — 技能兼容判定/转换/kebab 命名/目标路径/跳过守卫。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import {
   kebabName,
   classifySkill,
@@ -53,7 +54,7 @@ test('kebabName：非法字符折叠，空名兜底', () => {
 })
 
 test('skillTargetPath：目录束 SKILL.md', () => {
-  assert.equal(skillTargetPath('D:\\dsh\\skills', 'pdf-helper'), 'D:\\dsh\\skills\\pdf-helper\\SKILL.md')
+  assert.equal(skillTargetPath('D:\\dsh\\skills', 'pdf-helper'), path.join('D:\\dsh\\skills', 'pdf-helper', 'SKILL.md'))
 })
 
 test('skipSkillEntry：跳过 README/MEMORY/隐藏目录', () => {

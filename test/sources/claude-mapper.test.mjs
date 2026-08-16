@@ -39,11 +39,11 @@ test('mapSource：四类条目 → 计划', async (t) => {
 
   const skill = plans.find((p) => p.kind === 'skill')
   assert.equal(skill.action, 'copy')
-  assert.equal(skill.target.path, 'D:\\dsh\\skills\\pdf-helper\\SKILL.md')
+  assert.equal(skill.target.path, path.join('D:\\dsh\\skills', 'pdf-helper', 'SKILL.md'))
 
   const memory = plans.find((p) => p.kind === 'memory')
   assert.equal(memory.action, 'append-section')
-  assert.equal(memory.target.path, 'D:\\dsh\\AGENTS.md')
+  assert.equal(memory.target.path, path.join('D:\\dsh', 'AGENTS.md'))
   assert.equal(memory.content, '记忆内容')
 
   const instruction = plans.find((p) => p.kind === 'instruction')

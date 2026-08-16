@@ -1,6 +1,7 @@
 // agmd-section.test.mjs — AGENTS.md 管理段：追加/幂等/原位替换/冲突 diff/合并。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import {
   defaultAgentsMdPath,
   renderSection,
@@ -12,7 +13,7 @@ import {
 } from '../lib/agmd-section.mjs'
 
 test('defaultAgentsMdPath 跟随 DSH_HOME', () => {
-  assert.equal(defaultAgentsMdPath({ DSH_HOME: 'D:\\dsh' }), 'D:\\dsh\\AGENTS.md')
+  assert.equal(defaultAgentsMdPath({ DSH_HOME: 'D:\\dsh' }), path.join('D:\\dsh', 'AGENTS.md'))
 })
 
 test('planSection：空文件 → new（追加渲染段）', () => {
