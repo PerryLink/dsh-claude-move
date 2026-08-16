@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.2.2] - 2026-08-16
+
+### Fixed
+
+- The wizard's managed-section markers now accept any path-shaped plan key (8.3 short names like `RUNNER~1`, spaces, and every other path character), so `AGENTS.md` sections keyed by source paths stay idempotent on every platform.
+- The migration manifest store resolves `$DSH_HOME` lazily per operation instead of binding it at module import (isolated tests and temporary profiles no longer share the default home).
+- Converted skills record the source digest as `digest`, so re-runs recognize them as unchanged.
+- Path assertions in the test suite are platform-agnostic (`path.join`), so the full gate is green on Windows, macOS and Linux.
+
 ## [0.2.1] - 2026-08-16
 
 ### Added
@@ -11,12 +20,6 @@ All notable changes to this project are documented here. The format is based on 
 - Idempotency: every applied plan is recorded in `$DSH_HOME/claude-move/move.json` (`digest` / `targetDigest` / `appliedAt`); re-runs skip unchanged items, `force` re-applies, conflicts surface as diffs with explicit resolution (`skip` / `overwrite` / `rename` / `merge`, default skip).
 - Approval gate: any run that would write asks `ctx.approval` first (`allowed-once` only; otherwise zero writes).
 - New config: `requireApproval` / `codexHome` / `opencodeDataHome` / `opencodeConfigHome` / `hermesHome` / `skillsDir` / `agentsMdPath` / `moveWorkspaceMode`.
-
-### Fixed
-
-- The wizard's managed-section markers now accept path-shaped plan keys (Windows backslashes included), so `AGENTS.md` sections keyed by source paths stay idempotent.
-- The migration manifest store resolves `$DSH_HOME` lazily per operation instead of binding it at module import (isolated tests and temporary profiles no longer share the default home).
-- Converted skills record the source digest as `digest`, so re-runs recognize them as unchanged.
 
 ## [0.2.0] - 2026-08-15
 
