@@ -5,15 +5,18 @@
 // memory/CLAUDE.md 系统提示词段（F11/F13，同步提供者 + mtime 缓存）、
 // Claude 技能 provider（F12）、/claude-import-all 与 /resume-claude 命令（F15/F17）、
 // /api/claude-move/* 面板 JSON 路由（F16）。
+// 二期（四合一迁移向导）：move_detect / move_preview / move_run 工具与 /move 命令
+// （CC/Codex/OpenCode/Hermes 检测→预览→审批执行→报告；move.json 幂等；冲突 diff）。
 //
 // 只消费公开服务：tools / systemPrompt / skills / sessionPersistence /
-// workspaceRegistry（后两者经 ctx.get 可选读取）。源文件只读，缓存只写
-// resolveCacheDir()。
+// workspaceRegistry / commands / webServer / approval（后几者经 ctx.get 可选读取）。
+// 源文件只读，缓存只写 resolveCacheDir()；迁移落点只写 $DSH_HOME/skills、
+// $DSH_HOME/AGENTS.md 与 imports 工作区目录。
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
-import { readFile, mkdir } from 'node:fs/promises'
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -33,13 +36,27 @@ import {
   scanTranscriptFile,
   resetCacheFiles,
 } from './lib/discovery.mjs'
-import { convertClaudeJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents, validateSessionEvents } from './lib/convert.mjs'
+import { convertClaudeJsonl, convertCodexJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents, validateSessionEvents, appendTitleEvent } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, selectMemoryDirs, DEFAULT_MEMORY_MAX_BYTES, DEFAULT_MEMORY_SCOPE } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
 import { translateSettings } from './lib/settings.mjs'
 import { buildHandoff, DEFAULT_HANDOFF_MAX_CHARS } from './lib/handoff.mjs'
 import { importsStore } from './lib/imports-store.mjs'
+import { manifestStore } from './lib/manifest.mjs'
+import { runPreview, runExecute, runWizard, reportLines } from './lib/wizard.mjs'
+import { defaultAgentsMdPath } from './lib/agmd-section.mjs'
+import { personaParagraph, personaSentence } from './lib/persona.mjs'
+import * as claudeParser from './lib/sources/claude/parser.mjs'
+import * as claudeMapper from './lib/sources/claude/mapper.mjs'
+import * as codexParser from './lib/sources/codex/parser.mjs'
+import * as codexMapper from './lib/sources/codex/mapper.mjs'
+import * as opencodeParser from './lib/sources/opencode/parser.mjs'
+import * as opencodeMapper from './lib/sources/opencode/mapper.mjs'
+import * as hermesParser from './lib/sources/hermes/parser.mjs'
+import * as hermesMapper from './lib/sources/hermes/mapper.mjs'
+import { convertOpencodeRows, loadDbSessionRows, loadLegacySessionRows } from './lib/sources/opencode/convert.mjs'
+import { mergeDetections } from './lib/sources/contract.mjs'
 
 export const name = 'claude-move'
 
@@ -70,6 +87,16 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * @property {number} [importConcurrency] 批量导入读取+转换并发上限（默认 4；落盘串行）。
  * @property {'claudecode'|'per-project'} [workspaceMode] 工作区归组方式：'claudecode'（默认）把全部导入会话挂到独立的 claudecode 工作区（claudecodeDir 目录）；'per-project' 按源项目 cwd 各建一个工作区。
  * @property {string} [claudecodeDir] claudecode 工作区目录；缺省 `$DSH_HOME/claudecode`（DSH_HOME 缺失时 `~/.dsh/claudecode`）。插件只会在此目录下创建文件夹（迁移唯一的有意写入），绝不触碰其它路径。
+ * @property {boolean} [enableMove] 注册四合一迁移向导（move_detect/move_preview/move_run 工具与 /move 命令，默认 true）。
+ * @property {boolean} [requireApproval] 迁移执行前经 ctx.approval 审批（默认 true；fail-closed，非 allowed-once 零写入；无审批 seam 的平台显式设 false 才可执行）。
+ * @property {('claude'|'codex'|'opencode'|'hermes')[]} [sources] 向导覆盖的源（默认四源全开）。
+ * @property {string} [codexHome] Codex 数据根；缺省 `$CODEX_HOME` 或 `~/.codex`。
+ * @property {string} [opencodeDataHome] OpenCode 数据根；缺省 XDG_DATA_HOME/opencode（平台默认）。
+ * @property {string} [opencodeConfigHome] OpenCode 配置根；缺省 XDG_CONFIG_HOME/opencode（平台默认）。
+ * @property {string} [hermesHome] Hermes 数据根；缺省 `$HERMES_HOME` 或 `~/.hermes`。
+ * @property {'per-source'|'single'} [moveWorkspaceMode] 向导会话归组：'per-source'（默认）每源一个工作区（`$DSH_HOME/imports/<source>`）；'single' 全部挂到一个 imports 工作区（`$DSH_HOME/imports`）。
+ * @property {string} [skillsDir] 向导技能落点；缺省 `$DSH_HOME/skills`（官方用户技能根，DSH 自动发现）。
+ * @property {string} [agentsMdPath] 向导记忆/指令落点；缺省 `$DSH_HOME/AGENTS.md`（DSH 全局指令文件）。
  */
 
 export const Config = Schema.object({
@@ -92,6 +119,18 @@ export const Config = Schema.object({
   importConcurrency: Schema.number().default(DEFAULT_IMPORT_CONCURRENCY),
   workspaceMode: Schema.union([Schema.const('claudecode'), Schema.const('per-project')]).default('claudecode'),
   claudecodeDir: Schema.string(),
+  enableMove: Schema.boolean().default(true),
+  requireApproval: Schema.boolean().default(true),
+  sources: Schema.array(Schema.union([
+    Schema.const('claude'), Schema.const('codex'), Schema.const('opencode'), Schema.const('hermes'),
+  ])).default(['claude', 'codex', 'opencode', 'hermes']),
+  codexHome: Schema.string(),
+  opencodeDataHome: Schema.string(),
+  opencodeConfigHome: Schema.string(),
+  hermesHome: Schema.string(),
+  moveWorkspaceMode: Schema.union([Schema.const('per-source'), Schema.const('single')]).default('per-source'),
+  skillsDir: Schema.string(),
+  agentsMdPath: Schema.string(),
 })
 
 const sessionImportSchema = {
@@ -531,14 +570,34 @@ export async function attachToWorkspace(ctx, meta) {
 }
 
 /**
- * 工作区归组模式（E2）：'claudecode'（默认，全部导入会话挂到独立 claudecode
- * 工作区）或 'per-project'（按源项目 cwd 各建工作区）。未知值一律按
- * 'claudecode' 处理，保持「只新建、不打扰既有目录」的默认安全语义。
+ * 工作区归组模式（E2 + 向导）：'claudecode'（默认，全部导入会话挂到独立
+ * claudecode 工作区）、'per-project'（按源项目 cwd 各建工作区）或 'wizard'
+ * （四合一向导：按 source 挂到 imports 工作区）。未知值一律按 'claudecode'
+ * 处理，保持「只新建、不打扰既有目录」的默认安全语义。
  * @param config - 插件配置。
- * @returns 'claudecode' | 'per-project'。
+ * @returns 'claudecode' | 'per-project' | 'wizard'。
  */
 export function workspaceModeOf(config) {
-  return config?.workspaceMode === 'per-project' ? 'per-project' : 'claudecode'
+  if (config?.workspaceMode === 'per-project') return 'per-project'
+  if (config?.workspaceMode === 'wizard') return 'wizard'
+  return 'claudecode'
+}
+
+/**
+ * 向导会话工作区目录：'per-source' → `$DSH_HOME/imports/<source>`；
+ * 'single' → `$DSH_HOME/imports`（DSH_HOME 缺失时 `~/.dsh`）。
+ * @param config - 插件配置（wizardSource 为源标识）。
+ * @param env - 环境对象，缺省 process.env。
+ * @returns 目录绝对路径。
+ */
+export function resolveMoveDir(config, env = process.env) {
+  const base = env.DSH_HOME || path.join(homedir(), '.dsh')
+  const source = typeof config?.wizardSource === 'string' && config.wizardSource.length > 0
+    ? config.wizardSource
+    : 'imports'
+  return config?.moveWorkspaceMode === 'single'
+    ? path.join(base, 'imports')
+    : path.join(base, 'imports', source)
 }
 
 /**
@@ -566,7 +625,13 @@ export function resolveClaudecodeDir(config, env = process.env) {
  */
 export function applyWorkspaceCwd(meta, config) {
   if (!meta) return undefined
-  if (workspaceModeOf(config) !== 'claudecode') return meta.cwd
+  const mode = workspaceModeOf(config)
+  if (mode === 'wizard') {
+    const original = meta.cwd
+    meta.cwd = resolveMoveDir(config)
+    return original
+  }
+  if (mode !== 'claudecode') return meta.cwd
   const original = meta.cwd
   meta.cwd = resolveClaudecodeDir(config)
   return original
@@ -584,9 +649,43 @@ export function applyWorkspaceCwd(meta, config) {
  * @returns `{ attached, mode, path?, reason? }`。
  */
 export async function attachImportedSession(ctx, config, meta) {
-  if (workspaceModeOf(config) === 'per-project') {
+  const mode = workspaceModeOf(config)
+  if (mode === 'per-project') {
     const result = await attachToWorkspace(ctx, meta)
     return { ...result, mode: 'per-project' }
+  }
+  if (mode === 'wizard') {
+    // 向导归组：imports/<source>（或 imports）工作区，标题用源标识兜底。
+    const dir = resolveMoveDir(config)
+    const wr = ctx.get('workspaceRegistry')
+    if (!wr || typeof wr.resolveByPath !== 'function' || typeof wr.create !== 'function') {
+      return { attached: false, mode: 'wizard', path: dir, reason: 'workspace-registry-unavailable' }
+    }
+    try {
+      await mkdir(dir, { recursive: true })
+      let ws = await wr.resolveByPath(dir)
+      if (!ws) {
+        const sourceTitle = typeof config.wizardSource === 'string' ? config.wizardSource : null
+        for (const title of [sourceTitle, undefined, 'imports']) {
+          try {
+            ws = title === undefined || title === null ? await wr.create(dir) : await wr.create(dir, title)
+            break
+          } catch (err) {
+            const text = String((err && err.name) || '') + ' ' + String((err && err.message) || '')
+            if (/conflict/i.test(text)) continue
+            throw err
+          }
+        }
+      }
+      if (!ws) {
+        return { attached: false, mode: 'wizard', path: dir, reason: 'workspace-title-conflict' }
+      }
+      await ws.attachSession(meta.id)
+      return { attached: true, mode: 'wizard', path: dir }
+    } catch (err) {
+      console.error('[claude-move] workspace attach failed:', String((err && err.message) || err))
+      return { attached: false, mode: 'wizard', path: dir, reason: String((err && err.message) || err) }
+    }
   }
   const dir = resolveClaudecodeDir(config)
   const wr = ctx.get('workspaceRegistry')
@@ -1461,6 +1560,8 @@ export function makeClaudeState(config = {}) {
     indexMapCache: null,
     sourceCwdCache: null,
     invalidateSkills: null,
+    registeredCommands: new Set(),
+    lastWizardRun: null,
   }
 }
 
@@ -2169,6 +2270,604 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
   })
 }
 
+// ── 四合一迁移向导：move_detect / move_preview / move_run + /move ──────────────
+//
+// 阶段：detect（四源只读扫描）→ preview（幂等状态/diff/冲突）→ run（审批门 +
+// 逐项落盘 + manifest 记录）→ report。核心状态机在 lib/wizard.mjs（纯编排），
+// 本段只做 DSH 端口接线：源解析器/映射器、会话导入（复用 persistConverted +
+// 各源转换器）、$DSH_HOME/skills 与 AGENTS.md 写入、ctx.commands 注册、
+// ctx.approval 审批（特性探测，fail-closed）。
+
+/** 源解析器/映射器注册表（按源标识）。 */
+const WIZARD_PARSERS = { claude: claudeParser, codex: codexParser, opencode: opencodeParser, hermes: hermesParser }
+const WIZARD_MAPPERS = { claude: claudeMapper, codex: codexMapper, opencode: opencodeMapper, hermes: hermesMapper }
+
+/** 向导覆盖的源列表（config.sources 过滤未知值）。 */
+export function wizardSourcesOf(config) {
+  const want = config?.sources ?? ['claude', 'codex', 'opencode', 'hermes']
+  return (Array.isArray(want) ? want : []).filter((s) => WIZARD_PARSERS[s])
+}
+
+/** 向导技能落点：config.skillsDir 或 `$DSH_HOME/skills`（官方用户技能根）。 */
+export function wizardSkillsDir(config, env = process.env) {
+  if (typeof config?.skillsDir === 'string' && config.skillsDir.trim().length > 0) {
+    return path.resolve(config.skillsDir)
+  }
+  return path.join(env.DSH_HOME || path.join(homedir(), '.dsh'), 'skills')
+}
+
+/** 向导记忆/指令落点：config.agentsMdPath 或 `$DSH_HOME/AGENTS.md`。 */
+export function wizardAgentsMdPath(config, env = process.env) {
+  if (typeof config?.agentsMdPath === 'string' && config.agentsMdPath.trim().length > 0) {
+    return path.resolve(config.agentsMdPath)
+  }
+  return defaultAgentsMdPath(env)
+}
+
+/**
+ * 注册一条迁移来的 DSH 命令：把源提示词注入当前会话（绝不执行脚本）。
+ * 命令由 manifest 在 apply 时重建，迁移完成后即时注册。
+ * @param state - 插件状态（registeredCommands 去重）。
+ * @param name - 命令名（kebab-case）。
+ * @param prompt - 提示词全文。
+ * @returns `{ registered: boolean, reason? }`。
+ */
+export function registerMigratedCommand(state, name, prompt) {
+  if (!state || typeof name !== 'string' || name.length === 0) {
+    return { registered: false, reason: '命令名无效' }
+  }
+  if (state.registeredCommands.has(name)) return { registered: true }
+  // 延迟到 commands 服务可用（apply 阶段重建路径）。
+  if (!state.commandsService || typeof state.commandsService.register !== 'function') {
+    return { registered: false, reason: 'commands 服务不可用' }
+  }
+  const firstLine = String(prompt ?? '').split(/\r?\n/).find((l) => l.trim().length > 0) ?? ''
+  state.commandsService.register({
+    name,
+    description: 'Migrated command (imported by dsh-claude-move from another agent): ' + firstLine.slice(0, 100) + '（迁移导入的命令，注入提示词到当前会话）',
+    handler: async (invocation) => {
+      const injected = injectContext(invocation.agent, String(prompt ?? '').trim())
+      return {
+        kind: 'success',
+        text: (injected ? '（提示词已注入当前会话）' : '') + String(prompt ?? '').trim(),
+      }
+    },
+  })
+  state.registeredCommands.add(name)
+  return { registered: true }
+}
+
+/**
+ * 构造向导运行时端口（lib/wizard.mjs 的依赖注入面）。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ * @param state - 插件状态。
+ * @returns wizard 运行时对象。
+ */
+export function makeWizardRuntime(ctx, config, state) {
+  const skillsDir = wizardSkillsDir(config)
+  const agentsMdPath = wizardAgentsMdPath(config)
+  const maxBytes = config.maxTranscriptBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
+  const homeOf = (source) => {
+    switch (source) {
+      case 'codex': return config.codexHome ? path.resolve(config.codexHome) : codexParser.locateHome()
+      case 'opencode': return config.opencodeDataHome ? path.resolve(config.opencodeDataHome) : opencodeParser.locateHome()
+      case 'hermes': return config.hermesHome ? path.resolve(config.hermesHome) : hermesParser.locateHome()
+      default: return config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
+    }
+  }
+
+  return {
+    /** 源数据根定位 + 白名单扫描。 */
+    async detect(source, opts = {}) {
+      const parser = WIZARD_PARSERS[source]
+      if (!parser) throw new Error('未知源：' + source)
+      const home = homeOf(source)
+      if (source === 'opencode') {
+        const configHome = config.opencodeConfigHome
+          ? path.resolve(config.opencodeConfigHome)
+          : opencodeParser.locateConfigHome()
+        return parser.detect(home, { configHome, signal: opts.signal })
+      }
+      return parser.detect(home, { signal: opts.signal })
+    },
+    /** 清单 → 迁移计划（各源映射器）。 */
+    async map(source, detection) {
+      const mapper = WIZARD_MAPPERS[source]
+      if (!mapper) throw new Error('未知源：' + source)
+      return mapper.mapSource(source, detection, { skillsDir, agentsMdPath })
+    },
+    /** 目标文件读取（不存在 → null）。 */
+    async readTarget(p) {
+      try {
+        return await readFile(p, 'utf8')
+      } catch {
+        return null
+      }
+    },
+    /** 目标文件写入（只写 $DSH_HOME 下的 skills/AGENTS.md 等落点）。 */
+    async writeTarget(p, content) {
+      await mkdir(path.dirname(p), { recursive: true })
+      await writeFile(p, content, 'utf8')
+    },
+    /** 源文件读取（不存在 → null）。 */
+    async readSource(p) {
+      try {
+        return await readFile(p, 'utf8')
+      } catch {
+        return null
+      }
+    },
+    /** 冲突 rename：技能目录名加 -2/-3 后缀避让。 */
+    async renameTarget(p) {
+      const parent = path.dirname(path.dirname(p))
+      const name = path.basename(path.dirname(p))
+      for (let n = 2; ; n++) {
+        const candidate = path.join(parent, `${name}-${n}`)
+        if (!existsSync(candidate)) return path.join(candidate, 'SKILL.md')
+      }
+    },
+    /** 会话导入：按 provider 转换 → persistConverted（复用一期幂等/增量/force）。 */
+    async importSession(plan, { force }) {
+      const fs = requireFs(ctx)
+      const sourceKey = plan.source.importKey ?? plan.source.file
+      let converted
+      let secrets = { total: 0, hits: [] }
+      let statInfo = {}
+      if (plan.provider === 'opencode') {
+        const loaded = plan.source.storage === 'opencode-legacy'
+          ? await loadLegacySessionRows(plan.source.dataHome, plan.source.sessionId)
+          : loadDbSessionRows(plan.source.file, plan.source.sessionId)
+        if (!loaded) throw new Error('OpenCode 会话不可读：' + plan.source.sessionId)
+        converted = convertOpencodeRows(loaded, {})
+      } else {
+        const target = await fs.resolve(plan.source.file)
+        const info = await fs.stat(target)
+        if (info && typeof info.size === 'number' && info.size > maxBytes) {
+          throw new Error(`transcript 过大（${info.size} 字节 > maxTranscriptBytes ${maxBytes}）：请调高 maxTranscriptBytes 后重试`)
+        }
+        const raw = await fs.readText(target)
+        converted = plan.provider === 'codex'
+          ? convertCodexJsonl(raw, {})
+          : convertClaudeJsonl(raw, {})
+        if (!converted.events.some((e) => e.type === 'session/title')) {
+          appendTitleEvent(converted, plan.title)
+        }
+        secrets = scanSecrets(raw)
+        statInfo = {
+          sizeBytes: info && typeof info.size === 'number' ? info.size : undefined,
+          mtimeMs: info && typeof info.mtimeMs === 'number' ? info.mtimeMs : undefined,
+        }
+      }
+      const persisted = await listPersistedIds(ctx)
+      // 向导归组：workspaceMode 'wizard' → imports/<source> 工作区（applyWorkspaceCwd/attachImportedSession 已支持）。
+      const wizardConfig = {
+        ...config,
+        workspaceMode: 'wizard',
+        wizardSource: plan.from ?? plan.provider,
+        moveWorkspaceMode: config.moveWorkspaceMode,
+      }
+      const single = await persistConverted(ctx, converted, { force }, persisted, sourceKey, statInfo, wizardConfig)
+      single.secrets = secrets
+      return single
+    },
+    /** DSH 命令注册（迁移来的纯提示词命令）。 */
+    async registerCommand(name, prompt) {
+      return registerMigratedCommand(state, name, prompt)
+    },
+    /** 命令是否已由本插件注册（幂等预览用）。 */
+    hasCommand(name) {
+      return state.registeredCommands.has(name)
+    },
+    /**
+     * 审批端口（fail-closed）：ctx.approval 特性探测；无服务/无 agent/无开放
+     * 回合一律 'unavailable'（不写任何内容）。
+     */
+    async approval(args = {}) {
+      const service = ctx.get('approval')
+      if (!service || typeof service.request !== 'function' || !args.agent) return 'unavailable'
+      try {
+        return await service.request({
+          agent: args.agent,
+          toolName: args.toolName ?? 'move_run',
+          ...(args.callId ? { callId: args.callId } : {}),
+          reason: args.reason,
+          ...(args.signal ? { signal: args.signal } : {}),
+        })
+      } catch {
+        // 无开放回合等：审批不可用，fail-closed。
+        return 'unavailable'
+      }
+    },
+    /** move.json 清单。 */
+    async loadManifest() {
+      return manifestStore.load()
+    },
+    /** 记录一条已执行计划（串行 + 原子写）。 */
+    async record(key, rec) {
+      return manifestStore.update((manifest) => {
+        manifest[key] = { appliedAt: new Date().toISOString(), ...rec }
+      })
+    },
+    /**
+     * 会话导入状态（幂等预览）：imports.json + 持久化列表；源轮次增加 →
+     * 'updates'（增量续写）。
+     */
+    async sessionStatus(source) {
+      const key = source.importKey ?? source.file
+      const imports = await loadImports(resolveCacheDir())
+      const rec = unwrapImport(imports[key])
+      if (!rec || typeof rec.dshId !== 'string') return 'none'
+      const persisted = await listPersistedIds(ctx)
+      if (!persisted.has(rec.dshId)) return 'none'
+      if (typeof rec.turns === 'number' && typeof source.turns === 'number' && source.turns > rec.turns) {
+        return 'updates'
+      }
+      return 'imported'
+    },
+  }
+}
+
+/** move_detect 输出 schema（宽松，源内部结构由解析器决定）。 */
+const moveDetectSchema = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    stats: { type: 'object', additionalProperties: true, required: true },
+    sources: { type: 'array', required: true },
+  },
+}
+
+/** move_preview 输出 schema。 */
+const movePreviewSchema = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    counts: { type: 'object', additionalProperties: true, required: true },
+    conflicts: { type: 'array', required: true },
+    previews: { type: 'array', required: true },
+  },
+}
+
+/** move_run 输出 schema（宽松：execution 报告字段）。 */
+const moveRunSchema = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    approved: { type: 'boolean' },
+    outcome: { type: 'string' },
+    applied: { type: 'integer' },
+    skipped: { type: 'integer' },
+    conflictSkipped: { type: 'integer' },
+    unsupported: { type: 'integer' },
+    failed: { type: 'integer' },
+    results: { type: 'array' },
+  },
+}
+
+/** 源显示名（报告用）。 */
+const SOURCE_LABELS = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', hermes: 'Hermes' }
+
+/** move_detect 结果摘要（中文，一句角色陈述开头）。 */
+export function renderMoveDetect(args, value) {
+  const lines = [personaSentence('迁移', 'zh') + '检测到以下可迁移内容：']
+  for (const d of value.sources ?? []) {
+    const label = SOURCE_LABELS[d.source] ?? d.source
+    lines.push(`- ${label}（${d.home}${d.homeExists ? '' : '，不存在'}）：` +
+      `会话 ${d.sessions?.length ?? 0}、技能 ${d.skills?.length ?? 0}、记忆 ${d.memories?.length ?? 0}、` +
+      `指令 ${d.instructions?.length ?? 0}、命令 ${d.commands?.length ?? 0}、钩子 ${d.hooks?.length ?? 0}` +
+      (d.errors?.length ? `、错误 ${d.errors.length}` : ''))
+  }
+  if (!(value.sources ?? []).length) lines.push('- 未选择任何源（检查 config.sources）。')
+  lines.push('下一步：move_preview 查看逐项状态与冲突 diff；move_run 执行迁移。')
+  return [{ type: 'text', text: lines.join('\n') }]
+}
+
+/** move_preview 结果摘要（状态计数 + 冲突 diff）。 */
+export function renderMovePreview(args, value) {
+  const c = value.counts ?? {}
+  const lines = [personaSentence('迁移', 'zh') + `预览完成：新增 ${c.new ?? 0}、更新 ${c.changed ?? 0}、` +
+    `幂等跳过 ${c.unchanged ?? 0}、冲突 ${c.conflict ?? 0}、不支持 ${c.unsupported ?? 0}。`]
+  for (const conflict of value.conflicts ?? []) {
+    lines.push(`- 冲突：${conflict.key}（${conflict.reason ?? ''}）`)
+    if (conflict.existing) {
+      lines.push(`  目标现状：${String(conflict.existing).slice(0, 200)}`)
+    }
+    for (const line of (conflict.diff ?? []).slice(0, 12)) lines.push('  ' + line)
+    if ((conflict.diff ?? []).length > 12) lines.push('  …（diff 截断）')
+  }
+  for (const p of value.previews ?? []) {
+    if (p.status === 'unsupported') lines.push(`- 不支持：${p.key}（${p.reason ?? ''}）`)
+  }
+  lines.push('执行：move_run { resolve: { "<key>": "skip|overwrite|rename|merge" } } 逐项选择冲突解法（默认跳过，绝不猜测）。')
+  return [{ type: 'text', text: lines.join('\n') }]
+}
+
+/** move_run 结果摘要（报告：短 persona 开头 + 计数 + 不支持清单）。 */
+export function renderMoveRun(args, value) {
+  const lines = reportLines(value)
+  return [{ type: 'text', text: lines.join('\n') }]
+}
+
+/** 构造 move_detect / move_preview / move_run 三个工具。 */
+function makeMoveTools(ctx, config, state) {
+  const runtime = makeWizardRuntime(ctx, config, state)
+  const sourcesOf = (raw) => {
+    if (typeof raw === 'string' && raw !== 'all' && WIZARD_PARSERS[raw]) return [raw]
+    return wizardSourcesOf(config)
+  }
+
+  const detectTool = defineTool({
+    name: 'move_detect',
+    description:
+      'Detect migratable data from other coding agents (Claude Code / Codex / OpenCode / Hermes) with a read-only whitelist scan: sessions, skills, memories, instruction files, commands and hooks. Returns per-source counts and errors. Use move_preview next for per-item status and conflict diffs. ' +
+      '（只读白名单扫描四源（Claude Code/Codex/OpenCode/Hermes）可迁移内容：会话/技能/记忆/指令/命令/钩子，逐源计数与错误。下一步 move_preview。）',
+    parameters: {
+      source: {
+        type: 'string',
+        enum: ['all', 'claude', 'codex', 'opencode', 'hermes'],
+        description: "可选：'all'（默认）或单个源标识。",
+      },
+    },
+    output: { schema: moveDetectSchema, render: renderMoveDetect },
+    async execute(args, exec) {
+      const detections = []
+      for (const source of sourcesOf(args?.source)) {
+        exec?.signal?.throwIfAborted()
+        detections.push(await runtime.detect(source, { signal: exec?.signal }))
+      }
+      return mergeDetections(detections)
+    },
+  })
+
+  const previewTool = defineTool({
+    name: 'move_preview',
+    description:
+      'Preview the four-source migration plan: per-item idempotent status (new/changed/unchanged/conflict/unsupported), conflict diffs when a target was manually edited, and counts. No writes. Use move_run to execute; pass resolve per conflict key (skip/overwrite/rename/merge, default skip). ' +
+      '（预览四源迁移计划：逐项幂等状态（新增/更新/跳过/冲突/不支持）、目标被手工修改时的冲突 diff 与计数。零写入。执行用 move_run，冲突按 key 传 resolve。）',
+    parameters: {
+      source: {
+        type: 'string',
+        enum: ['all', 'claude', 'codex', 'opencode', 'hermes'],
+        description: "可选：'all'（默认）或单个源标识。",
+      },
+      force: {
+        type: 'boolean',
+        description: '可选：true 时把已迁移项标为重新应用（默认 false）。',
+      },
+    },
+    output: { schema: movePreviewSchema, render: renderMovePreview },
+    async execute(args, exec) {
+      const detections = []
+      for (const source of sourcesOf(args?.source)) {
+        exec?.signal?.throwIfAborted()
+        detections.push(await runtime.detect(source, { signal: exec?.signal }))
+      }
+      const plans = []
+      for (const detection of detections) {
+        const mapped = await runtime.map(detection.source, detection)
+        plans.push(...(mapped.plans ?? []))
+      }
+      const manifest = await runtime.loadManifest()
+      const preview = await runPreview(runtime, plans, manifest, args?.force === true)
+      state.lastWizardRun = { detections, plans, preview, execution: null }
+      return {
+        counts: preview.counts,
+        conflicts: preview.conflicts.map((c) => ({
+          key: c.plan.key,
+          reason: c.reason,
+          ...(c.diff ? { diff: c.diff } : {}),
+          ...(c.existing ? { existing: c.existing } : {}),
+        })),
+        previews: preview.previews.map((p) => ({
+          key: p.plan.key,
+          source: p.plan.from,
+          kind: p.plan.kind,
+          status: p.status,
+          reason: p.reason,
+        })),
+      }
+    },
+  })
+
+  const runTool = defineTool({
+    name: 'move_run',
+    description:
+      'Execute the four-source migration after approval (ctx.approval; fails closed when unavailable or rejected — nothing is written). Import sessions (resumable), copy/convert skills into $DSH_HOME/skills, append memories/instructions as managed sections of $DSH_HOME/AGENTS.md, register prompt-only commands. Idempotent via move.json manifest; force re-applies; conflicts need per-key resolve (skip/overwrite/rename/merge, default skip). ' +
+      '（审批后执行四源迁移（fail-closed：审批不可用/拒绝时零写入）。导入可续聊会话、技能拷入 $DSH_HOME/skills、记忆/指令追加为 $DSH_HOME/AGENTS.md 管理段、纯提示词命令注册为 DSH 命令。move.json 幂等；force 重应用；冲突按 key 传 resolve。）',
+    parameters: {
+      source: {
+        type: 'string',
+        enum: ['all', 'claude', 'codex', 'opencode', 'hermes'],
+        description: "可选：'all'（默认）或单个源标识。",
+      },
+      selection: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '可选：只执行这些计划 key（move_preview 输出里的 key）。',
+      },
+      resolve: {
+        type: 'object',
+        additionalProperties: true,
+        description: '可选：冲突解法映射 { "<key>": "skip|overwrite|rename|merge" }；默认 skip（绝不猜测）。merge 只对 AGENTS.md 段有效。',
+      },
+      force: {
+        type: 'boolean',
+        description: '可选：true 重新应用已迁移项（默认 false）。',
+      },
+    },
+    output: { schema: moveRunSchema, render: renderMoveRun },
+    async execute(args, exec) {
+      const detections = []
+      for (const source of sourcesOf(args?.source)) {
+        exec?.signal?.throwIfAborted()
+        detections.push(await runtime.detect(source, { signal: exec?.signal }))
+      }
+      const plans = []
+      const mapErrors = []
+      for (const detection of detections) {
+        const mapped = await runtime.map(detection.source, detection)
+        plans.push(...(mapped.plans ?? []))
+        for (const err of mapped.errors ?? []) mapErrors.push(err)
+      }
+      const manifest = await runtime.loadManifest()
+      const preview = await runPreview(runtime, plans, manifest, args?.force === true)
+      const execution = await runExecute(runtime, {
+        plans,
+        manifest,
+        force: args?.force === true,
+        resolve: args?.resolve ?? {},
+        selection: args?.selection ?? [],
+        requireApproval: config.requireApproval !== false,
+        approval: runtime.approval,
+        approvalContext: {
+          agent: exec?.agent,
+          toolName: 'move_run',
+          callId: exec?.callId,
+          signal: exec?.signal,
+        },
+        signal: exec?.signal,
+      })
+      state.lastWizardRun = { detections, plans, preview, execution }
+      state.invalidateSkills?.()
+      return { ...execution, ...(mapErrors.length > 0 ? { mapErrors } : {}) }
+    },
+  })
+
+  return { detect: detectTool, preview: previewTool, run: runTool }
+}
+
+/**
+ * 注册 /move 命令（detect | preview | run | report [source]）。
+ * run 需要审批（审批服务要求模型回合内）：非交互/无审批 seam 时注入指示让
+ * 模型调用 move_run 工具完成审批内执行；requireApproval=false 时直接执行。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ * @param state - 插件状态。
+ */
+export function registerMoveCommand(ctx, config, state) {
+  withService(ctx, 'commands', (commands) => {
+    if (typeof commands.register !== 'function') return
+    state.commandsService = commands
+    const runtime = makeWizardRuntime(ctx, config, state)
+
+    commands.register({
+      name: 'move',
+      description: 'Four-source migration wizard (Claude Code / Codex / OpenCode / Hermes): detect → preview → run → report（四合一迁移向导：detect 检测 → preview 预览 → run 执行 → report 报告）',
+      input: { hint: 'detect | preview | run | report [source=claude|codex|opencode|hermes|all]' },
+      handler: async (invocation) => {
+        try {
+          const parts = invocation.rawInput.trim().split(/\s+/)
+          const sub = (parts[0] ?? '').toLowerCase() || 'report'
+          const rawSource = parts[1] ?? 'all'
+          const sources = rawSource !== 'all' && WIZARD_PARSERS[rawSource] ? [rawSource] : wizardSourcesOf(config)
+
+          const detections = []
+          for (const source of sources) detections.push(await runtime.detect(source))
+          const plans = []
+          for (const detection of detections) {
+            const mapped = await runtime.map(detection.source, detection)
+            plans.push(...(mapped.plans ?? []))
+          }
+          const manifest = await runtime.loadManifest()
+
+          if (sub === 'detect') {
+            const merged = mergeDetections(detections)
+            const lines = renderMoveDetect({}, merged).map((b) => b.text)
+            return { kind: 'success', text: lines.join('\n') }
+          }
+
+          if (sub === 'preview') {
+            const preview = await runPreview(runtime, plans, manifest, false)
+            state.lastWizardRun = { detections, plans, preview, execution: null }
+            const lines = renderMovePreview({}, {
+              counts: preview.counts,
+              conflicts: preview.conflicts.map((c) => ({ key: c.plan.key, reason: c.reason, diff: c.diff, existing: c.existing })),
+              previews: preview.previews.map((p) => ({ key: p.plan.key, source: p.plan.from, kind: p.plan.kind, status: p.status, reason: p.reason })),
+            }).map((b) => b.text)
+            return { kind: 'success', text: lines.join('\n') }
+          }
+
+          if (sub === 'run') {
+            const execution = await runExecute(runtime, {
+              plans,
+              manifest,
+              force: false,
+              resolve: {},
+              selection: [],
+              requireApproval: config.requireApproval !== false,
+              approval: runtime.approval,
+              approvalContext: {}, // 命令不在模型回合内：approval 必然 unavailable（fail-closed）。
+            })
+            state.lastWizardRun = { detections, plans, preview: null, execution }
+            if (execution.approved === false && config.requireApproval !== false) {
+              // 审批必须在模型回合内：注入指示，由模型调 move_run 完成审批。
+              const guidance = personaParagraph('迁移', 'zh')
+                + '\n\n请在会话中运行 move_run 工具完成迁移（迁移写入需经审批，审批只能在模型回合内发起；'
+                + '预览与冲突信息可用 move_preview 查看）。'
+                + `\n计划数：${plans.length}；冲突默认跳过，可用 resolve 逐项选择解法。`
+              injectContext(invocation.agent, guidance)
+              return {
+                kind: 'success',
+                text: guidance + '\n\n（迁移未执行：零写入。）',
+              }
+            }
+            const lines = reportLines(execution).join('\n')
+            return { kind: 'success', text: personaParagraph('迁移', 'zh') + '\n\n' + lines }
+          }
+
+          // report：最近一次执行/预览摘要。
+          const last = state.lastWizardRun
+          if (last?.execution) {
+            const lines = reportLines(last.execution).join('\n')
+            return { kind: 'success', text: personaParagraph('迁移', 'zh') + '\n\n' + lines }
+          }
+          if (last?.preview) {
+            const lines = renderMovePreview({}, {
+              counts: last.preview.counts,
+              conflicts: last.preview.conflicts.map((c) => ({ key: c.plan.key, reason: c.reason, diff: c.diff, existing: c.existing })),
+              previews: [],
+            }).map((b) => b.text)
+            return { kind: 'success', text: lines.join('\n') }
+          }
+          const applied = Object.keys(manifest).length
+          return {
+            kind: 'success',
+            text: personaParagraph('迁移', 'zh')
+              + `\n\n暂无最近执行记录。move.json 共记录 ${applied} 条已迁移项。用 /move detect 或 /move preview 开始。`,
+          }
+        } catch (err) {
+          return { kind: 'error', text: '/move 失败：' + String((err && err.message) || err) }
+        }
+      },
+    })
+  })
+}
+
+/**
+ * apply 时从 manifest 重建迁移来的命令注册（重启后仍可用）。
+ * @param ctx - Cordis 上下文。
+ * @param state - 插件状态。
+ */
+export function registerManifestCommands(ctx, state) {
+  withService(ctx, 'commands', (commands) => {
+    if (typeof commands.register !== 'function') return
+    state.commandsService = commands
+    void (async () => {
+      try {
+        const manifest = await manifestStore.load()
+        for (const record of Object.values(manifest)) {
+          if (record?.action === 'register-command' && typeof record.prompt === 'string') {
+            registerMigratedCommand(state, record.target, record.prompt)
+          }
+        }
+      } catch (err) {
+        console.error('[claude-move] manifest command rebuild failed:', String((err && err.message) || err))
+      }
+    })()
+  })
+}
+
 /**
  * 挂载插件：注册扫描/导入工具、个人上下文贡献、命令与面板路由。
  * @param ctx - Cordis 上下文。
@@ -2178,7 +2877,15 @@ export function apply(ctx, config = {}) {
   const state = makeClaudeState(config)
   ctx.tools.register(makeScanTool(ctx, config, state))
   ctx.tools.register(makeImportTool(ctx, config))
+  if (config.enableMove !== false) {
+    const move = makeMoveTools(ctx, config, state)
+    ctx.tools.register(move.detect)
+    ctx.tools.register(move.preview)
+    ctx.tools.register(move.run)
+  }
   registerContextContributions(ctx, config, state)
   registerCommands(ctx, config)
+  if (config.enableMove !== false) registerMoveCommand(ctx, config, state)
   registerWebRoutes(ctx, config, state)
+  registerManifestCommands(ctx, state)
 }

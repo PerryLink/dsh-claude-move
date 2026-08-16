@@ -149,10 +149,10 @@ async function withTempDshHome(t) {
   return dir
 }
 
-test('apply 注册 claude_scan 与 import_claude', () => {
+test('apply 注册 claude_scan 与 import_claude（及四合一 move_* 工具）', () => {
   const { ctx, registered } = makeCtx({})
   apply(ctx)
-  assert.deepEqual(registered.map((d) => d.name), ['claude_scan', 'import_claude'])
+  assert.deepEqual(registered.map((d) => d.name), ['claude_scan', 'import_claude', 'move_detect', 'move_preview', 'move_run'])
 })
 
 test('resolveImportTarget：all 映射到 projects 目录', () => {

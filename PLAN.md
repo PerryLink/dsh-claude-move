@@ -2,6 +2,80 @@
 
 > 目标：Claude Code 全量迁移 + 无缝续聊。研究三个参考插件与本机 DSH（源码 rc.5 / 发布 rc.6）公开扩展点后的实施蓝图。验收以任务书 F/S/C/N 为准。
 
+## 二期：四合一迁移向导（CC / Codex / OpenCode / Hermes）
+
+> 目标：把本插件升级为竞品用户迁入 DSH 的首选工具 —— detect → 预览 diff → 确认执行 → 报告一站式。
+> 验收：四源各一个解析器 + 一个映射器（独立模块 + 独立测试）、`/move` 命令与工具、
+> 幂等重跑（manifest 摘要跳过 + force）、冲突 diff 选择、迁移走审批、只读白名单、Schema 配置、
+> 短 persona 引导文案、双语 README（支持矩阵 + 迁移对照表）、干净 profile 实测、git tag。
+
+### 0. 研究结论（2026-08，本机 DSH 源码 + 各源官方文档）
+
+**DSH 落点机制（当前 checkout 已验证）：**
+
+| 落点 | 机制 | 出处 |
+|---|---|---|
+| 会话导入 | `sessionPersistence.create + append`（一期已用，平衡事件协议） | 一期 |
+| 全局指令 | `$DSH_HOME/AGENTS.md`（用户全局指令文件，`~/.dsh/AGENTS.md` 兜底；DSH 原生加载） | packages/context/agent-instructions |
+| 技能落盘 | `$DSH_HOME/skills/<name>/SKILL.md` 或扁平 `<name>.md`（YAML frontmatter 必须有非空 name+description；`.system` 跳过） | packages/skill/skill-filesystem |
+| 审批 | `ctx.approval.request({agent, toolName, callId, reason, signal})` → `allowed-once|rejected|cancelled|unavailable`；仅模型回合内可用；无服务/无 turn 时 fail-closed | docs/subsystems/approval.md |
+| 命令 | `ctx.commands.register`（一期已用） | 一期 |
+| persona 风格 | 官方 Minimal persona：`You are a helpful software engineer assistant.`（一句角色陈述，保持短小） | apps/cli/config/agent-presets/minimal |
+
+**四源格式：**
+
+| 源 | 会话 | 记忆/指令 | 技能 | 钩子/命令 |
+|---|---|---|---|---|
+| Claude Code | `~/.claude/projects/<slug>/*.jsonl`（一期已支持） | `projects/*/memory/*.md`、全局/项目 `CLAUDE.md` | `~/.claude/skills/**`（SKILL.md frontmatter name/description） | `settings.json` hooks（无 DSH 等价 seam） |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`（`{timestamp,type,payload}`，一期 convert 已支持） | 全局/项目 `AGENTS.md`（DSH 原生读）、全局/项目 `CODEX.md`、`~/.codex/memories/` | `~/.codex/skills/<name>/SKILL.md`（`.system/` 为捆绑技能，跳过） | `~/.codex/hooks/<name>/{command.md,prompt.md}` + `config.toml [commands]` |
+| OpenCode | `~/.local/share/opencode/opencode.db`（SQLite：session/message/part 表，node:sqlite 只读）或旧版 `storage/{session,message,part}/*.json` | 全局 `~/.config/opencode/AGENTS.md`（项目级 AGENTS.md DSH 原生读，无需迁移） | `~/.config/opencode/agent/*.md`、`.opencode/agent/*.md`（转换为技能） | `~/.config/opencode/command/*.md`、`.opencode/command/*.md` |
+| Hermes | 无（任务范围外；`state.db` 不读） | `~/.hermes/memories/MEMORY.md` + `USER.md`（`§` 分隔条目） | `~/.hermes/skills/<category>/<name>/SKILL.md`（嵌套类别，`.hub/`、`.bundled_manifest` 跳过） | 无 |
+
+**只读白名单（每源解析器声明）：** 永不读 `auth.json`、`state_*.sqlite`、`history.jsonl`、`log/`、`snapshot/`、`opencode/auth.json`、`.env` 等凭据/内部状态；解析器内 `readAllowed()` 守卫越界读取。
+
+### 1. 模块架构
+
+```
+lib/sources/contract.mjs      # 契约：detection/migrationItem 形状、白名单守卫、计数工具（零依赖）
+lib/sources/<source>/parser.mjs   # 一源一解析器：数据根定位 → 结构化清单（零 DSH 依赖）
+lib/sources/<source>/mapper.mjs   # 一源一映射器：清单 → 迁移计划/不支持清单（零 DSH 依赖）
+lib/wizard.mjs                # 纯编排（注入运行时端口）：detect → plan → preview(diff/冲突) → execute(审批) → report
+lib/manifest.mjs              # move.json：幂等摘要/目标/结果，原子写 + 串行（复用 imports-store 模式）
+lib/agmd-section.mjs          # $DSH_HOME/AGENTS.md 管理段（标记注释、diff、冲突检测）
+lib/skill-migrate.mjs         # 技能兼容判定 + 转换（SKILL.md name+description 直拷；否则合成 frontmatter）
+lib/commands-migrate.mjs      # 钩子/命令分类：纯提示词 → DSH 命令；含 shell → 不支持清单
+lib/persona.mjs               # 短 persona 段落（一句角色陈述，对齐 Minimal persona）
+index.mjs                     # Config 扩展 + move_detect/move_preview/move_run 工具 + /move 命令 + 工作区/审批接线
+```
+
+- 映射规则：记忆/指令文件 → `$DSH_HOME/AGENTS.md` 管理段；技能 → `$DSH_HOME/skills`（兼容直拷，否则转换）；钩子/命令 → DSH 命令或明确不支持清单；会话 → DSH 会话（只读历史 + 可继续，复制式）。
+- 幂等：`move.json` 记录 `{ key, digest, target, appliedAt }`；摘要未变跳过，`force` 重应用；会话复用一期 imports.json 机制。
+- 冲突：目标已存在且内容不同 → preview 输出 diff，`resolve: { key: skip|overwrite|rename|merge }` 逐项选择；默认 skip + 报告（绝不猜测）。
+- 审批：执行前经 `ctx.approval`（特性探测）一次性审批；`unavailable/rejected/cancelled` 一律不写（fail-closed）；`requireApproval: false` 允许无 seam 平台显式降级。
+- 会话归组：`moveWorkspaceMode: 'per-source'`（默认，`$DSH_HOME/imports/<source>`）| `'single'`（`$DSH_HOME/imports`）。
+
+### 2. 迁移对照表（README 用）
+
+| 源文件 | DSH 落点 | 方式 |
+|---|---|---|
+| CC `projects/*/*.jsonl` | 可续聊 DSH 会话（claude 工作区） | 一期全保真映射 |
+| Codex `sessions/**/rollout-*.jsonl` | 可续聊 DSH 会话（codex 工作区） | 一期 convert + 标题补全 |
+| OpenCode `opencode.db` / 旧版 storage JSON | 可续聊 DSH 会话（opencode 工作区） | message/part 顺序合成 |
+| CC memory / Hermes `MEMORY.md`/`USER.md` / Codex `memories/` | `$DSH_HOME/AGENTS.md` 管理段 | 标记注释追加（幂等） |
+| `CLAUDE.md`/`CODEX.md`/全局 `AGENTS.md` | `$DSH_HOME/AGENTS.md` 管理段 | 同上（项目级 AGENTS.md DSH 原生读，不迁移） |
+| CC/Codex/Hermes `skills/**/SKILL.md` | `$DSH_HOME/skills/<kebab>/SKILL.md` | 兼容直拷（name+description）；否则合成 frontmatter 转换 |
+| OpenCode `agent/*.md` | `$DSH_HOME/skills/<kebab>/SKILL.md` | 转换为技能（persona 建议一句角色陈述） |
+| Codex/OpenCode 纯提示词命令 | DSH 命令（注入会话） | 迁移时动态注册 + apply 时从 manifest 重建 |
+| CC settings.json hooks / Codex hooks / 含 shell 的命令 | 明确「不支持」清单 + 建议 | 报告列出，绝不静默丢弃 |
+
+### 3. 阶段划分
+
+- **W1 契约与共享件**：contract.mjs、agmd-section、skill-migrate、commands-migrate、persona、manifest（各带单测）。
+- **W2 四源模块**：claude（复用一期 discovery/convert）/ codex / opencode（node:sqlite 只读 + 旧版 JSON 双路径）/ hermes —— 各带 parser+mapper 单测与合成 fixtures。
+- **W3 向导**：wizard.mjs + 假运行时单测（幂等/force/冲突/审批拒绝零写入）。
+- **W4 接线**：index.mjs Config 扩展、move_detect/move_preview/move_run 工具、/move 命令、审批/工作区端口、mock ctx 集成测试、safety 测试扩展。
+- **W5 实测与发布**：dev/ 干净 profile 四源最小样例迁移冒烟；README.md + 五语同步（四源支持矩阵 + 迁移对照表）；CHANGELOG；git tag v0.3.0。
+
 ## 1. 三个参考插件研究结论
 
 ### 1.1 Nwflower/dsh-chat-import（MIT）—— 复用其转换核心
