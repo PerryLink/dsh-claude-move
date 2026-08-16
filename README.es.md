@@ -5,6 +5,8 @@
 `Solo copia` · `Reanudación sin interrupciones` · `Workspaces por proyecto` · `Sincronización en vivo con Claude Code`
 
 [![Test](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml/badge.svg)](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![Node ^22.19 || >=24](https://img.shields.io/static/v1?label=node&message=%5E22.19%20%7C%7C%20%3E%3D24&color=2f7d4f)](https://nodejs.org)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Topic: dsh](https://img.shields.io/badge/topic-dsh-3fb950)](https://github.com/topics/dsh)
@@ -245,7 +247,15 @@ CI ejecuta la suite completa en Node 22 vía GitHub Actions ([test.yml](.github/
 
 ## 🤝 Contribuir y dar feedback
 
-Issues y pull requests son bienvenidos — usa las plantillas provistas ([reporte de bug](.github/ISSUE_TEMPLATE/bug-report.yml), [solicitud de función](.github/ISSUE_TEMPLATE/feature-request.yml)). Las preguntas y discusiones viven en las GitHub Discussions del repo. Reporta problemas de seguridad de forma privada mediante GitHub Security Advisories (repo Settings → Security).
+Issues y pull requests son bienvenidos — usa las plantillas provistas ([reporte de bug](.github/ISSUE_TEMPLATE/bug-report.yml), [solicitud de función](.github/ISSUE_TEMPLATE/feature-request.yml)). Las preguntas y discusiones viven en las [GitHub Discussions](https://github.com/PerryLink/dsh-claude-move/discussions) del repo. Reporta problemas de seguridad de forma privada mediante GitHub Security Advisories (repo Settings → Security; ver [SECURITY.md](SECURITY.md)).
+
+## 💛 Colaboradores
+
+Gracias a todos los que ayudaron a mejorar este plugin:
+
+- [OLDnana1](https://github.com/OLDnana1) — análisis de la causa raíz de la corrupción por llamadas a herramientas interrumpidas, que hacía que las sesiones importadas devolvieran permanentemente HTTP 400 al reanudar ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); corregido en v0.2.0.
+- [GooodWei](https://github.com/GooodWei) — identificó que `README.md` (y cualquier `.md` sin descripción) se registraba erróneamente como skill, rompiendo toda la carga de skills de DSH ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); corregido en v0.2.0.
+- Los proyectos MIT upstream que este plugin reutiliza se acreditan en [Atribución](#-attribution-open-source-components) y en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## 🔗 Enlaces relacionados
 

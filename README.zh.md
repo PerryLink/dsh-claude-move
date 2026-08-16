@@ -5,6 +5,8 @@
 `复制式迁移` · `无缝续聊` · `按项目划分工作区` · `与 Claude Code 实时同步`
 
 [![Test](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml/badge.svg)](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![Node ^22.19 || >=24](https://img.shields.io/static/v1?label=node&message=%5E22.19%20%7C%7C%20%3E%3D24&color=2f7d4f)](https://nodejs.org)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Topic: dsh](https://img.shields.io/badge/topic-dsh-3fb950)](https://github.com/topics/dsh)
@@ -243,7 +245,15 @@ CI 经 GitHub Actions（[test.yml](.github/workflows/test.yml)）在 Node 22 上
 
 ## 🤝 参与贡献与反馈
 
-欢迎提 Issue 与 PR——请使用对应模板（[缺陷报告](.github/ISSUE_TEMPLATE/bug-report.yml)、[功能请求](.github/ISSUE_TEMPLATE/feature-request.yml)）。问题与讨论在仓库的 GitHub Discussions。安全问题请通过 GitHub Security Advisories（仓库 Settings → Security）私下报告。
+欢迎提 Issue 与 PR——请使用对应模板（[缺陷报告](.github/ISSUE_TEMPLATE/bug-report.yml)、[功能请求](.github/ISSUE_TEMPLATE/feature-request.yml)）。问题与讨论在仓库的 [GitHub Discussions](https://github.com/PerryLink/dsh-claude-move/discussions)。安全问题请通过 GitHub Security Advisories（仓库 Settings → Security）私下报告，详见 [SECURITY.md](SECURITY.md)。
+
+## 💛 贡献者致谢
+
+感谢每一位让这个插件变得更好的人：
+
+- [OLDnana1](https://github.com/OLDnana1) —— 定位了「中断工具调用」导致导入会话续聊永久 400 的根因（[#1](https://github.com/PerryLink/dsh-claude-move/issues/1)），已于 v0.2.0 修复。
+- [GooodWei](https://github.com/GooodWei) —— 发现 `README.md`（及任何无描述的 `.md`）被误注册为技能、导致 DSH 技能加载整体失败（[#1](https://github.com/PerryLink/dsh-claude-move/issues/1)），已于 v0.2.0 修复。
+- 本插件所复用的 MIT 上游项目在[署名](#-attribution-open-source-components)与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中致谢。
 
 ## 🔗 相关链接
 

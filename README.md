@@ -5,6 +5,8 @@
 `Copy-only` · `Seamlessly resumable` · `Per-project workspaces` · `Live sync with Claude Code`
 
 [![Test](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml/badge.svg)](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![Node ^22.19 || >=24](https://img.shields.io/static/v1?label=node&message=%5E22.19%20%7C%7C%20%3E%3D24&color=2f7d4f)](https://nodejs.org)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Topic: dsh](https://img.shields.io/badge/topic-dsh-3fb950)](https://github.com/topics/dsh)
@@ -248,7 +250,15 @@ CI runs the full suite on Node 22 across Linux/macOS/Windows via GitHub Actions 
 
 ## 🤝 Contributing & feedback
 
-Issues and pull requests are welcome — please use the provided templates ([bug report](.github/ISSUE_TEMPLATE/bug-report.yml), [feature request](.github/ISSUE_TEMPLATE/feature-request.yml)). Questions and discussion live in the repo's GitHub Discussions. Report security issues privately via GitHub Security Advisories (repo Settings → Security).
+Issues and pull requests are welcome — please use the provided templates ([bug report](.github/ISSUE_TEMPLATE/bug-report.yml), [feature request](.github/ISSUE_TEMPLATE/feature-request.yml)). Questions and discussion live in the repo's [GitHub Discussions](https://github.com/PerryLink/dsh-claude-move/discussions). Report security issues privately via GitHub Security Advisories (repo Settings → Security; see [SECURITY.md](SECURITY.md)).
+
+## 💛 Contributors
+
+Thanks to everyone who helped make this plugin better:
+
+- [OLDnana1](https://github.com/OLDnana1) — root-cause analysis of the interrupted tool-call corruption that made imported sessions permanently return HTTP 400 on resume ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); fixed in v0.2.0.
+- [GooodWei](https://github.com/GooodWei) — identified `README.md` (and any description-less `.md`) being misregistered as a skill, which broke DSH's whole skill load ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); fixed in v0.2.0.
+- Upstream MIT projects whose code and conventions this plugin builds on are credited in [Attribution](#-attribution-open-source-components) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## 🔗 Related links
 

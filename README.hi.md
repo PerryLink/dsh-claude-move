@@ -5,6 +5,8 @@
 `केवल-कॉपी` · `बिना रुकावट जारी` · `प्रोजेक्ट-वार वर्कस्पेस` · `Claude Code के साथ लाइव तालमेल`
 
 [![Test](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml/badge.svg)](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml)
+[![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![Node ^22.19 || >=24](https://img.shields.io/static/v1?label=node&message=%5E22.19%20%7C%7C%20%3E%3D24&color=2f7d4f)](https://nodejs.org)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Topic: dsh](https://img.shields.io/badge/topic-dsh-3fb950)](https://github.com/topics/dsh)
@@ -246,7 +248,15 @@ CI GitHub Actions ([test.yml](.github/workflows/test.yml)) के ज़रि�
 
 ## 🤝 योगदान और प्रतिक्रिया
 
-Issue और pull request स्वागत योग्य हैं — दिए गए टेम्पलेट उपयोग करें ([बग रिपोर्ट](.github/ISSUE_TEMPLATE/bug-report.yml), [फ़ीचर अनुरोध](.github/ISSUE_TEMPLATE/feature-request.yml))। प्रश्न और चर्चा रेपो की GitHub Discussions में होती हैं। सुरक्षा समस्याएँ निजी तौर पर GitHub Security Advisories (रेपो Settings → Security) से रिपोर्ट करें।
+Issue और pull request स्वागत योग्य हैं — दिए गए टेम्पलेट उपयोग करें ([बग रिपोर्ट](.github/ISSUE_TEMPLATE/bug-report.yml), [फ़ीचर अनुरोध](.github/ISSUE_TEMPLATE/feature-request.yml))। प्रश्न और चर्चा रेपो की [GitHub Discussions](https://github.com/PerryLink/dsh-claude-move/discussions) में होती हैं। सुरक्षा समस्याएँ निजी तौर पर GitHub Security Advisories (रेपो Settings → Security; देखें [SECURITY.md](SECURITY.md)) से रिपोर्ट करें।
+
+## 💛 योगदानकर्ता
+
+इस प्लगइन को बेहतर बनाने में मदद करने वाले सभी लोगों का धन्यवाद:
+
+- [OLDnana1](https://github.com/OLDnana1) — बाधित टूल-कॉल के कारण आयातित सत्रों के रिज़्यूम पर स्थायी HTTP 400 आने की समस्या का मूल-कारण विश्लेषण ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); v0.2.0 में ठीक किया गया।
+- [GooodWei](https://github.com/GooodWei) — पहचाना कि `README.md` (और बिना विवरण वाली कोई भी `.md`) गलती से skill के रूप में पंजीकृत हो जाती थी, जिससे DSH की पूरी skill लोडिंग टूट जाती थी ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); v0.2.0 में ठीक किया गया।
+- इस प्लगइन द्वारा पुन: उपयोग किए गए MIT अपस्ट्रीम प्रोजेक्ट्स का श्रेय [एट्रिब्यूशन](#-attribution-open-source-components) और [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) में दिया गया है।
 
 ## 🔗 संबंधित लिंक
 
