@@ -6,40 +6,64 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. Please keep transcript contents out of this report — use small synthetic examples instead.
+        Thanks for reporting! Please keep real transcript contents out of this report — use small synthetic examples instead.
   - type: input
     id: version
     attributes:
-      label: Plugin version
-      description: The package version, or the git revision if installed from a checkout.
-      placeholder: 0.1.0
+      label: Package version
+      description: The dsh-claude-move package version, or the git revision if installed from a checkout.
+      placeholder: 0.2.0
     validations:
       required: true
   - type: input
     id: dsh-version
     attributes:
-      label: DSH version
-      description: `dsh` version / how DSH was installed (release, rc, or source checkout).
-      placeholder: 0.1.0-rc.6
+      label: Runtime environment version
+      description: `dsh` version and how DSH was installed (npm release, rc, or source checkout).
+      placeholder: 0.1.0-rc.6 (npm)
     validations:
       required: true
   - type: input
     id: platform
     attributes:
-      label: OS and Node
-      description: e.g. Windows 11 / Node 22.
+      label: OS and Node version
+      description: e.g. Windows 11 / Node 22.12.0.
     validations:
       required: true
   - type: textarea
-    id: what-happened
+    id: repro
     attributes:
-      label: What happened
-      description: Steps to reproduce, observed behavior, and what you expected. Include the failing command or tool call.
+      label: Steps to reproduce
+      description: Exact steps, including the failing command / tool call / panel action.
+      placeholder: |
+        1. Install: dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
+        2. Run /claude-import-all
+        3. Open the imported session and send any message
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened, including the exact error message if any.
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Relevant logs
-      description: `dsh` console output, `[claude-move]`-prefixed errors, or `--dump-config` excerpts. Trim or redact sensitive content.
+      label: Relevant logs (optional)
+      description: `dsh` console output, `[claude-move]`-prefixed errors, or `--dump-config` excerpts.
       render: text
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        > **⚠️ Before pasting logs: redact all secrets.** Remove tokens, API keys, authorization headers, credentials, and any real transcript content. Paste sanitized or synthetic text only — never share real keys.

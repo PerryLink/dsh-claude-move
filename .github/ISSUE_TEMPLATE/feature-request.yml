@@ -6,19 +6,28 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
+      label: Problem this solves
       description: What gap or friction does this address? A concrete scenario helps most.
     validations:
       required: true
   - type: textarea
-    id: proposal
+    id: expected
     attributes:
-      label: Proposal
+      label: Expected behavior
       description: What should the plugin do, and where (tool / command / panel / config)?
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives considered
+      label: Alternatives considered (optional)
       description: Any workarounds or rejected designs worth recording.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context (optional)
+      description: Links, screenshots, related issues, or anything else that helps.
+    validations:
+      required: false
