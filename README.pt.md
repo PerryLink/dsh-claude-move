@@ -1,291 +1,160 @@
-# dsh-claude-move
+<div align="center">
 
-**Mantenha seu histórico do Claude Code ao migrar para o DeepSeek Harness.** Uma única instalação copia cada sessão, memória, habilidade e `CLAUDE.md` do Claude para o DSH como sessões retomáveis — organizadas em um workspace `claudecode` dedicado (um workspace por projeto é opcional via config).
+# 🚚 dsh-claude-move
 
-`Somente cópia` · `Retomada sem interrupções` · `Workspaces por projeto` · `Sincronização ao vivo com o Claude Code`
+**Migre Claude Code, Codex, OpenCode e Hermes para o DeepSeek Harness — copie sessões, memórias, habilidades, instruções e comandos de barra como sessões DSH retomáveis, somente-cópia e com aprovação.**
 
-[![Test](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml/badge.svg)](https://github.com/PerryLink/dsh-claude-move/actions/workflows/test.yml)
+*Mantenha seu histórico do Claude Code ao migrar: uma única instalação, sessões retomáveis, sincronização em tempo real com um Claude Code em execução e um assistente de migração de quatro fontes.*
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![DSH plugin](https://img.shields.io/badge/dsh-plugin-✅-green)](https://github.com/topics/dsh-plugin)
+[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=master&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
+[![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-claude-move?label=version)](https://github.com/PerryLink/dsh-claude-move/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
-[![Node ^22.19 || >=24](https://img.shields.io/static/v1?label=node&message=%5E22.19%20%7C%7C%20%3E%3D24&color=2f7d4f)](https://nodejs.org)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Topic: dsh](https://img.shields.io/badge/topic-dsh-3fb950)](https://github.com/topics/dsh)
-[![Topic: dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-3fb950)](https://github.com/topics/dsh-plugin)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/PerryLink/dsh-claude-move/issues)
 
-![Cartão social do dsh-claude-move](assets/social-card.png)
+[English](README.md) · [简体中文](README.zh.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
-[English](README.md) | [中文](README.zh.md) | [Español](README.es.md) | Português | [हिन्दी](README.hi.md)
+</div>
 
-> Prévia de desenvolvimento (0.1.0). Roteiro e design: [PLAN.md](PLAN.md) · histórico de mudanças: [CHANGELOG.md](CHANGELOG.md).
+---
 
-## ✨ Recursos
+## Compatibilidade
 
-- 🔍 **Descoberta automática** — localiza a raiz de dados do Claude (`$CLAUDE_CONFIG_DIR`, padrão `~/.claude`) e indexa cada projeto/sessão (título, marcas de tempo, contagens), estado do diretório e do git, memórias, habilidades, `CLAUDE.md` global e `settings.json` — com cache incremental que só relê arquivos alterados.
-- 📥 **Importação de histórico com fidelidade total** — sessões DSH equilibradas e retomáveis (`turn/start → step/start → user/message → assistant/message → tool/call → tool/result → step/end → turn/end`), linhas malformadas com número de linha. Chamadas de ferramenta interrompidas são reparadas para que cada `tool_use` tenha exatamente um resultado (sem mais 400s permanentes ao retomar).
-- 🗂 **Um workspace `claudecode` (padrão)** — toda sessão importada fica em um workspace "claudecode" dedicado, enraizado em uma pasta nova (`$DSH_HOME/claudecode` por padrão; a única coisa que o plugin cria). `workspaceMode: 'per-project'` restaura o agrupamento de um workspace por projeto.
-- 🔁 **Somente cópia e incremental** — nada é movido, reescrito ou excluído em nenhum lado. Reexecutar a importação apenas anexa os novos turnos à mesma sessão DSH; `force: true` salva uma cópia completa adicional com um novo id.
-- 🧠 **Contexto pessoal sempre atualizado** — memórias injetadas como seção ao vivo (projeto atual primeiro, `memoryScope`), habilidades do Claude como habilidades reais do DSH (global **e por projeto** `.claude/skills`, documentos que não são habilidades como `README.md` são ignorados), `CLAUDE.md` global + de projeto injetado cedo. Mesmo no workspace `claudecode`, o diretório original do projeto é lembrado para a resolução de memória/`CLAUDE.md`.
-- ⚡ **Sincronização ao vivo com o Claude Code** — continue usando o Claude Code em paralelo; cada reexecução traz apenas o que mudou.
-- 🖥 **Painel web e comandos de um passo** — `/claude-import-all`, `/resume-claude` e um painel de migração flutuante com progresso.
-- 🪄 **Assistente de migração de quatro fontes (0.2.1)** — um assistente `/move` mais as ferramentas `move_detect` / `move_preview` / `move_run` migram Claude Code, Codex, OpenCode e Hermes: memórias/instruções viram seções gerenciadas do `AGENTS.md`, skills viram skills reais do DSH, comandos slash viram comandos do DSH e sessões viram sessões retomáveis — com porta de aprovação, idempotente (`move.json`) e conflitos exibidos como diff, sem adivinhar.
-- 🛡 **Segurança em primeiro lugar** — arquivos fonte estritamente somente leitura, logs do DSH append-only, segredos informados apenas por posição, registros de permissão contados mas nunca importados.
+| Superfície | Status |
+|---|---|
+| Harness | DeepSeek Harness `0.1.0-rc.6` (peers fixados em `0.1.0-rc.6`) |
+| Node | `^22.19.0 \|\| >=24.0.0` |
+| Plataformas | Todas (ferramentas de host + painel web flutuante; somente costuras públicas) |
+| Modelo | Qualquer (as importações são determinísticas; sem chamadas próprias ao modelo) |
 
-## 🚀 Início rápido
+## O que você recebe
 
-```sh
-# 1. Instalar
-dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
-```
+1. **Auto-descoberta** — `claude_scan` localiza a raiz de dados do Claude (`$CLAUDE_CONFIG_DIR`, fallback `~/.claude`) e indexa cada projeto/sessão, memória, habilidade, `CLAUDE.md` global e `settings.json`, com cache incremental e varredura paralela.
+2. **Importação de fidelidade total** — `import_claude` converte transcrições em sessões DSH balanceadas e retomáveis, repara chamadas de ferramenta interrompidas e importa por streaming em blocos transcrições maiores que `maxTranscriptBytes`.
+3. **Um único workspace `claudecode`** — cada sessão importada cai em um workspace dedicado (padrão `$DSH_HOME/claudecode`); `workspaceMode: 'per-project'` restaura o agrupamento um-workspace-por-projeto.
+4. **Somente-cópia e incremental** — nada é movido, reescrito ou excluído em nenhum dos lados; re-executar apenas anexa os turnos novos.
+5. **Contexto pessoal, sempre atualizado** — memórias injetadas como seção de prompt em tempo real, habilidades do Claude registradas como habilidades DSH reais, e o `CLAUDE.md` global + de projeto injetado cedo.
+6. **Assistente de migração de quatro fontes** — o assistente `/move` mais as ferramentas `move_detect` / `move_preview` / `move_run` migram Claude Code, Codex, OpenCode e Hermes: memórias viram seções gerenciadas de `AGENTS.md`, habilidades viram habilidades DSH, comandos de barra viram comandos DSH, e sessões viram sessões DSH retomáveis — com aprovação e idempotência (`move.json`).
+7. **Painel web e comandos** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset` e um painel de migração flutuante com progresso, cancelamento, paginação e "abrir sessão".
 
-2. Em qualquer sessão do DSH, rode um comando:
-
-```
-/claude-import-all      # varrer → copiar todas as sessões do Claude → relatório
-```
-
-3. Atualize uma vez a página web já aberta (o painel tem o botão «Atualizar lista de sessões») e clique em qualquer sessão importada para continuar. **Não é preciso reiniciar o DSH** — veja [Depois de importar](#-depois-de-importar).
-
-Prefere controle fino?
-
-```
-claude_scan                                     # índice estruturado de todos os projetos/sessões
-import_claude { path: "~/.claude/projects" }    # um diretório de projeto (recursivo)
-import_claude { path: "all" }                   # tudo
-```
-
-## 🪄 Assistente de migração de quatro fontes
-
-```text
-/move              # assistente em um passo: detectar → pré-visualizar → executar → relatar (as quatro fontes)
-move_detect        # escaneia Claude Code / Codex / OpenCode / Hermes
-move_preview       # plano por item: new | unchanged | changed | conflict (com diff) | unsupported
-move_run           # executa após a porta de aprovação; resolução: skip | overwrite | rename | merge (skip por padrão, nunca adivinha)
-```
-
-- **Fontes** — Claude Code (`~/.claude`), Codex (`~/.codex`), OpenCode (raízes de dados + configuração), Hermes (raízes de skills/memória); cada fonte tem seu próprio parser e mapper.
-- **Mapeamento** — memórias/instruções → seções gerenciadas somente de acréscimo no `AGENTS.md` global do DSH (uma seção marcada por item); skills → skills reais do DSH (bundles `SKILL.md` copiados como estão, outros formatos convertidos); comandos slash → comandos registrados do DSH (os prompts são reconstruídos do `move.json` após reiniciar); sessões → sessões retomáveis do DSH (os mesmos importadores da fase 1).
-- **Idempotente** — cada plano aplicado é registrado em `$DSH_HOME/claude-move/move.json` (`digest` / `targetDigest` / `appliedAt`); reexecuções pulam o que não mudou e `force` reaplica.
-- **Porta de aprovação** — uma execução que for escrever algo pergunta primeiro ao `ctx.approval`; qualquer coisa diferente de `allowed-once` significa zero escritas.
-
-## 🗂 O que é migrado
-
-```
-~/.claude (somente leitura)
- ├─ projects/*/*.jsonl  ──→  sessões DSH retomáveis, agrupadas em um workspace "claudecode" (padrão)
- ├─ projects/*/memory/  ──→  seção de memória ao vivo do prompt do sistema (relida por requisição)
- ├─ skills/**           ──→  habilidades reais do DSH
- └─ CLAUDE.md + settings ──→  seção inicial do prompt + sugestões de configuração (nunca auto-aplicadas)
-```
-
-| No Claude Code | Aterrissa no DSH como |
-| --- | --- |
-| Transcrições de sessão (`projects/*/*.jsonl`) | Sessões DSH equilibradas e retomáveis — mapeamento fiel de `user`/`assistant`/`tool`/`thinking` com reparo de chamadas de ferramenta interrompidas — agrupadas em um workspace **`claudecode`** (padrão `$DSH_HOME/claudecode`) ou um workspace por projeto (`workspaceMode: 'per-project'`) |
-| Arquivos de memória (`projects/*/memory/*.md`) | Uma seção de contexto do prompt do sistema ao vivo, relida a cada requisição (`feedback > project > reference > user`) — o diretório original do projeto é lembrado mesmo dentro do workspace `claudecode` |
-| Habilidades (`~/.claude/skills/**`) | Habilidades reais do DSH (nomes kebab-case, colisões com sufixo, máximo 30 por padrão; `README.md`/`MEMORY.md` e arquivos sem descrição são ignorados) |
-| `CLAUDE.md` (global + por projeto) | Uma seção inicial do prompt; o arquivo do projeto vence |
-| `settings.json` | Sugestões de configuração do DSH com lista explícita de chaves não mapeáveis |
-| Estado do projeto (diretório, branch do git e arquivos modificados) | Visível no índice de varredura, nos selos do painel web e no handoff do `/resume-claude` |
-
-## 📦 Instalação
+## Início rápido
 
 ```sh
-# Do GitHub
-dsh plugin --profile web add -w github:PerryLink/dsh-claude-move
+# 1. instale o bundle no seu perfil
+dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"
 
-# Cópia local (desenvolvimento)
-dsh plugin --profile web add -w link:/path/to/dsh-claude-move
+# ou pelo npm (versões publicadas)
+dsh plugin --profile web add dsh-claude-move
 
-# De um tarball empacotado
-dsh plugin --profile web add -w ./dsh-claude-move-0.1.0.tgz
+# 2. reinicie e verifique a linha
+dsh --profile web --dump-config | grep -A4 'id: claude-move'
 ```
 
-O pacote é ESM puro, sem etapa de build, então a instalação via Git dispensa o script `prepare` e a lista `allowBuilds`. Consulte o [guia oficial de empacotamento e instalação](https://deepseek-harness.github.io/deepseek-harness/develop/basic/publish).
-
-## 🛠 Uso
-
-Chame as ferramentas em qualquer sessão com o plugin montado:
-
-```
-claude_scan                          # varredura completa (cache incremental)
-claude_scan { path: "~/.claude/projects/<slug>" }   # varredura parcial
-claude_scan { refresh: true }        # ignora o cache e varre tudo de novo
-
-import_claude { path: "~/.claude/projects/<slug>/<sessionId>.jsonl" }  # uma sessão
-import_claude { path: "~/.claude/projects" }        # diretório (recursivo)
-import_claude { path: "all" }                       # tudo
-# Pode rodar de novo quando quiser: arquivos sem mudanças são pulados e transcrições que cresceram anexam apenas os novos turnos.
-import_claude { path: "...", force: true }          # nova cópia completa como import-<src>-<n> (a cópia anterior é mantida)
-```
-
-Comandos (disparados pelo usuário, sem turno do modelo):
-
-```
-/claude-import-all                # um passo: varrer → importar tudo → relatório → injetar na sessão atual
-/resume-claude latest             # continuar a sessão do Claude mais recente
-/resume-claude <sessionId>        # pelo id de sessão de origem ou id import-<src>
-/resume-claude <palavra-chave>    # busca títulos; múltiplos resultados são listados, nunca adivinhados
-/claude-move-reset                # reinicia a cache do plugin (marcadores + mapa de importação); sessões importadas são mantidas
-```
-
-Painel web: o botão flutuante **🐳 Claude 迁移** (canto inferior direito) abre o painel — árvore de projetos/sessões com selos de estado (não importado / importado / importado-com-turnos-novos / origem ausente / diretório inexistente / git sujo), filtro por palavra-chave, paginação, «Importar e continuar» + «Abrir sessão» + «Atualizar lista de sessões» por sessão, importação em lote com barra de progresso e cancelamento, e botão de reinício de cache. Os textos seguem o idioma do navegador (zh/en). Usa as rotas JSON `/api/claude-move/*` do próprio plugin, registradas no seam público `ctx.webServer`.
-
-- **Varredura**: retorna um índice JSON estruturado: projetos (slug/cwd/existência do diretório/branch do git e arquivos modificados), sessões (título/marcas de tempo/contagens/linhas malformadas), memórias, habilidades, CLAUDE.md global e settings.json; cada sessão carrega `import.status` (`none`/`imported`/`source-missing`) e `import.updatesPending` quando há turnos novos não sincronizados. `settingsSuggestions` contém a tradução do settings.json para o DSH e as chaves não mapeáveis (ver [COMPLIANCE.md](COMPLIANCE.md)).
-- **Importação**: mapeia mensagens user/assistant/tool/thinking com fidelidade total; chamadas de ferramenta interrompidas são reparadas (exatamente um resultado por `tool_use`), e o resultado é uma sessão equilibrada e retomável, vinculada ao workspace `claudecode` (padrão) ou ao workspace por projeto. Lotes são resumidos arquivo por arquivo (`imported`/`appended`/`already-imported`/`skipped`/`failed`), linhas malformadas carregam número de linha, segredos suspeitos são informados apenas por posição (arquivo:linha:tipo) e registros de permissão são contados, nunca importados. Importar nunca apaga nem reescreve nada: sessões existentes do DSH ficam intactas, cópias importadas anteriormente são mantidas e os arquivos fonte do Claude nunca são gravados.
-- **O contexto pessoal entra em vigor automaticamente** (sem ação de importação):
-  - Memórias: `projects/*/memory/*.md` são injetados como seção dinâmica, relidos a cada requisição (memórias novas valem na hora), ordenados `feedback > project > reference > user`, limite de 8 KiB por padrão. Com `memoryScope: current-project` (padrão) só as memórias do projeto da sessão atual são injetadas (recai em todos os projetos quando o cwd não corresponde a nenhum); `all` injeta tudo com o projeto atual primeiro. Dentro do workspace `claudecode`, o plugin resolve o projeto original a partir do `sourceCwd` registrado.
-  - Habilidades: `~/.claude/skills/**/SKILL.md` (mais arquivos planos `*.md`) e `.claude/skills/**` do projeto atual viram habilidades do DSH (nomes normalizados para kebab-case, colisões com sufixo, máximo 30; `README.md`/`MEMORY.md` e arquivos sem descrição são ignorados, para que nunca quebrem o carregamento de habilidades); o DSH cuida do catálogo e da ferramenta `skill`.
-  - Instruções: o `~/.claude/CLAUDE.md` global mais o `.claude/CLAUDE.md` da sessão atual são injetados como uma seção inicial (o projeto vence; resolvido via `sourceCwd` dentro do workspace `claudecode`).
-
-## ✅ Depois de importar
-
-**Não é preciso reiniciar o DSH.** As importações são gravadas de forma durável pelo serviço público `sessionPersistence` assim que terminam:
-
-- As listas do servidor (`session.list` / `workspace.list`, a CLI ou qualquer página recém-aberta) mostram imediatamente as sessões importadas sob o workspace **`claudecode`** (um por projeto com `workspaceMode: 'per-project'`).
-- O painel atualiza sozinho a lista de sessões da página já aberta (serviços de cliente do shell `sessions`/`workspaces`, detectados por capacidade) e oferece «Abrir sessão» por sessão importada; em shells antigos sem esses serviços recai no botão «Atualizar lista de sessões» / recarga da página — as importações gravam sessões frias direto no serviço de persistência, então não emitem o frame ao vivo `host/session-added`; os grupos de workspaces, porém, atualizam ao vivo (`host/workspace-changed`).
-- As sessões importadas podem ser abertas, lidas e retomadas na hora — `/resume-claude`, ou clique na sessão da lista. O handoff informa o diretório original do projeto. Reexecutar a importação a qualquer momento apenas anexa os novos turnos às mesmas sessões.
-
-## ⚙️ Configuração
-
-Tudo opcional e substituível no `cordis.yml`:
-
-```yaml
-- id: claude-move
-  name: dsh-claude-move
-  config:
-    claudeHome: null            # padrão: $CLAUDE_CONFIG_DIR ou ~/.claude
-    workspaceMode: claudecode   # 'claudecode' (padrão: um workspace dedicado para todas as importações) | 'per-project' (um workspace por cwd de origem)
-    claudecodeDir: null         # pasta do workspace claudecode; padrão $DSH_HOME/claudecode (a única pasta que o plugin cria)
-    scanGit: true               # nível de sondagem git: true completo | 'branch' sem subprocessos | false
-    gitTimeoutMs: 5000          # tempo limite do subprocesso git
-    scanConcurrency: 8          # limite de concorrência da varredura de projetos
-    maxTranscriptBytes: 67108864
-    excludeProjects: []         # substrings de slug a ignorar, ex. ['demo-']
-    enableMemory: true
-    memoryMaxBytes: 8192
-    memoryScope: current-project  # 'current-project' só o projeto atual | 'all' tudo, atual primeiro
-    enableSkills: true
-    maxSkills: 30
-    extraSkillDirs: []
-    enableInstructions: true
-    resumeMaxChars: 2048      # limite de caracteres do resumo de transição
-    resumeMode: inject        # 'inject' resumo de transição | 'agents' ctx.agents.resume
-    enableWebPanel: true      # registrar as rotas do painel /api/claude-move/*
-    importConcurrency: 4      # concorrência de leitura+conversão por lote (o salvamento segue sequencial)
-    # Assistente de quatro fontes (0.2.1+):
-    requireApproval: true     # as escritas do assistente perguntam ao ctx.approval (apenas allowed-once)
-    codexHome: null           # por padrão: $CODEX_HOME ou ~/.codex
-    opencodeDataHome: null    # por padrão: diretório de dados XDG da plataforma/opencode
-    opencodeConfigHome: null  # por padrão: diretório de configuração XDG da plataforma/opencode
-    hermesHome: null          # por padrão: $HERMES_HOME ou ~/.hermes
-    skillsDir: null           # destino de skills do assistente; por padrão $DSH_HOME/skills
-    agentsMdPath: null        # destino de memórias/instruções; por padrão $DSH_HOME/AGENTS.md
-    moveWorkspaceMode: per-source  # 'per-source' | 'single' agrupamento de espaços de trabalho
-```
-
-## 🗑 Desinstalação
-
-Remova a linha `claude-move` dos bundles do perfil e reinicie o `dsh`. As sessões importadas permanecem no diretório de dados do DSH; o plugin apenas escreve seu cache (`$DSH_HOME/claude-move/`) e a pasta do workspace `claudecode`, e nunca toca os dados fonte do Claude.
-
-## 🧭 Compatibilidade
-
-- Alvo: `dsh 0.1.0-rc.6` (perfil web); dependências peer fixadas em `0.1.0-rc.6`. Node `^22.19 || >=24`.
-- Última verificação **2026-08-13** no Windows (Node 22) contra `@deepseek-ai/dsh@0.1.0-rc.6`: instalação do zero via tarball, varredura real (40 projetos / 2387 sessões), importação real em lote 13/13 com reimportação idempotente 13/13, vínculo ao workspace e artefatos de persistência confirmados. macOS/Linux cobertos pela matriz CI (linux/macos/windows × Node 22).
-- Verificado **2026-08-14** contra o checkout atual do `deepseek-harness` (perfil web, backend de sessões JSONL+zstd, registro de workspaces real) em um home isolado: boot web completo com o plugin montado, varredura + importação total pelas rotas do painel, criação do workspace `claudecode` com sessões vinculadas, anexo incremental a uma sessão importada existente (seq contíguo, carrega limpo), reimportação segura após reinício e sessões DSH preexistentes intactas o tempo todo. Nenhuma sessão é jamais arquivada, apagada ou reescrita.
-
-### Matriz de compatibilidade (apenas seams públicos)
-
-| Superfície | Uso | Fallback quando ausente |
-| --- | --- | --- |
-| Serviços host (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | usados onde listados | serviços opcionais registram-se reativamente via `internal/service`; `fs` ausente falha em voz alta |
-| `sessionPersistence.listSnapshots` / `readFrom`, `fs.streamText`, `ctx.jobs`, `ctx.agents.resume` | detectados por capacidade | `list()` / leitura completa com rejeição em voz alta / tabela de jobs própria / injeção do resumo |
-| Serviços de cliente do shell (`sessions.refresh/open`, `workspaces.refresh`) | detectados no apply do painel | recarga completa da página |
-| Novas capacidades da plataforma nunca são requisitos duros — o plugin sempre inicia no rc.6. | | |
-
-## 🔐 Permissões e dados
-
-- **Lê** `~/.claude` (transcrições, memórias, habilidades, CLAUDE.md, settings.json) — estritamente somente leitura — e os diretórios de projeto para os quais importa (vínculo ao workspace no modo `per-project`).
-- **Escreve** os logs de sessão do DSH pelo serviço público `sessionPersistence` — apenas create + append, nunca apaga, reescreve ou arquiva sessões existentes — registros do registro de workspaces, seu próprio cache em `$DSH_HOME/claude-move/` (marcadores de varredura + mapa de importação), e a pasta do workspace `claudecode` (`$DSH_HOME/claudecode` por padrão; um simples `mkdir`, nunca qualquer exclusão).
-- **Nunca** modifica os arquivos fonte do Claude, toca dados de outros aplicativos nem acessa a rede.
-- **Nenhuma credencial** é lida ou transmitida; segredos suspeitos nas transcrições são informados apenas por posição.
-
-## 🛡 Limites de segurança
-
-- Arquivos fonte são estritamente somente leitura; logs de sessão do DSH são append-only (apenas `create` + `append`).
-- Transcrições externas são entrada não confiável: nada nelas é executado; conteúdo system/developer/thinking nunca entra no resumo de transição.
-- Sem mudanças no motor do DSH, pacotes oficiais de UI ou apiproxy — apenas serviços públicos (`sessionPersistence` / `workspaceRegistry` / `tools` / `commands` / `systemPrompt` / `skills` / `webServer`).
-- Segredos suspeitos são informados apenas por localização (nunca seu conteúdo); registros `permission`/`permission-mode`/`queue-operation` são contados, não importados.
-
-## 🩺 Solução de problemas
-
-- Linha sem efeito: `dsh --profile <p> --dump-config` deve imprimir `# == dsh-claude-move`; execute `dsh plugin --profile <p> add -w ...` novamente.
-- A web inicia mas trava em silêncio: perfis novos inicializados por `dsh plugin add` contêm apenas `dsh-base` — adicione `@deepseek-ai/dsh-web-app` em `dsh.profile.bundles`. Instalar no perfil `web` existente não precisa de nada.
-- Rotas do painel 404: só são servidas quando `enableWebPanel: true` e um servidor web está composto; verifique o log de boot por fibras FAILED.
-- A importação falha com "transcript 过大": aumente `maxTranscriptBytes` ou importe esse arquivo individualmente.
-- A importação teve sucesso mas a barra lateral não mostra a nova sessão: a página já estava aberta — clique uma vez em «Atualizar lista de sessões» do painel (ou recarregue a página). Nunca é preciso reiniciar o DSH.
-- Logs: falhas de boot são impressas no console do `dsh`; o plugin registra erros com o prefixo `[claude-move]` para problemas de workspace/mapa de importação.
-
-## 📚 Documentação
-
-- [PLAN.md](PLAN.md) — conclusões da pesquisa e plano de implementação.
-- [ARCHITECTURE.md](ARCHITECTURE.md) — diagrama de arquitetura e tabela completa de mapeamento de dados.
-- [COMPLIANCE.md](COMPLIANCE.md) — auditoria cláusula por cláusula frente às restrições oficiais de plugins (repo e docs do deepseek-harness, [deepseek.com/harness](https://www.deepseek.com/harness/), a [documentação de desenvolvimento](https://deepseek-harness.github.io/deepseek-harness/develop/basic/), [Cordis](https://github.com/cordiverse/cordis) e o [paper do Cordis](https://github.com/cordiverse/paper)).
-- [OPTIMIZATION.md](OPTIMIZATION.md) — linhas de base medidas e candidatos de otimização ordenados.
-- [RELEASE.md](RELEASE.md) — checklist de release com evidência de aceitação.
-- [CHANGELOG.md](CHANGELOG.md) — o que mudou em cada versão.
-
-## 🙏 Atribuição (componentes open source)
-
-Este projeto está licenciado sob a Apache License 2.0; os seguintes componentes sob MIT conservam suas próprias licenças (texto completo em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)):
-
-- Núcleo de conversão vendored de [Nwflower/dsh-chat-import](https://github.com/Nwflower/dsh-chat-import) (MIT).
-- Convenções de descoberta e modelo de segurança de [Demogorgon314/dsh-resume-plugin](https://github.com/Demogorgon314/dsh-resume-plugin) (MIT; seu `session_reader.py` tem origem Apache-2.0 — ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
-- Padrões de injeção de memory/skills e análise de frontmatter de [YYTbit/dsh-plugin-claude-bridge](https://github.com/YYTbit/dsh-plugin-claude-bridge) (MIT).
-
-## 🧑‍💻 Desenvolvimento
+Depois, em qualquer sessão DSH, execute um comando:
 
 ```sh
-npm install   # peer deps: @deepseek-ai/cordis, @deepseek-ai/dsh-tools@0.1.0-rc.6, @deepseek-ai/schemastery
-npm test      # node --test: convert (vendored + estendido), discovery, import/report, context, settings
+/claude-import-all      # escaneia → copia cada sessão do Claude → relata
 ```
 
-O CI roda a suíte completa no Node 22 via GitHub Actions ([test.yml](.github/workflows/test.yml)).
+Não é preciso reiniciar o DSH após importar — atualize a página web aberta uma vez e clique em qualquer sessão importada para continuar.
 
-## 🧠 Model Experience
+## Instalar e desinstalar
 
-- A superfície visível ao modelo são as descrições/esquemas das duas ferramentas e suas saídas: `claude_scan` devolve o índice estruturado, `import_claude` devolve resumos por arquivo com posições de avisos. Os resultados das ferramentas são eles próprios eventos `tool/result` registrados, então tudo é reconstruível.
-- Nenhum texto oculto visível ao modelo; as seções memory/CLAUDE.md ficam registradas em `ctx.systemPrompt` (montagem do prompt, reconstruível a partir do log de sessão).
+- **Canal git** (último `master`): `dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"` — ESM puro, sem etapa de `prepare` nem `allowBuilds`.
+- **Canal npm** (versões publicadas): `dsh plugin --profile web add dsh-claude-move`.
+- **Canal tarball**: `npm pack` neste repo e depois `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`.
+- **Desinstalar**: remova a linha `claude-move` dos bundles do perfil e reinicie o `dsh`. As sessões importadas permanecem; o plugin só grava seu cache (`$DSH_HOME/claude-move/`) e a pasta do workspace `claudecode`, e nunca toca nos dados fonte do Claude.
 
-## ⚠️ Limitações conhecidas
+## Configuração
 
-- Títulos vêm de `custom-title`/`ai-title`/primeiro prompt; registros `summary` do Claude não são usados como títulos.
-- Blocos `thinking` são mantidos no log importado como conteúdo `reasoning`, mas nunca entram no resumo de transição.
-- Chamadas de ferramenta interrompidas são reparadas com um resultado de erro sintético (nunca descartadas), então sessões com interrupções no meio do turno continuam retomáveis — o reparo é reportado no resultado da importação (`repaired.synthesized`).
-- Registros de permissão são contados, não importados; sugestões de presets de permissão do DSH são geradas nos relatórios.
-- Transcrições maiores que `maxTranscriptBytes` são importadas por streaming em blocos quando o host oferece `fs.streamText` (memória O(bloco)); sem essa superfície falham em voz alta em vez de importação parcial (fidelidade primeiro).
-- Registros `summary` do Claude são informados, mas não mapeados para nós de compactação do DSH (ver OPTIMIZATION.md); o histórico completo é importado como turnos originais.
-- Em `workspaceMode: 'per-project'`, sessões cujo diretório de origem foi excluído ainda importam, mas o vínculo ao workspace falha (ficam sem grupo; `workspace.attached: false` mais um `reason` no relatório). O workspace `claudecode` padrão não depende do diretório de origem, então essas sessões se vinculam normalmente nele.
-- Importações em lote interrompidas podem ser reexecutadas com segurança (idempotente, append-only): arquivos concluídos são pulados e os que cresceram anexam apenas os novos turnos.
-- Se uma transcrição foi truncada ou reiniciada no lugar (menos turnos que a importação registrada), a reimportação a pula e reporta `sourceShrunk`; use `force: true` para uma cópia completa nova.
-- O painel web é um painel flutuante sem build, dirigido pelas rotas JSON do próprio plugin; não usa o sistema interno de slots de UI do shell (mantido independente dos internals não documentados do rc.6).
+Tudo opcional, anulável no cordis.yml.
 
-## 🤝 Contribuir e dar feedback
+| Chave | Padrão | Significado |
+|---|---|---|
+| `claudeHome` | `$CLAUDE_CONFIG_DIR` ou `~/.claude` | Raiz de dados do Claude |
+| `workspaceMode` | `claudecode` | `claudecode` (um workspace dedicado) · `per-project` (um workspace por cwd fonte) |
+| `claudecodeDir` | `$DSH_HOME/claudecode` | Pasta do workspace `claudecode` (a única pasta que o plugin cria) |
+| `scanGit` | `true` | Nível de sondagem git: `true` (completo) · `'branch'` (zero chamadas git) · `false` |
+| `gitTimeoutMs` | `5000` | Timeout do subprocesso git |
+| `scanConcurrency` | `8` | Limite de varredura paralela de projetos |
+| `maxTranscriptBytes` | `67108864` | Limiar de importação por streaming (em blocos acima) |
+| `excludeProjects` | `[]` | Substrings de slug a pular |
+| `enableMemory` | `true` | Injeta memórias como seção de prompt em tempo real |
+| `memoryMaxBytes` | `8192` | Limite da seção de memória |
+| `memoryScope` | `current-project` | `current-project` · `all` (projeto atual primeiro) |
+| `enableSkills` | `true` | Registra habilidades do Claude como habilidades DSH |
+| `maxSkills` | `30` | Limite de habilidades |
+| `extraSkillDirs` | `[]` | Diretórios de habilidades extras |
+| `enableInstructions` | `true` | Injeta `CLAUDE.md` global + de projeto |
+| `resumeMaxChars` | `2048` | Limite de caracteres do resumo de handoff |
+| `resumeMode` | `inject` | `inject` (resumo de handoff) · `agents` (ctx.agents.resume) |
+| `enableWebPanel` | `true` | Registra as rotas do painel `/api/claude-move/*` |
+| `importConcurrency` | `4` | Leitura + conversão em paralelo por lote |
+| `requireApproval` | `true` | Escritas do assistente pedem `ctx.approval` (somente allowed-once) |
+| `codexHome` | `$CODEX_HOME` ou `~/.codex` | Raiz de dados do Codex |
+| `opencodeDataHome` | dir de dados XDG da plataforma/opencode | Raiz de dados do OpenCode |
+| `opencodeConfigHome` | dir de config XDG da plataforma/opencode | Raiz de config do OpenCode |
+| `hermesHome` | `$HERMES_HOME` ou `~/.hermes` | Raiz de dados do Hermes |
+| `skillsDir` | `$DSH_HOME/skills` | Destino de habilidades do assistente |
+| `agentsMdPath` | `$DSH_HOME/AGENTS.md` | Destino de memória/instruções do assistente |
+| `moveWorkspaceMode` | `per-source` | Agrupamento de workspace para importações do assistente: `per-source` · `single` |
 
-Issues e pull requests são bem-vindos — use os modelos fornecidos ([relato de bug](.github/ISSUE_TEMPLATE/bug-report.yml), [solicitação de recurso](.github/ISSUE_TEMPLATE/feature-request.yml)). Perguntas e discussões ficam nas [GitHub Discussions](https://github.com/PerryLink/dsh-claude-move/discussions) do repo. Reporte problemas de segurança em particular via GitHub Security Advisories (repo Settings → Security; veja [SECURITY.md](SECURITY.md)).
+## Ferramentas e superfícies
 
-## 💛 Colaboradores
+| Superfície | Tipo | Notas |
+|---|---|---|
+| `claude_scan` | ferramenta | Índice estruturado de projetos/sessões/memórias/habilidades/ajustes |
+| `import_claude` | ferramenta | Importa uma sessão, um diretório ou `all` (incremental; `force` para cópia nova) |
+| `move_detect` / `move_preview` / `move_run` | ferramentas | Assistente de quatro fontes: escanear, plano por item com diffs, executar com aprovação |
+| `/claude-import-all` | comando | Escaneia → importa tudo → relata |
+| `/resume-claude` | comando | Continua uma sessão do Claude (latest, id ou palavra-chave) |
+| `/claude-move-reset` | comando | Reinicia o cache do plugin (sessões importadas mantidas) |
+| `/move` | comando | Assistente de quatro fontes de um só passo |
+| Painel web de migração | cliente | Painel flutuante com progresso, cancelamento, paginação, abrir sessão |
 
-Obrigado a todos que ajudaram a melhorar este plugin:
+## Permissões e dados
 
-- [OLDnana1](https://github.com/OLDnana1) — análise da causa raiz da corrupção por chamadas de ferramenta interrompidas, que fazia as sessões importadas retornarem HTTP 400 permanentemente ao retomar ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); corrigido na v0.2.0.
-- [GooodWei](https://github.com/GooodWei) — identificou que `README.md` (e qualquer `.md` sem descrição) era registrado erroneamente como skill, quebrando todo o carregamento de skills do DSH ([#1](https://github.com/PerryLink/dsh-claude-move/issues/1)); corrigido na v0.2.0.
-- Os projetos MIT upstream reutilizados por este plugin são creditados em [Atribuição](#-attribution-open-source-components) e em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- **Permissões**: o manifesto do workshop declara `filesystem:read` e `filesystem:write`.
+- **Lê** `~/.claude` (transcrições, memórias, habilidades, `CLAUDE.md`, `settings.json`) — estritamente somente leitura — e os diretórios de projeto para os quais importa.
+- **Grava** logs de sessão DSH via o serviço público `sessionPersistence` (somente create + append, nunca exclui/reescreve/arquiva), registros do workspace-registry, seu cache sob `$DSH_HOME/claude-move/` e a pasta do workspace `claudecode`.
+- **Nunca** modifica arquivos fonte do Claude, toca dados de outros aplicativos nem acessa a rede. **Nenhuma** credencial é lida ou transmitida.
 
-## 🔗 Links relacionados
+## Limites de segurança
 
-- DeepSeek Harness: [repo](https://github.com/deepseek-ai/deepseek-harness) · [site](https://www.deepseek.com/harness/) · [documentação de desenvolvimento](https://deepseek-harness.github.io/deepseek-harness/develop/basic/)
-- Ecossistema de plugins: [tópico `dsh`](https://github.com/topics/dsh) · [tópico `dsh-plugin`](https://github.com/topics/dsh-plugin) · [Discord](https://discord.gg/Ycq5dCaS4)
+- **Arquivos fonte são somente leitura; logs DSH são somente-append** (somente `create` + `append`).
+- **Transcrições externas são entrada não confiável** — nada nelas é executado; conteúdo system/developer/thinking nunca entra no handoff de retomada.
+- **Somente serviços públicos** — `sessionPersistence` / `workspaceRegistry` / `tools` / `commands` / `systemPrompt` / `skills` / `webServer`; sem mudanças no motor ou na UI.
+- **Segredos relatados apenas por posição**; registros `permission`/`permission-mode`/`queue-operation` são contados, não importados.
+- **Escritas do assistente com aprovação** — qualquer coisa diferente de `allowed-once` significa zero escritas.
 
-## 📄 Licença
+## Limitações conhecidas
 
-Apache License 2.0 — ver [LICENSE](LICENSE) e [NOTICE](NOTICE). Avisos de terceiros (incluindo o texto MIT dos componentes MIT) em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- Títulos vêm de `custom-title`/`ai-title`/primeiro prompt; registros `summary` do Claude são relatados mas não mapeados para nós de compactação DSH.
+- Blocos `thinking` são mantidos como conteúdo `reasoning`, mas nunca entram no handoff de retomada.
+- Chamadas de ferramenta interrompidas são reparadas com um resultado de erro sintético (relatado como `repaired.synthesized`).
+- Em hosts sem superfície de streaming `fs.streamText`, transcrições maiores que `maxTranscriptBytes` falham em voz alta em vez de importar parcialmente.
+- Em `workspaceMode: 'per-project'`, sessões cujo diretório fonte foi excluído ainda importam, mas o anexo ao workspace falha (ficam desagrupadas). O workspace `claudecode` padrão não depende do diretório fonte.
+- O painel web é um painel flutuante sem build dirigido pelas próprias rotas JSON do plugin.
+
+## Desenvolvimento
+
+```sh
+npm install   # peer deps: @deepseek-ai/dsh-tools@0.1.0-rc.6, @deepseek-ai/cordis, schemastery
+npm test      # node --test test/*.test.mjs
+```
+
+## Tópicos
+
+`deepseek-harness`, `dsh-plugin`, `claude-code`, `migration`, `session-import`, `resume`
+
+## Contribuidores
+
+- [@PerryLink](https://github.com/PerryLink) — criador e mantenedor: o pipeline de importação, o assistente de migração de quatro fontes, o painel web, a documentação, CI/CD e releases.
+- [@OLDnana1](https://github.com/OLDnana1) — análise de causa raiz da corrupção de chamadas de ferramenta interrompidas que fazia as sessões importadas retornarem permanentemente HTTP 400 ao retomar.
+- [@GooodWei](https://github.com/GooodWei) — identificou que `README.md` (e qualquer `.md` sem descrição) era registrado incorretamente como habilidade, o que quebrava o carregamento de habilidades do DSH.
+
+## Licença
+
+[Apache License 2.0](LICENSE) © 2026 dsh-claude-move contributors
