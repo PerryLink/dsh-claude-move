@@ -17,6 +17,8 @@
         name: 'claude-move-panel',
         inject: [],
         apply: function (ctx) { installPanel(ctx) },
+        // 纯函数测试面（U3）：面板仅此三个无 I/O/时钟/随机的纯函数。
+        helpers: { panelText, esc, safeService, strings: PANEL_STRINGS },
       }
     },
   })
@@ -153,6 +155,11 @@ function panelText(key, ...args) {
     text = text.replace('{' + i + '}', String(args[i] ?? ''))
   }
   return text
+}
+
+/** HTML 转义（纯函数；面板渲染所有外部文本前调用）。 */
+function esc(text) {
+  return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
 function installPanel(ctx) {
@@ -443,9 +450,6 @@ function installPanel(ctx) {
 
   function setBar(pct) { bar.style.width = Math.max(0, Math.min(100, pct)) + '%' }
   function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
-  function esc(text) {
-    return String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-  }
 
   // 默认收起：只显示悬浮按钮，用户点击才展开抽屉（不抢占每次页面加载的注意力）。
 }

@@ -22,3 +22,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run coverage
+      - run: npm run lint
+      - run: npm run check:readmes
+      - run: npm run verify:self-contained
+      - run: npm run verify:artifacts
