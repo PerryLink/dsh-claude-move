@@ -74,6 +74,38 @@ test('Loader composition applies the special config value (enableMove: false)', 
   assert.ok(summary.tools.includes('claude_scan'), 'claude_scan stays registered when only the move wizard is disabled')
 })
 
+// 真实热重载验证（dshWorkshop lifecycle.activation: hot-reload 的证据）：经
+// Include.refresh() 事务（HMR watcher 同一路径）改写 enableWebPanel 两次，
+// 面板路由随 fiber 卸载并在重挂载时不抛 duplicate route。行携带稳定 id——
+// 无 id 的行在每次配置读取后被视为删除+新增而整体重挂。
+test('Loader hot-reload: an enableWebPanel config edit cycles the panel routes cleanly', () => {
+  const fixture = join(repositoryRoot, 'test', 'fixtures', 'mock-webserver.mjs')
+  const configPath = join(temporaryRoot, 'reload.yml')
+  writeFileSync(configPath, [
+    "- id: sysprompt",
+    "  name: '@deepseek-ai/dsh-system-prompt'",
+    "- id: tools",
+    "  name: '@deepseek-ai/dsh-tools'",
+    "- id: commands",
+    "  name: '@deepseek-ai/dsh-commands'",
+    "- id: mock-webserver",
+    `  name: ${JSON.stringify(pathToFileURL(fixture).href)}`,
+    "- id: claude-move",
+    `  name: ${JSON.stringify(pathToFileURL(entry).href)}`,
+    '  config:',
+    `    claudeHome: ${JSON.stringify(claudeHome)}`,
+    '    scanGit: false',
+    '    enableWebPanel: true',
+    '',
+  ].join('\n'))
+  const evidence = runRunner(configPath, 'reload')
+  assert.equal(evidence.status, 0, `stdout:\n${evidence.stdout}\nstderr:\n${evidence.stderr}`)
+  const marker = evidence.stdout.match(/DSH_LOADER_RESULT (.+)$/mu)
+  const summary = JSON.parse(marker[1])
+  assert.equal(summary.cycled, true)
+  assert.equal(summary.routes, 5)
+})
+
 test('invalid config fails loud through the Loader for the expected reason', () => {
   const cases = [
     { lines: ["enableMove: 'yes'"], reason: /expected boolean/u },

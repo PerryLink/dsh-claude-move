@@ -4,9 +4,13 @@
 // cordis.yml (service rows + plugin row + config), then asserts the plugin's
 // contributions through the authoritative registries and executes one real
 // behavior. Config is applied by the Loader, so the expected outcome proves
-// the config in the file was honored.
+// the config in the file was honored. The `reload` scenario additionally
+// rewrites the cordis.yml twice (enableWebPanel true → false → true) and
+// drives the include entry's refresh() — the same transaction the HMR
+// watcher triggers — asserting the panel routes unload with the fiber and
+// re-register without a duplicate route.
 //
-// Usage: node scripts/loader-runner.mjs <cordis.yml> move|no-move
+// Usage: node scripts/loader-runner.mjs <cordis.yml> move|no-move|reload
 // Exit 0 prints DSH_LOADER_RESULT <json>; any assertion or load failure exits
 // non-zero with the reason on stderr (used by the invalid-config and
 // default-export regression cases).
@@ -15,7 +19,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { CallId } from '@deepseek-ai/dsh-llm'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
@@ -23,8 +27,8 @@ import { pathToFileURL } from 'node:url'
 
 const configArgument = process.argv[2]
 const expected = process.argv[3]
-if (configArgument === undefined || (expected !== 'move' && expected !== 'no-move')) {
-  console.error('usage: loader-runner.mjs <cordis.yml> move|no-move')
+if (configArgument === undefined || (expected !== 'move' && expected !== 'no-move' && expected !== 'reload')) {
+  console.error('usage: loader-runner.mjs <cordis.yml> move|no-move|reload')
   process.exit(2)
 }
 
@@ -47,12 +51,46 @@ try {
     },
   })
   ctx.loader.builtins.include = Include
-  await ctx.loader.create({
+  const includeId = await ctx.loader.create({
     name: 'cordis:include',
     config: { path: pathToFileURL(configPath).href },
   })
   await ctx.loader.await()
 
+  if (expected === 'reload') {
+    const include = ctx.loader.resolve(includeId)?.subtree
+    if (include === undefined || typeof include.refresh !== 'function') {
+      throw new Error('reload: the include entry exposes no refresh()')
+    }
+    const webServer = /** @type {any} */ (ctx.get('webServer'))
+    if (webServer === undefined) throw new Error('reload: the mock webServer row did not mount')
+    const assertBase = () => {
+      const names = ctx.tools.schemas().map((schema) => schema.name)
+      for (const name of ['claude_scan', 'import_claude', 'move_detect', 'move_preview', 'move_run']) {
+        if (!names.includes(name)) throw new Error(`reload: ${name} tool is missing`)
+      }
+    }
+
+    // Phase 1: initial mount — the five panel routes are registered.
+    assertBase()
+    if (webServer.list().length !== 5) throw new Error(`reload: expected 5 routes after mount, got ${webServer.list().length}`)
+
+    // Phase 2: enableWebPanel:false — the routes must unload with the fiber.
+    writeFileSync(configPath, readFileSync(configPath, 'utf8').replace('enableWebPanel: true', 'enableWebPanel: false'))
+    await include.refresh()
+    await ctx.loader.await()
+    assertBase()
+    if (webServer.list().length !== 0) throw new Error(`reload: expected 0 routes while disabled, got ${webServer.list().length}`)
+
+    // Phase 3: re-enable — remount re-registers without a duplicate route.
+    writeFileSync(configPath, readFileSync(configPath, 'utf8').replace('enableWebPanel: false', 'enableWebPanel: true'))
+    await include.refresh()
+    await ctx.loader.await()
+    assertBase()
+    if (webServer.list().length !== 5) throw new Error(`reload: expected 5 routes after re-enable, got ${webServer.list().length}`)
+
+    process.stdout.write(`DSH_LOADER_RESULT ${JSON.stringify({ routes: webServer.list().length, cycled: true })}\n`)
+  } else {
   // Authoritative registries carry the plugin's contributions.
   const toolNames = ctx.tools.schemas().map((schema) => schema.name)
   for (const name of ['claude_scan', 'import_claude']) {
@@ -110,6 +148,7 @@ try {
     scanProjects: /** @type {any} */ (result.value).projects.length,
   }
   process.stdout.write(`DSH_LOADER_RESULT ${JSON.stringify(summary)}\n`)
+  }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error))
   process.exit(1)
