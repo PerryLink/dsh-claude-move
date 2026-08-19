@@ -69,13 +69,30 @@ function makeCtx(tree) {
     async archiveSession() {},
   }
   const webServer = {
-    register(route) { routes.push(route); return () => {} },
+    // 与真实宿主一致：重复 exact 路由抛 duplicate route；返回的 disposer 摘除路由。
+    register(route) {
+      if (routes.some((existing) => existing.kind === route.kind && existing.path === route.path)) {
+        throw new Error(`duplicate exact route: ${route.path}`)
+      }
+      routes.push(route)
+      return () => {
+        const index = routes.indexOf(route)
+        if (index >= 0) routes.splice(index, 1)
+      }
+    },
   }
+  const effects = []
   const ctx = {
     fs,
     sessionPersistence: persistence,
     tools: { register: () => () => {} },
     on: () => () => {},
+    // 与 Cordis fiber effect 一致：立即执行并收集返回的 disposer。
+    effect(fn) {
+      const dispose = fn()
+      if (typeof dispose === 'function') effects.push(dispose)
+      return () => {}
+    },
     get(service) {
       if (service === 'webServer') return webServer
       if (service === 'workspaceRegistry') return workspaceRegistry
@@ -84,7 +101,15 @@ function makeCtx(tree) {
       return undefined
     },
   }
-  return { ctx, routes, persistence }
+  return {
+    ctx,
+    routes,
+    persistence,
+    // 模拟 fiber 卸载：逆序执行全部已收集的 effect disposer。
+    disposeAll() {
+      for (const dispose of effects.splice(0).reverse()) dispose()
+    },
+  }
 }
 
 function mockRes() {
@@ -130,6 +155,22 @@ test('无 webServer 服务时跳过路由注册；enableWebPanel=false 时也跳
   const { ctx: ctx2, routes: routes2 } = makeCtx({})
   apply(ctx2, { enableWebPanel: false })
   assert.equal(routes2.length, 0)
+})
+
+test('插件卸载撤销全部面板路由；重挂载不再抛 duplicate route（HMR 回归）', () => {
+  const { ctx, routes, disposeAll } = makeCtx({})
+  apply(ctx)
+  assert.equal(routes.length, 5)
+
+  // 模拟 fiber 卸载：webServer.register 的 disposer 必须全部被执行。
+  disposeAll()
+  assert.equal(routes.length, 0)
+
+  // 重挂载（配置热重载）：路由表已清空，register 不再抛 duplicate route。
+  apply(ctx)
+  assert.equal(routes.length, 5)
+  disposeAll()
+  assert.equal(routes.length, 0)
 })
 
 test('GET /api/claude-move/index 返回扫描索引', async (t) => {
@@ -246,6 +287,7 @@ test('webServer 后置就绪：经 internal/service 响应式注册路由', () =
       ;(listeners[event] ??= []).push(cb)
       return () => {}
     },
+    effect(fn) { fn(); return () => {} },
   }
   apply(ctx)
   assert.equal(routes.length, 0, '服务未就绪时暂不注册')

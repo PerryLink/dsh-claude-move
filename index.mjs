@@ -2085,11 +2085,16 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
   const claudeHome = () => config.claudeHome ? path.resolve(config.claudeHome) : locateClaudeHome()
   const jobs = new Map()
   const JOB_RETENTION = 20
+  // webServer.register 返回的 disposer 是唯一注销途径（重复 exact 路由会抛
+  // duplicate route），不随 fiber 自动撤销：逐个收集，函数末尾挂进一个
+  // ctx.effect，fiber 卸载时逆序摘除全部路由。
+  /** @type {Array<(() => void) | undefined>} */
+  const routeDisposers = []
 
   // 官方后台任务服务（B5）：特性探测，缺失回退自有 job Map（rc.6 兼容）。
   const hostJobs = typeof ctx.get === 'function' ? ctx.get('jobs') : undefined
 
-  webServer.register({
+  routeDisposers.push(webServer.register({
     kind: 'exact',
     path: '/api/claude-move/index',
     handler: async (req, res) => {
@@ -2101,9 +2106,9 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         sendJson(res, 500, { error: String((err && err.message) || err) })
       }
     },
-  })
+  }))
 
-  webServer.register({
+  routeDisposers.push(webServer.register({
     kind: 'exact',
     path: '/api/claude-move/import',
     handler: async (req, res) => {
@@ -2196,9 +2201,9 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         }
       })()
     },
-  })
+  }))
 
-  webServer.register({
+  routeDisposers.push(webServer.register({
     kind: 'exact',
     path: '/api/claude-move/progress',
     handler: (req, res) => {
@@ -2213,9 +2218,9 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
       const { controller: _controller, hostJobId: _hostJobId, ...publicJob } = job
       sendJson(res, 200, publicJob)
     },
-  })
+  }))
 
-  webServer.register({
+  routeDisposers.push(webServer.register({
     kind: 'exact',
     path: '/api/claude-move/job',
     handler: (req, res) => {
@@ -2245,9 +2250,9 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
       }
       sendJson(res, 200, { cancelled: true })
     },
-  })
+  }))
 
-  webServer.register({
+  routeDisposers.push(webServer.register({
     kind: 'exact',
     path: '/api/claude-move/reset',
     handler: async (req, res) => {
@@ -2267,7 +2272,12 @@ function registerRouteDefinitions(ctx, config, state, webServer) {
         sendJson(res, 500, { error: String((err && err.message) || err) })
       }
     },
-  })
+  }))
+
+  // 路由随本插件生命周期撤销：fiber 卸载时逆序执行全部 disposer。
+  ctx.effect(() => () => {
+    for (const dispose of routeDisposers.splice(0).reverse()) dispose?.()
+  }, 'claude-move: web panel routes')
 }
 
 // ── 四合一迁移向导：move_detect / move_preview / move_run + /move ──────────────
