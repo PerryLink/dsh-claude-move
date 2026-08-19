@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.2.3] - 2026-08-19
+
+### Fixed
+
+- The web panel routes now unload with the plugin fiber: the five `/api/claude-move/*` route disposers ride one `ctx.effect`, so a config hot-reload or disable followed by a remount no longer throws `duplicate exact route` (the host route table previously kept handlers closed over the unloaded fiber). The route tests now simulate fiber disposal against a duplicate-strict `webServer.register`.
+
 ## [0.2.2] - 2026-08-16
 
 ### Fixed
