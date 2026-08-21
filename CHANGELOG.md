@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.2.5] - 2026-08-21
+
+### Changed
+
+- Upgrade to DeepSeek Harness `0.1.0-rc.8`: all 14 `@deepseek-ai/dsh-*` devDependencies pinned to exact `0.1.0-rc.8`, the `@deepseek-ai/dsh-tools` peer range widened to `>=0.1.0-rc.8 <0.2.0`, the compatibility declaration bumped to rc.8, and the CI compat matrix re-pinned to rc.8. No behavior change: every consumed seam (`defineTool` output schemas, sync `systemPrompt` providers, `skills.registerProvider`, `webServer.register` exact routes, `SESSION_FORMAT_VERSION=0` session persistence) is unchanged in rc.8. Verified by the full gate (214 tests, coverage, lint, readme sync, self-contained, artifacts) and a real keyless headless smoke on an rc.8 profile (`dsh-base` + `dsh-headless` + `dsh-claude-move` against a deterministic mock LLM, `SMOKE-OK`).
+
 ## [0.2.4] - 2026-08-19
 
 ### Changed
