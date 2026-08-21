@@ -22,7 +22,7 @@
 
 ## अनुकूलता
 
-- `dsh 0.1.0-rc.6` (web profile) को लक्षित करता है; peer निर्भरताएँ `0.1.0-rc.6` पर पिन हैं। Node `^22.19 || >=24`।
+- `dsh 0.1.0-rc.8` (web profile) को लक्षित करता है; peer निर्भरताएँ `>=0.1.0-rc.8` चाहिए। Node `^22.19 || >=24`।
 - अंतिम बार एक ताज़ा tarball इंस्टॉल के विरुद्ध सत्यापित: वास्तविक स्कैन, वास्तविक बैच आयात (आइडेम्पोटेंट पुनः-आयात), workspace जुड़ाव और पर्सिस्टेंस आर्टिफैक्ट की पुष्टि; macOS/Linux CI मैट्रिक्स द्वारा कवर हैं।
 
 ### अनुकूलता मैट्रिक्स (केवल सार्वजनिक सीम)
@@ -32,7 +32,7 @@
 | Host सेवाएँ (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | जहाँ सूचीबद्ध वहाँ आवश्यक | वैकल्पिक सेवाएँ प्रतिक्रियात्मक रूप से पंजीकृत होती हैं; `fs` अनुपस्थित होने पर ज़ोर से विफल |
 | `sessionPersistence.listSnapshots` / `readFrom` / `streamText`-सक्षम `fs` / `ctx.jobs` / `ctx.agents.resume` | फ़ीचर-डिटेक्टेड | `list()` / पूरी फ़ाइल पढ़ना और ज़ोर से अस्वीकार / स्वयं का job map / हैंडऑफ़ इंजेक्ट |
 | Client shell सेवाएँ (`sessions.refresh/open`, `workspaces.refresh`) | पैनल apply पर फ़ीचर-डिटेक्टेड | पूर्ण-पृष्ठ रीलोड |
-| नई प्लेटफ़ॉर्म क्षमताएँ कभी कठोर आवश्यकताएँ नहीं होतीं — प्लगइन rc.6 पर बूट होने योग्य रहता है। | | |
+| नई प्लेटफ़ॉर्म क्षमताएँ कभी कठोर आवश्यकताएँ नहीं होतीं — प्लगइन rc.8 पर बूट होने योग्य रहता है। | | |
 
 ## आपको क्या मिलता है
 
@@ -242,7 +242,7 @@ import_claude { path: "...", force: true }          # ताज़ा पूर�
 ## विकास
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@0.1.0-rc.6, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.0-rc.8, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 

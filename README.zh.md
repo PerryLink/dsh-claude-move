@@ -22,7 +22,7 @@
 
 ## 兼容性
 
-- 面向 `dsh 0.1.0-rc.6`（web profile）；peer 依赖锁定在 `0.1.0-rc.6`。Node `^22.19 || >=24`。
+- 面向 `dsh 0.1.0-rc.8`（web profile）；peer 依赖要求 `>=0.1.0-rc.8`。Node `^22.19 || >=24`。
 - 最近针对全新 tarball 安装验证：真实扫描、真实批量导入（幂等重导入）、工作区挂载与持久化产物均已确认；macOS/Linux 由 CI 矩阵覆盖。
 
 ### 兼容性矩阵（仅公开接缝）
@@ -32,7 +32,7 @@
 | Host 服务（`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`） | 所列之处必需 | 可选服务响应式注册；缺失 `fs` 大声失败 |
 | `sessionPersistence.listSnapshots` / `readFrom` / 支持 `streamText` 的 `fs` / `ctx.jobs` / `ctx.agents.resume` | 特性探测 | `list()` / 整文件读取并大声拒绝 / 自有 job map / 交接注入 |
 | Client shell 服务（`sessions.refresh/open`、`workspaces.refresh`） | 面板 apply 时特性探测 | 整页刷新 |
-| 较新的平台能力从不是硬性要求 —— 插件在 rc.6 上始终保持可启动。 | | |
+| 较新的平台能力从不是硬性要求 —— 插件在 rc.8 上始终保持可启动。 | | |
 
 ## 你能获得什么
 
@@ -242,7 +242,7 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 ## 开发
 
 ```sh
-npm install   # peer 依赖：@deepseek-ai/dsh-tools@0.1.0-rc.6、@deepseek-ai/cordis、schemastery
+npm install   # peer 依赖：@deepseek-ai/dsh-tools@>=0.1.0-rc.8、@deepseek-ai/cordis、schemastery
 npm test      # node --test test/*.test.mjs
 ```
 

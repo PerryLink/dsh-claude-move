@@ -22,7 +22,7 @@
 
 ## Compatibility
 
-- Targets `dsh 0.1.0-rc.6` (web profile); peer dependencies pinned to `0.1.0-rc.6`. Node `^22.19 || >=24`.
+- Targets `dsh 0.1.0-rc.8` (web profile); peer dependencies require `>=0.1.0-rc.8`. Node `^22.19 || >=24`.
 - Last verified against a fresh tarball install: real scan, real batch import (idempotent re-import), workspace attach and persistence artifacts confirmed; macOS/Linux covered by the CI matrix.
 
 ### Compatibility matrix (public seams only)
@@ -32,7 +32,7 @@
 | Host services (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | required where listed | optional services register reactively; missing `fs` fails loud |
 | `sessionPersistence.listSnapshots` / `readFrom` / `streamText`-capable `fs` / `ctx.jobs` / `ctx.agents.resume` | feature-detected | `list()` / whole-file read with loud rejection / own job map / handoff inject |
 | Client shell services (`sessions.refresh/open`, `workspaces.refresh`) | feature-detected at panel apply | full-page reload |
-| Newer platform capabilities are never hard requirements — the plugin stays bootable on rc.6. | | |
+| Newer platform capabilities are never hard requirements — the plugin stays bootable on rc.8. | | |
 
 ## What you get
 
@@ -242,7 +242,7 @@ This project is licensed under the Apache License 2.0; the following MIT-license
 ## Development
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@0.1.0-rc.6, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.0-rc.8, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 

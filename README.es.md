@@ -22,7 +22,7 @@
 
 ## Compatibilidad
 
-- Dirigido a `dsh 0.1.0-rc.6` (perfil web); peer dependencies fijadas a `0.1.0-rc.6`. Node `^22.19 || >=24`.
+- Dirigido a `dsh 0.1.0-rc.8` (perfil web); las dependencias peer requieren `>=0.1.0-rc.8`. Node `^22.19 || >=24`.
 - Última verificación con una instalación nueva desde tarball: escaneo real, importación por lotes real (reimportación idempotente), adjuntado al workspace y artefactos de persistencia confirmados; macOS/Linux cubiertos por la matriz de CI.
 
 ### Matriz de compatibilidad (solo costuras públicas)
@@ -32,7 +32,7 @@
 | Servicios de host (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | obligatorio donde se indica | los servicios opcionales se registran reactivamente; la falta de `fs` falla en voz alta |
 | `sessionPersistence.listSnapshots` / `readFrom` / `fs` con capacidad `streamText` / `ctx.jobs` / `ctx.agents.resume` | detectado por característica | `list()` / lectura de archivo completo con rechazo en voz alta / mapa de jobs propio / inyección de traspaso |
 | Servicios de shell del cliente (`sessions.refresh/open`, `workspaces.refresh`) | detectado por característica al aplicar el panel | recarga completa de la página |
-| Las capacidades de plataforma más nuevas nunca son requisitos estrictos — el plugin sigue arrancando en rc.6. | | |
+| Las capacidades de plataforma más nuevas nunca son requisitos estrictos — el plugin sigue arrancando en rc.8. | | |
 
 ## Qué obtienes
 
@@ -242,7 +242,7 @@ Este proyecto está licenciado bajo la Apache License 2.0; los siguientes compon
 ## Desarrollo
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@0.1.0-rc.6, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.0-rc.8, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 

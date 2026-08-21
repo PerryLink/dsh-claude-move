@@ -32,7 +32,7 @@ dev/                 ❌ 本地工程面：冒烟脚本、夹具、演示——�
 ## 命令
 
 ```sh
-npm install   # 安装 peer 依赖（@deepseek-ai/dsh-tools@0.1.0-rc.6、schemastery）
+npm install   # 安装 peer 依赖（@deepseek-ai/dsh-tools@>=0.1.0-rc.8、schemastery）
 npm test      # node --test 跑 test/*.test.mjs
 ```
 
