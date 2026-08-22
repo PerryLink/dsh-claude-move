@@ -22,7 +22,7 @@
 
 ## Compatibilidade
 
-- Direcionado a `dsh 0.1.0-rc.8` (perfil web); dependências peer exigem `>=0.1.0-rc.8`. Node `^22.19 || >=24`.
+- Direcionado a `dsh 0.1.1-rc.2` (perfil web); dependências peer exigem `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
 - Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI.
 
 ### Matriz de compatibilidade (somente costuras públicas)
