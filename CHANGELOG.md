@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Tighten the `@deepseek-ai/schemastery` peer range from `>=3.0.0` to `^3.18.0` to match the range every other DSH plugin declares (and the harness's pinned `3.18.x` line); `>=3.0.0` over-claimed API compatibility across 3.x minors.
+
 ## [0.2.6] - 2026-08-22
 
 ### Changed
