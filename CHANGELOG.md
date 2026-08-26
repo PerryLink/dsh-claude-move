@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.3.0] - 2026-08-26
+
+### Added
+
+- DSH 会话回迁 Claude jsonl 双向导出：新增 `claude_export` 工具与 `/claude-export` 命令，把 DSH 会话导出回 Claude 的 jsonl 格式。
+
+### Fixed
+
+- Use platform-neutral absolute paths in the export path tests (CI).
+
 ## [0.2.7] - 2026-08-23
 
 ### Changed
