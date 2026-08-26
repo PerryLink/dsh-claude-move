@@ -364,17 +364,20 @@ function dshExportEvents() {
 }
 
 test('resolveExportTarget：缺省落点按 sessionId 清洗文件名，显式路径直接解析', () => {
-  const config = { exportDir: 'D:\\exports' }
-  assert.equal(resolveExportTarget(undefined, 'import-sess-1', config), path.join('D:', 'exports', 'import-sess-1.jsonl'))
-  assert.equal(resolveExportTarget('~\\out\\a.jsonl', 'x', config), path.join(homedir(), 'out', 'a.jsonl'))
+  const exportDir = path.join(homedir(), 'exports')
+  const config = { exportDir }
+  assert.equal(resolveExportTarget(undefined, 'import-sess-1', config), path.join(exportDir, 'import-sess-1.jsonl'))
+  assert.equal(resolveExportTarget(path.join('~', 'out', 'a.jsonl'), 'x', config), path.join(homedir(), 'out', 'a.jsonl'))
 })
 
 test('resolveExportDir：config.exportDir 优先，否则 $DSH_HOME/claude-export', (t) => {
   const prev = process.env.DSH_HOME
-  process.env.DSH_HOME = path.join('D:', 'dshhome')
+  const dshHome = path.join(homedir(), 'dshhome')
+  process.env.DSH_HOME = dshHome
   t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
-  assert.equal(resolveExportDir({}), path.join('D:', 'dshhome', 'claude-export'))
-  assert.equal(resolveExportDir({ exportDir: path.join('D:', 'x') }), path.join('D:', 'x'))
+  assert.equal(resolveExportDir({}), path.join(dshHome, 'claude-export'))
+  const exportDir = path.join(homedir(), 'x')
+  assert.equal(resolveExportDir({ exportDir }), exportDir)
 })
 
 test('runExport：读会话日志 → 回迁 Claude JSONL 文件（F18）', async (t) => {
