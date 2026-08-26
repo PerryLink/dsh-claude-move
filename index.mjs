@@ -42,6 +42,7 @@ import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileEx
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
 import { translateSettings } from './lib/settings.mjs'
 import { buildHandoff, DEFAULT_HANDOFF_MAX_CHARS } from './lib/handoff.mjs'
+import { eventsToClaudeJsonl } from './lib/export.mjs'
 import { importsStore } from './lib/imports-store.mjs'
 import { manifestStore } from './lib/manifest.mjs'
 import { runPreview, runExecute, runWizard, reportLines } from './lib/wizard.mjs'
@@ -97,6 +98,8 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * @property {'per-source'|'single'} [moveWorkspaceMode] 向导会话归组：'per-source'（默认）每源一个工作区（`$DSH_HOME/imports/<source>`）；'single' 全部挂到一个 imports 工作区（`$DSH_HOME/imports`）。
  * @property {string} [skillsDir] 向导技能落点；缺省 `$DSH_HOME/skills`（官方用户技能根，DSH 自动发现）。
  * @property {string} [agentsMdPath] 向导记忆/指令落点；缺省 `$DSH_HOME/AGENTS.md`（DSH 全局指令文件）。
+ * @property {boolean} [enableExport] 注册 DSH 会话回迁导出（claude_export 工具与 /claude-export 命令，默认 true）。
+ * @property {string} [exportDir] 回迁导出落点目录；缺省 `$DSH_HOME/claude-export`（DSH_HOME 缺失时 `~/.dsh/claude-export`）。
  */
 
 export const Config = Schema.object({
@@ -131,6 +134,8 @@ export const Config = Schema.object({
   moveWorkspaceMode: Schema.union([Schema.const('per-source'), Schema.const('single')]).default('per-source'),
   skillsDir: Schema.string(),
   agentsMdPath: Schema.string(),
+  enableExport: Schema.boolean().default(true),
+  exportDir: Schema.string(),
 })
 
 const sessionImportSchema = {
@@ -1520,6 +1525,146 @@ function makeImportTool(ctx, config) {
   })
 }
 
+// ── 会话回迁导出（F18）：DSH 会话 → Claude 可 resume JSONL ────────────────────
+
+/** claude_export 输出 schema。 */
+const exportResultSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    sessionId: { type: 'string', required: true },
+    path: { type: 'string', required: true },
+    title: { type: 'string' },
+    cwd: { type: 'string' },
+    lines: { type: 'integer', required: true },
+    turns: { type: 'integer', required: true },
+    user: { type: 'integer', required: true },
+    assistant: { type: 'integer', required: true },
+    toolCalls: { type: 'integer', required: true },
+    toolResults: { type: 'integer', required: true },
+  },
+}
+
+/**
+ * 回迁导出落点目录：config.exportDir 显式给出则按绝对路径解析，否则
+ * `$DSH_HOME/claude-export`（DSH_HOME 缺失时 `~/.dsh/claude-export`）。
+ * @param config - 插件配置。
+ * @param env - 环境对象，缺省 process.env。
+ * @returns 目录绝对路径。
+ */
+export function resolveExportDir(config, env = process.env) {
+  if (typeof config?.exportDir === 'string' && config.exportDir.trim().length > 0) {
+    return path.resolve(config.exportDir)
+  }
+  const base = env.DSH_HOME || path.join(homedir(), '.dsh')
+  return path.join(base, 'claude-export')
+}
+
+/**
+ * 解析导出目标文件路径：显式 path（支持 `~`）直接解析；缺省落回
+ * `<exportDir>/<sanitized-sessionId>.jsonl`。
+ * @param raw - 工具参数里的 path。
+ * @param sessionId - DSH 会话 id。
+ * @param config - 插件配置。
+ * @returns 绝对文件路径。
+ */
+export function resolveExportTarget(raw, sessionId, config) {
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    const expanded = raw.startsWith('~')
+      ? path.join(homedir(), raw.slice(1).replace(/^[\\/]+/, ''))
+      : raw
+    return path.resolve(expanded)
+  }
+  const safe = String(sessionId ?? '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128)
+  return path.join(resolveExportDir(config), `${safe || 'session'}.jsonl`)
+}
+
+/**
+ * 执行一次回迁导出：读 DSH 会话日志（sessionPersistence.readFrom）→ 反向折叠为
+ * Claude 可 resume JSONL → 写入目标文件。只读源会话、只写导出落点文件，绝不
+ * 改写 DSH 会话日志。会话不可读/无可导出内容时大声失败。
+ * @param ctx - Cordis 上下文。
+ * @param config - 插件配置。
+ * @param args - 工具参数 `{ sessionId, path? }`。
+ * @param signal - 可选 AbortSignal。
+ * @returns `{ sessionId, path, title, cwd, lines, turns, user, assistant, toolCalls, toolResults }`。
+ */
+export async function runExport(ctx, config, args, signal) {
+  const sp = ctx.get('sessionPersistence')
+  if (!sp || typeof sp.readFrom !== 'function') {
+    throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 回迁导出需要该服务')
+  }
+  const sessionId = typeof args?.sessionId === 'string' ? args.sessionId.trim() : ''
+  if (sessionId.length === 0) throw new Error('sessionId 必填：要回迁为 Claude jsonl 的 DSH 会话 id')
+  signal?.throwIfAborted()
+  let read
+  try {
+    read = await sp.readFrom(sessionId, 0)
+  } catch (err) {
+    throw new Error(`读取会话 ${sessionId} 失败（不存在或不可读）：${String((err && err.message) || err)}`)
+  }
+  const events = Array.isArray(read?.events) ? read.events : null
+  if (!events || events.length === 0) throw new Error(`会话 ${sessionId} 无日志事件，无法导出`)
+  const cwd = typeof read?.meta?.cwd === 'string' ? read.meta.cwd : null
+  const result = eventsToClaudeJsonl({ events, sessionId, cwd })
+  if (result.lines.length === 0) {
+    throw new Error(`会话 ${sessionId} 无可导出的对话内容（user/assistant/tool 轮次为空）`)
+  }
+  const target = resolveExportTarget(args?.path, sessionId, config)
+  await mkdir(path.dirname(target), { recursive: true })
+  await writeFile(target, result.lines.map((l) => l + '\n').join(''), 'utf8')
+  return {
+    sessionId,
+    path: target,
+    title: result.title ?? null,
+    cwd,
+    lines: result.lines.length,
+    turns: result.counts.turns,
+    user: result.counts.user,
+    assistant: result.counts.assistant,
+    toolCalls: result.counts.toolCalls,
+    toolResults: result.counts.toolResults,
+  }
+}
+
+/** claude_export 结果的模型可读摘要（中文）。 */
+export function renderExport(args, value) {
+  const lines = [
+    `已把 DSH 会话 ${value.sessionId} 回迁为 Claude 可 resume JSONL：`,
+    `- 输出文件：${value.path}`,
+    `- 轮次 ${value.turns}、用户消息 ${value.user}、助手消息 ${value.assistant}、` +
+      `工具调用 ${value.toolCalls}、工具结果 ${value.toolResults}（共 ${value.lines} 行）`,
+    value.title ? `- 标题：${value.title}` : null,
+    value.cwd ? `- 工作目录：${value.cwd}` : '- 工作目录：未知（Claude 打开时回退当前目录）',
+    'Claude Code 续接：claude --resume <输出文件>（或放入项目 .claude/projects 后 resume）。',
+  ].filter(Boolean)
+  return [{ type: 'text', text: lines.join('\n') }]
+}
+
+function makeExportTool(ctx, config) {
+  return defineTool({
+    name: 'claude_export',
+    description:
+      'Export a DSH session back into a resumable Claude Code JSONL transcript (user/assistant/tool turns, thinking and tool_use/tool_result pairing, file reference best-effort mapping). Read-only on the source session; writes one .jsonl target. Round-trips the same shape claude_scan/import_claude consume, so the export can be re-imported or resumed by Claude Code. ' +
+      '（把 DSH 会话回迁为 Claude Code 可 resume 的 JSONL transcript：覆盖 user/assistant/tool 轮次、thinking 与 tool_use/tool_result 配对、文件引用尽力映射。只读源会话，只写一个目标 .jsonl；与 import_claude 同构，可被再次导入或由 Claude Code resume。）',
+    parameters: {
+      sessionId: {
+        type: 'string',
+        required: true,
+        description: '要导出的 DSH 会话 id（会话列表/import_claude 结果中的 dshSessionId）。',
+      },
+      path: {
+        type: 'string',
+        description: `可选：目标 .jsonl 文件路径（支持 ~）。缺省写入 ${resolveExportDir(config)}/<sessionId>.jsonl。`,
+      },
+    },
+    output: { schema: exportResultSchema, render: renderExport },
+    async execute(args, exec) {
+      return runExport(ctx, config, args, exec?.signal)
+    },
+  })
+}
+
 // ── 个人信息搬移（F11-F13）：同步注入 + 技能 provider ────────────────────────
 
 /**
@@ -2001,6 +2146,29 @@ function registerCommandDefinitions(ctx, config, commands) {
       }
     },
   })
+
+  // F18：DSH 会话回迁 Claude 可 resume JSONL（双向迁移的导出方向）。
+  if (config.enableExport !== false) {
+    commands.register({
+      name: 'claude-export',
+      description: 'Export a DSH session into a resumable Claude Code JSONL transcript（把 DSH 会话回迁为 Claude Code 可 resume 的 JSONL transcript）',
+      input: { hint: '<DSH 会话 id> [目标 .jsonl 路径]' },
+      handler: async (invocation) => {
+        try {
+          const parts = invocation.rawInput.trim().split(/\s+/)
+          const sessionId = parts[0]
+          if (!sessionId) {
+            return { kind: 'error', text: '请提供要导出的 DSH 会话 id：/claude-export <sessionId> [path]' }
+          }
+          const value = await runExport(ctx, config, { sessionId, path: parts[1] }, invocation.signal)
+          const text = renderExport({}, value).map((b) => b.text).join('\n')
+          return { kind: 'success', text }
+        } catch (err) {
+          return { kind: 'error', text: 'claude-export 失败：' + String((err && err.message) || err) }
+        }
+      },
+    })
+  }
 }
 
 // ── 面板 JSON 路由（F16）：ctx.webServer 公开 seam ─────────────────────────────
@@ -2887,6 +3055,7 @@ export function apply(ctx, config = {}) {
   const state = makeClaudeState(config)
   ctx.tools.register(makeScanTool(ctx, config, state))
   ctx.tools.register(makeImportTool(ctx, config))
+  if (config.enableExport !== false) ctx.tools.register(makeExportTool(ctx, config))
   if (config.enableMove !== false) {
     const move = makeMoveTools(ctx, config, state)
     ctx.tools.register(move.detect)

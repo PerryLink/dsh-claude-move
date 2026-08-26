@@ -42,7 +42,8 @@
 4. **Somente-cópia e incremental** — nada é movido, reescrito ou excluído em nenhum dos lados; reexecutar apenas anexa os turnos novos (`force: true` salva uma cópia completa extra sob um novo id).
 5. **Contexto pessoal, sempre atualizado** — memórias injetadas como uma seção de prompt em tempo real, habilidades do Claude registradas como habilidades DSH reais (globais + de projeto), e o `CLAUDE.md` global + de projeto injetado cedo.
 6. **Assistente de migração de quatro fontes** — `/move` mais `move_detect` / `move_preview` / `move_run` migram Claude Code, Codex, OpenCode e Hermes, com aprovação e idempotência (`move.json`).
-7. **Painel web e comandos** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset` e um painel de migração flutuante.
+7. **Painel web e comandos** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset`, `/claude-export` e um painel de migração flutuante.
+8. **Exportação bidirecional** — `claude_export` (ou `/claude-export <sessionId>`) grava uma sessão DSH de volta como transcript JSONL retomável do Claude Code (turnos `user`/`assistant`/`tool`, pareamento `thinking` + `tool_use`/`tool_result`, mapeamento `cwd` de melhor esforço), para que o histórico possa sair do DSH novamente.
 
 ## Assistente de migração de quatro fontes
 
@@ -122,6 +123,9 @@ import_claude { path: "all" }                       # tudo
 # Reexecute a qualquer momento: arquivos inalterados são pulados, transcrições crescidas anexam apenas os turnos novos.
 # Arquivos acima de maxTranscriptBytes são importados por streaming em blocos (sem teto de memória).
 import_claude { path: "...", force: true }          # cópia completa nova (cópia anterior mantida)
+
+claude_export { sessionId: "<dsh-session-id>" }     # grava uma sessão DSH de volta para JSONL do Claude
+claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }  # destino explícito
 ```
 
 Comandos (acionados pelo usuário, sem turno do modelo):
@@ -132,6 +136,7 @@ Comandos (acionados pelo usuário, sem turno do modelo):
 /resume-claude <sessionId>        # por id de sessão fonte ou id import-<src>
 /resume-claude <keyword>          # corresponde a títulos; múltiplas correspondências são listadas, nunca adivinhadas
 /claude-move-reset                # reinicia o cache do plugin (marcadores + mapa de importação); sessões importadas são mantidas
+/claude-export <sessionId> [path] # exporta uma sessão DSH para um transcript JSONL retomável do Claude
 ```
 
 Painel web: um painel de migração flutuante com a árvore de projetos/sessões, selos de status (não importado / importado / importado-com-turnos-novos / fonte ausente / diretório ausente / git sujo), filtro por palavra-chave, renderização paginada, "Importar e continuar" + "Abrir sessão" + "Atualizar lista de sessões" por sessão, importação em lote com barra de progresso em tempo real e cancelar, e um botão de reinício de cache. Os textos seguem o idioma do navegador (zh/en). Servido pelas rotas JSON `/api/claude-move/*` próprias do plugin na costura pública `ctx.webServer`.
@@ -177,6 +182,8 @@ Tudo opcional, anulável no cordis.yml.
 | `skillsDir` | `$DSH_HOME/skills` | Destino de skills do assistente |
 | `agentsMdPath` | `$DSH_HOME/AGENTS.md` | Destino de memória/instruções do assistente |
 | `moveWorkspaceMode` | `per-source` | Agrupamento de workspace para importações do assistente: `per-source` · `single` |
+| `enableExport` | `true` | Registra a ferramenta `claude_export` e o comando `/claude-export` |
+| `exportDir` | `$DSH_HOME/claude-export` | Pasta de exportação padrão (um `path` explícito sempre vence) |
 
 ## Ferramentas e superfícies
 
@@ -184,10 +191,12 @@ Tudo opcional, anulável no cordis.yml.
 |---|---|---|
 | `claude_scan` | ferramenta | Índice estruturado de projetos/sessões/memórias/habilidades/ajustes |
 | `import_claude` | ferramenta | Importa uma sessão, um diretório ou `all` (incremental; `force` para cópia nova) |
+| `claude_export` | ferramenta | Exporta uma sessão DSH para um transcript JSONL retomável do Claude Code |
 | `move_detect` / `move_preview` / `move_run` | ferramentas | Assistente de quatro fontes: varrer, plano por item com diffs, executar após aprovação |
 | `/claude-import-all` | comando | Varre → importa tudo → relata |
 | `/resume-claude` | comando | Continua uma sessão do Claude (latest, id ou palavra-chave) |
 | `/claude-move-reset` | comando | Reinicia o cache do plugin (sessões importadas mantidas) |
+| `/claude-export` | comando | Exporta uma sessão DSH para um transcript JSONL retomável do Claude |
 | `/move` | comando | Assistente de quatro fontes de um só passo |
 | Painel web de migração | cliente | Painel flutuante com progresso, cancelamento, paginação, abrir sessão |
 

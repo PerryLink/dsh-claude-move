@@ -42,7 +42,8 @@
 4. **只复制且增量** —— 两侧都不会被移动、改写或删除；重新运行只追加新的轮次（`force: true` 以新 id 额外保存一份完整副本）。
 5. **个人上下文，始终新鲜** —— 记忆作为实时提示词段落注入，Claude 技能注册为真正的 DSH 技能（全局 + 项目级），全局 + 项目 `CLAUDE.md` 提前注入。
 6. **四来源迁移向导** —— `/move` 加上 `move_detect` / `move_preview` / `move_run` 迁移 Claude Code、Codex、OpenCode 和 Hermes，审批门控且幂等（`move.json`）。
-7. **Web 面板与命令** —— `/claude-import-all`、`/resume-claude`、`/claude-move-reset`，以及一个浮动迁移面板。
+7. **Web 面板与命令** —— `/claude-import-all`、`/resume-claude`、`/claude-move-reset`、`/claude-export`，以及一个浮动迁移面板。
+8. **双向导出** —— `claude_export`（或 `/claude-export <sessionId>`）把 DSH 会话回写为 Claude Code 可 resume 的 JSONL transcript（user/assistant/tool 轮次、thinking + tool_use/tool_result 配对、cwd 尽力映射），让历史可以再次离开 DSH。
 
 ## 四来源迁移向导
 
@@ -122,6 +123,9 @@ import_claude { path: "all" }                       # 全部
 # 随时重新运行：未变更的文件被跳过，增长的 transcript 只追加新的轮次。
 # 超过 maxTranscriptBytes 的文件以分块流式导入（无内存上限）。
 import_claude { path: "...", force: true }          # 全新的完整副本（保留之前的副本）
+
+claude_export { sessionId: "<dsh-session-id>" }     # 把 DSH 会话回写为 Claude JSONL
+claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }  # 指定目标
 ```
 
 命令（用户触发，不占模型轮次）：
@@ -132,6 +136,7 @@ import_claude { path: "...", force: true }          # 全新的完整副本（�
 /resume-claude <sessionId>        # 按源会话 id 或 import-<src> id
 /resume-claude <keyword>          # 匹配标题；多个匹配会列出，绝不猜测
 /claude-move-reset                # 重置插件缓存（书签 + 导入映射）；导入的会话保留
+/claude-export <sessionId> [path] # 导出 DSH 会话为可 resume 的 Claude JSONL transcript
 ```
 
 Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（未导入 / 已导入 / 已导入并有新轮次 / 源缺失 / 目录缺失 / git 脏）、关键字过滤、分页渲染、每个会话的「导入并继续」+「打开会话」+「刷新会话列表」、带实时进度条和取消的批量导入，以及一个缓存重置按钮。文本跟随浏览器语言（zh/en）。通过插件自身的 `/api/claude-move/*` JSON 路由在公开 `ctx.webServer` 接缝上提供。
@@ -177,6 +182,8 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 | `skillsDir` | `$DSH_HOME/skills` | 向导技能目标 |
 | `agentsMdPath` | `$DSH_HOME/AGENTS.md` | 向导记忆/指令目标 |
 | `moveWorkspaceMode` | `per-source` | 向导导入的工作区分组：`per-source` · `single` |
+| `enableExport` | `true` | 注册 `claude_export` 工具与 `/claude-export` 命令 |
+| `exportDir` | `$DSH_HOME/claude-export` | 默认导出目录（显式 `path` 始终优先） |
 
 ## 工具与界面
 
@@ -184,10 +191,12 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 |---|---|---|
 | `claude_scan` | 工具 | 项目/会话/记忆/技能/设置的结构化索引 |
 | `import_claude` | 工具 | 导入单个会话、一个目录或 `all`（增量；`force` 生成全新副本） |
+| `claude_export` | 工具 | 把 DSH 会话导出为可 resume 的 Claude Code JSONL transcript |
 | `move_detect` / `move_preview` / `move_run` | 工具 | 四来源向导：扫描、带 diff 的逐项计划、在审批之后执行 |
 | `/claude-import-all` | 命令 | 扫描 → 导入全部 → 报告 |
 | `/resume-claude` | 命令 | 继续一个 Claude 会话（latest、id 或关键字） |
 | `/claude-move-reset` | 命令 | 重置插件缓存（导入的会话保留） |
+| `/claude-export` | 命令 | 导出 DSH 会话为可 resume 的 Claude JSONL transcript |
 | `/move` | 命令 | 一次性四来源向导 |
 | Web 迁移面板 | 客户端 | 带进度、取消、分页、打开会话的浮动面板 |
 
@@ -219,7 +228,7 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 
 ## 模型体验
 
-- 面向模型的面是两个工具的描述/schema 及其输出：`claude_scan` 返回结构化索引，`import_claude` 返回逐文件摘要以及警告的位置。工具结果本身被记录为 `tool/result` 事件，因此一切都可以重建。
+- 面向模型的面是这些工具的描述/schema 及其输出：`claude_scan` 返回结构化索引，`import_claude` 返回逐文件摘要以及警告的位置，`claude_export` 返回导出摘要（目标路径 + 轮次/消息/工具计数）。工具结果本身被记录为 `tool/result` 事件，因此一切都可以重建。
 - 没有隐藏的面向模型的文本；记忆/`CLAUDE.md` 段落注册在 `ctx.systemPrompt` 上（提示词组装，可从会话日志重建）。
 
 ## 故障排查

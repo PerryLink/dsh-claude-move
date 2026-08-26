@@ -43,7 +43,8 @@
 4. **Copy-only & incremental** — nothing on either side is moved, rewritten, or deleted; re-running appends only the new turns (`force: true` saves an extra full copy under a new id).
 5. **Personal context, always fresh** — memories injected as a live prompt section, Claude skills registered as real DSH skills (global + project-level), global + project `CLAUDE.md` injected early.
 6. **Four-source migration wizard** — `/move` plus `move_detect` / `move_preview` / `move_run` migrate Claude Code, Codex, OpenCode and Hermes, approval-gated and idempotent (`move.json`).
-7. **Web panel & commands** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset`, and a floating migration panel.
+7. **Web panel & commands** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset`, `/claude-export`, and a floating migration panel.
+8. **Bidirectional export** — `claude_export` (or `/claude-export <sessionId>`) writes a DSH session back out as a resumable Claude Code JSONL transcript (`user`/`assistant`/`tool` turns, `thinking` + `tool_use`/`tool_result` pairing, best-effort `cwd` mapping), so history can leave DSH again.
 
 ## Four-source migration wizard
 
@@ -123,6 +124,9 @@ import_claude { path: "all" }                       # everything
 # Re-run any time: unchanged files are skipped, grown transcripts append only the new turns.
 # Files over maxTranscriptBytes are stream-imported in chunks (no memory ceiling).
 import_claude { path: "...", force: true }          # fresh full copy (previous copy kept)
+
+claude_export { sessionId: "<dsh-session-id>" }     # write a DSH session back to Claude JSONL
+claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }  # explicit target
 ```
 
 Commands (user-triggered, no model turn):
@@ -133,6 +137,7 @@ Commands (user-triggered, no model turn):
 /resume-claude <sessionId>        # by source session id or import-<src> id
 /resume-claude <keyword>          # match titles; multiple matches are listed, never guessed
 /claude-move-reset                # reset the plugin cache (bookmarks + import map); imported sessions are kept
+/claude-export <sessionId> [path] # export a DSH session to a resumable Claude JSONL transcript
 ```
 
 Web panel: a floating migration panel with the project/session tree, status badges (not imported / imported / imported-with-new-turns / source missing / directory missing / git dirty), keyword filter, paged rendering, per-session "Import & continue" + "Open session" + "Refresh session list", batch import with a live progress bar and cancel, and a cache-reset button. Texts follow the browser language (zh/en). Served through the plugin's own `/api/claude-move/*` JSON routes on the public `ctx.webServer` seam.
@@ -178,6 +183,8 @@ All optional, overridable in cordis.yml.
 | `skillsDir` | `$DSH_HOME/skills` | Wizard skill target |
 | `agentsMdPath` | `$DSH_HOME/AGENTS.md` | Wizard memory/instruction target |
 | `moveWorkspaceMode` | `per-source` | `per-source` · `single` workspace grouping for wizard imports |
+| `enableExport` | `true` | Register the `claude_export` tool and `/claude-export` command |
+| `exportDir` | `$DSH_HOME/claude-export` | Default export folder (explicit `path` always wins) |
 
 ## Tools & surfaces
 
@@ -185,10 +192,12 @@ All optional, overridable in cordis.yml.
 |---|---|---|
 | `claude_scan` | tool | Structured index of projects/sessions/memories/skills/settings |
 | `import_claude` | tool | Import one session, a directory, or `all` (incremental, `force` for a fresh copy) |
+| `claude_export` | tool | Export a DSH session to a resumable Claude Code JSONL transcript |
 | `move_detect` / `move_preview` / `move_run` | tools | Four-source wizard: scan, per-item plan with diffs, execute behind approval |
 | `/claude-import-all` | command | Scan → import everything → report |
 | `/resume-claude` | command | Continue a Claude session (latest, id, or keyword) |
 | `/claude-move-reset` | command | Reset the plugin cache (imported sessions kept) |
+| `/claude-export` | command | Export a DSH session to a resumable Claude JSONL transcript |
 | `/move` | command | One-shot four-source wizard |
 | Web migration panel | client | Floating panel with progress, cancel, paging, open session |
 
@@ -196,7 +205,7 @@ All optional, overridable in cordis.yml.
 
 - **Permissions**: the workshop manifest declares `filesystem:read` and `filesystem:write`.
 - **Reads** `~/.claude` (transcripts, memories, skills, `CLAUDE.md`, `settings.json`) — strictly read-only — and the project directories it imports into.
-- **Writes** DSH session logs via the public `sessionPersistence` service (create + append only, never delete/rewrite/archive), workspace-registry records, its cache under `$DSH_HOME/claude-move/`, and the `claudecode` workspace folder.
+- **Writes** DSH session logs via the public `sessionPersistence` service (create + append only, never delete/rewrite/archive), workspace-registry records, its cache under `$DSH_HOME/claude-move/`, the `claudecode` workspace folder, and exported `.jsonl` files under `$DSH_HOME/claude-export/` (or an explicit target path).
 - **Never** modifies Claude source files, touches other applications' data, or accesses the network. **No credentials** are read or transmitted.
 
 ## Security boundaries
@@ -220,7 +229,7 @@ All optional, overridable in cordis.yml.
 
 ## Model Experience
 
-- The model-facing surface is the two tools' descriptions/schemas and their outputs: `claude_scan` returns the structured index, `import_claude` returns per-file summaries with positions of warnings. Tool results are themselves logged `tool/result` events, so everything is reconstructable.
+- The model-facing surface is the tools' descriptions/schemas and their outputs: `claude_scan` returns the structured index, `import_claude` returns per-file summaries with positions of warnings, and `claude_export` returns the export summary (target path + turn/message/tool counts). Tool results are themselves logged `tool/result` events, so everything is reconstructable.
 - No hidden model-facing text; memory/`CLAUDE.md` sections are registered on `ctx.systemPrompt` (prompt assembly, rebuildable from the session log).
 
 ## Troubleshooting

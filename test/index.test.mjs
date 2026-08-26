@@ -4,9 +4,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import path from 'node:path'
-import { apply, runScan, resolveScanTarget, trimIndex, workspaceModeOf, resolveClaudecodeDir, applyWorkspaceCwd, sourceCwdSync, makeClaudeState } from '../index.mjs'
+import { apply, runScan, resolveScanTarget, trimIndex, workspaceModeOf, resolveClaudecodeDir, applyWorkspaceCwd, sourceCwdSync, makeClaudeState, runExport, resolveExportTarget, resolveExportDir } from '../index.mjs'
 import { loadImportsSync, saveImports } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
@@ -49,7 +49,7 @@ function makeCtx(persistedIds) {
 test('apply 注册 claude_scan 工具且输出 schema 为结构化索引', () => {
   const ctx = makeCtx([])
   apply(ctx)
-  assert.deepEqual(ctx.registered.map((d) => d.name), ['claude_scan', 'import_claude', 'move_detect', 'move_preview', 'move_run'])
+  assert.deepEqual(ctx.registered.map((d) => d.name), ['claude_scan', 'import_claude', 'claude_export', 'move_detect', 'move_preview', 'move_run'])
   const def = ctx.registered[0]
   assert.equal(def.name, 'claude_scan')
   assert.ok(def.output.schema.properties.projects)
@@ -325,4 +325,107 @@ test('trimIndex：projectsLimit/sessionsLimit/brief 裁剪（C4）', () => {
   assert.equal(trimmed.projects[0].sessions[0].typeCounts, undefined, 'brief 去掉重型字段')
   assert.deepEqual(trimmed.projects[0].sessions[0].import, { status: 'none' }, '保留导入状态')
   assert.equal(trimIndex(structuredClone(index), {}).projects.length, 2, '默认不裁剪')
+})
+
+// ── 会话回迁导出（F18）────────────────────────────────────────────────────────
+
+/** 手工构造一份含工具调用的 DSH 事件日志（与 convert.mjs 合成形状一致）。 */
+function dshExportEvents() {
+  const events = []
+  let seq = 0
+  const push = (type, data) => events.push({ type, seq: seq++, time: 1000 + seq, data })
+  push('turn/start', { turn: 1 })
+  push('step/start', { turn: 1, step: 1 })
+  push('user/message', { id: 'u1', role: 'user', content: [{ type: 'text', text: '列出文件' }], source: { kind: 'user' } })
+  push('assistant/message', {
+    turn: 1, step: 1,
+    message: {
+      id: 'a1', role: 'assistant',
+      content: [
+        { type: 'text', text: '好的' },
+        { type: 'tool-call', id: 'c1', name: 'Bash', arguments: '{"command":"ls"}' },
+      ],
+      source: { kind: 'model', provider: 'claude-code', model: 'claude-sonnet-4-5' },
+    },
+  })
+  push('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'Bash', arguments: '{"command":"ls"}' })
+  push('tool/result', {
+    turn: 1, step: 1,
+    message: {
+      id: 't1', role: 'user',
+      content: [{ type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: 'a.txt' }], isError: false }],
+      source: { kind: 'tool', callId: 'c1' },
+    },
+  })
+  push('step/end', { turn: 1, step: 1 })
+  push('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  push('session/title', { title: '测试会话', messageSeqs: [], source: { kind: 'user' } })
+  return events
+}
+
+test('resolveExportTarget：缺省落点按 sessionId 清洗文件名，显式路径直接解析', () => {
+  const config = { exportDir: 'D:\\exports' }
+  assert.equal(resolveExportTarget(undefined, 'import-sess-1', config), path.join('D:', 'exports', 'import-sess-1.jsonl'))
+  assert.equal(resolveExportTarget('~\\out\\a.jsonl', 'x', config), path.join(homedir(), 'out', 'a.jsonl'))
+})
+
+test('resolveExportDir：config.exportDir 优先，否则 $DSH_HOME/claude-export', (t) => {
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = path.join('D:', 'dshhome')
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+  assert.equal(resolveExportDir({}), path.join('D:', 'dshhome', 'claude-export'))
+  assert.equal(resolveExportDir({ exportDir: path.join('D:', 'x') }), path.join('D:', 'x'))
+})
+
+test('runExport：读会话日志 → 回迁 Claude JSONL 文件（F18）', async (t) => {
+  const dshHome = await makeTempDir(t)
+  const prev = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prev === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prev })
+
+  const events = dshExportEvents()
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return {
+          readFrom: async (id) => ({
+            meta: { id, cwd: path.join('C:', 'work', 'demo'), createdAt: 0 },
+            events,
+          }),
+        }
+      }
+      return undefined
+    },
+  }
+  const value = await runExport(ctx, {}, { sessionId: 'sess-export-1' })
+  assert.equal(value.sessionId, 'sess-export-1')
+  assert.equal(value.title, '测试会话')
+  assert.equal(value.turns, 1)
+  assert.equal(value.user, 2, '用户提问 + 工具结果各一条')
+  assert.equal(value.assistant, 1)
+  assert.equal(value.toolCalls, 1)
+  assert.equal(value.toolResults, 1)
+  assert.equal(value.path, path.join(dshHome, 'claude-export', 'sess-export-1.jsonl'))
+  const raw = await readFile(value.path, 'utf8')
+  const lines = raw.trim().split('\n')
+  assert.equal(lines.length, value.lines)
+  for (const line of lines) assert.doesNotThrow(() => JSON.parse(line))
+  // custom-title 记录为第一条。
+  assert.equal(JSON.parse(lines[0]).type, 'custom-title')
+})
+
+test('runExport：会话不可读时响亮失败', async () => {
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return { readFrom: async () => { throw new Error('not found') } }
+      }
+      return undefined
+    },
+  }
+  await assert.rejects(() => runExport(ctx, {}, { sessionId: 'missing' }), /不存在或不可读/)
 })

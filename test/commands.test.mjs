@@ -119,10 +119,10 @@ const simpleTranscript = [
   claudeLine('assistant', { message: { content: [{ type: 'text', text: '已修改登录代码。' }] } }),
 ].join('\n') + '\n'
 
-test('apply 注册 claude-import-all / resume-claude / claude-move-reset 命令（及四合一 /move）', () => {
+test('apply 注册 claude-import-all / resume-claude / claude-move-reset / claude-export 命令（及四合一 /move）', () => {
   const { ctx, commandDefs } = makeCtx({})
   apply(ctx)
-  assert.deepEqual(commandDefs.map((d) => d.name), ['claude-import-all', 'resume-claude', 'claude-move-reset', 'move'])
+  assert.deepEqual(commandDefs.map((d) => d.name), ['claude-import-all', 'resume-claude', 'claude-move-reset', 'claude-export', 'move'])
   assert.equal(commandDefs[1].input.hint, 'latest | 会话ID | 标题关键词')
 })
 

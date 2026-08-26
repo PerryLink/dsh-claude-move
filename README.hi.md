@@ -42,7 +42,8 @@
 4. **केवल-कॉपी और वृद्धिशील** — किसी भी तरफ कुछ भी स्थानांतरित, दोबारा लिखा या हटाया नहीं जाता; फिर चलाने पर केवल नए टर्न जोड़े जाते हैं (`force: true` एक नए id के तहत अतिरिक्त पूरी कॉपी सहेजता है)।
 5. **व्यक्तिगत संदर्भ, हमेशा ताज़ा** — यादें लाइव प्रॉम्प्ट अनुभाग के रूप में इंजेक्ट होती हैं, Claude कौशल वास्तविक DSH कौशल के रूप में पंजीकृत होते हैं (वैश्विक + प्रोजेक्ट-स्तर), वैश्विक + प्रोजेक्ट `CLAUDE.md` जल्दी इंजेक्ट होता है।
 6. **चार-स्रोत माइग्रेशन विज़ार्ड** — `/move` और `move_detect` / `move_preview` / `move_run` Claude Code, Codex, OpenCode और Hermes को माइग्रेट करते हैं, अनुमोदन-गेटेड और आइडेम्पोटेंट (`move.json`)।
-7. **वेब पैनल और कमांड** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset`, और एक फ़्लोटिंग माइग्रेशन पैनल।
+7. **वेब पैनल और कमांड** — `/claude-import-all`, `/resume-claude`, `/claude-move-reset`, `/claude-export`, और एक फ़्लोटिंग माइग्रेशन पैनल।
+8. **द्विदिश निर्यात** — `claude_export` (या `/claude-export <sessionId>`) एक DSH सत्र को वापस resumable Claude Code JSONL transcript के रूप में लिखता है (`user`/`assistant`/`tool` टर्न, `thinking` + `tool_use`/`tool_result` जोड़ी, सर्वोत्तम-प्रयास `cwd` मैपिंग), ताकि इतिहास फिर से DSH से बाहर जा सके।
 
 ## चार-स्रोत माइग्रेशन विज़ार्ड
 
@@ -122,6 +123,9 @@ import_claude { path: "all" }                       # सब कुछ
 # कभी भी फिर चलाएँ: अपरिवर्तित फ़ाइलें छोड़ दी जाती हैं, बढ़ी ट्रांसक्रिप्ट केवल नए टर्न जोड़ती हैं।
 # maxTranscriptBytes से बड़ी फ़ाइलें खंडों में स्ट्रीम-आयात होती हैं (कोई मेमोरी सीमा नहीं)।
 import_claude { path: "...", force: true }          # ताज़ा पूरी कॉपी (पिछली कॉपी रखी जाती है)
+
+claude_export { sessionId: "<dsh-session-id>" }     # DSH सत्र को वापस Claude JSONL में लिखें
+claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }  # स्पष्ट लक्ष्य
 ```
 
 कमांड (उपयोगकर्ता-ट्रिगर, कोई मॉडल टर्न नहीं):
@@ -132,6 +136,7 @@ import_claude { path: "...", force: true }          # ताज़ा पूर�
 /resume-claude <sessionId>        # स्रोत सत्र id या import-<src> id से
 /resume-claude <keyword>          # शीर्षक मिलाएँ; कई मिलान सूचीबद्ध होते हैं, कभी अनुमान नहीं
 /claude-move-reset                # प्लगइन कैश रीसेट करें (बुकमार्क + आयात मैप); आयातित सत्र बने रहते हैं
+/claude-export <sessionId> [path] # DSH सत्र को resumable Claude JSONL transcript में निर्यात करें
 ```
 
 वेब पैनल: प्रोजेक्ट/सत्र ट्री, स्थिति बैज (आयातित नहीं / आयातित / नए-टर्न-सहित-आयातित / स्रोत अनुपस्थित / निर्देशिका अनुपस्थित / git गंदा), कीवर्ड फ़िल्टर, पृष्ठांकित रेंडरिंग, प्रति-सत्र "आयात करें और जारी रखें" + "सत्र खोलें" + "सत्र सूची रीफ़्रेश करें", लाइव प्रगति पट्टी और रद्द के साथ बैच आयात, और एक कैश-रीसेट बटन वाला फ़्लोटिंग माइग्रेशन पैनल। पाठ ब्राउज़र भाषा (zh/en) का अनुसरण करते हैं। सार्वजनिक `ctx.webServer` सीम पर प्लगइन के अपने `/api/claude-move/*` JSON मार्गों से परोसा जाता है।
@@ -177,6 +182,8 @@ import_claude { path: "...", force: true }          # ताज़ा पूर�
 | `skillsDir` | `$DSH_HOME/skills` | विज़ार्ड कौशल लक्ष्य |
 | `agentsMdPath` | `$DSH_HOME/AGENTS.md` | विज़ार्ड याद/निर्देश लक्ष्य |
 | `moveWorkspaceMode` | `per-source` | विज़ार्ड आयात के लिए workspace समूहन: `per-source` · `single` |
+| `enableExport` | `true` | `claude_export` टूल और `/claude-export` कमांड पंजीकृत करें |
+| `exportDir` | `$DSH_HOME/claude-export` | डिफ़ॉल्ट निर्यात फ़ोल्डर (स्पष्ट `path` हमेशा प्राथमिकता) |
 
 ## उपकरण और सतहें
 
@@ -184,10 +191,12 @@ import_claude { path: "...", force: true }          # ताज़ा पूर�
 |---|---|---|
 | `claude_scan` | टूल | प्रोजेक्ट/सत्र/याद/कौशल/सेटिंग का संरचित इंडेक्स |
 | `import_claude` | टूल | एक सत्र, निर्देशिका या `all` आयात करें (वृद्धिशील; `force` से नई कॉपी) |
+| `claude_export` | टूल | DSH सत्र को resumable Claude Code JSONL transcript में निर्यात करें |
 | `move_detect` / `move_preview` / `move_run` | टूल | चार-स्रोत विज़ार्ड: स्कैन, diff सहित प्रति-आइटम योजना, अनुमोदन के बाद निष्पादन |
 | `/claude-import-all` | कमांड | स्कैन → सब आयात → रिपोर्ट |
 | `/resume-claude` | कमांड | Claude सत्र जारी करें (latest, id या कीवर्ड) |
 | `/claude-move-reset` | कमांड | प्लगइन कैश रीसेट करें (आयातित सत्र बने रहते हैं) |
+| `/claude-export` | कमांड | DSH सत्र को resumable Claude JSONL transcript में निर्यात करें |
 | `/move` | कमांड | एक-चरण चार-स्रोत विज़ार्ड |
 | वेब माइग्रेशन पैनल | क्लाइंट | प्रगति, रद्द, पेजिंग, सत्र खोलें वाला फ़्लोटिंग पैनल |
 
