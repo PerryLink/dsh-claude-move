@@ -1,6 +1,7 @@
 <div align="center">
 
 # 🚚 dsh-claude-move
+- **1024 商店渠道**：先 `npm i -g dsh1024`，再 `dsh1024 plugin --profile web add dsh-claude-move`（计入 [deepseek1024.com](https://deepseek1024.com) 安装排行）。
 
 **将 Claude Code、Codex、OpenCode 和 Hermes 迁移到 DeepSeek Harness —— 将会话、记忆、技能、指令和斜杠命令复制为可续聊的 DSH 会话，只复制、审批门控。**
 
