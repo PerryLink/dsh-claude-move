@@ -18,7 +18,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { CallId } from '@deepseek-ai/dsh-llm'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
@@ -130,6 +129,9 @@ try {
 
   // Real behavior: claude_scan through the real tools registry over an empty
   // temp dir (no source data → empty index, deterministic).
+  // Dual-ruler call id: host master renamed dsh-llm's `CallId` brand to
+  // `ToolCallId`; a local identity keeps the runner green on both rulers.
+  const CallId = (id) => id
   const result = await ctx.tools.execute({
     callId: CallId('dsh-claude-move-loader-runner'),
     name: 'claude_scan',

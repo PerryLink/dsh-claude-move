@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `scripts/loader-runner.mjs` 不再从 `@deepseek-ai/dsh-llm` 导入 `CallId` 品牌（宿主 master 已更名 `ToolCallId`）：改用本地恒等工厂，双基线（已发布 rc 线与 0.1.2-alpha.1 checkout）均可运行。
+
 ## [0.3.0] - 2026-08-26
 
 ### Added
