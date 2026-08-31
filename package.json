@@ -1,6 +1,6 @@
 {
   "name": "dsh-claude-move",
-  "description": "Four-source migration wizard: copy Claude Code, Codex, OpenCode and Hermes sessions, memories, skills, instructions and slash commands into DeepSeek Harness as resumable sessions 鈥?copy-only, approval-gated, idempotent",
+  "description": "Four-source migration wizard: copy Claude Code, Codex, OpenCode and Hermes sessions, memories, skills, instructions and slash commands into DeepSeek Harness as resumable sessions — copy-only, approval-gated, idempotent",
   "version": "0.3.1",
   "type": "module",
   "main": "./index.mjs",
