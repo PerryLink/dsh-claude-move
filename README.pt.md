@@ -24,6 +24,7 @@
 ## Compatibilidade
 
 - Direcionado a `dsh 0.1.1-rc.2` (perfil web); dependências peer exigem `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
+0.1.2-alpha.2 (adaptado em 2026-08-31): o envelope de sessão mantém seu campo ignorable apenas para compatibilidade de leitura de logs armazenados - o Session.append ainda não consegue estampá-lo, então o comportamento da porta não muda.
 - Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI.
 
 ### Matriz de compatibilidade (somente costuras públicas)
