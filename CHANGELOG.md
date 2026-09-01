@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Upgrade the `@deepseek-ai/dsh-*` dev dependencies from `0.1.2-alpha.2` to `0.1.2-alpha.3` (peer ranges stay `>=0.1.0-rc.8 <0.2.0`), align the `@deepseek-ai/cordis` / `@deepseek-ai/schemastery` carets to `^4.0.2` / `^3.18.2`, refresh `dshWorkshop.compatibility.dshVersions` and the five-language README compatibility notes to `0.1.2-alpha.3`, and regenerate `package-lock.json` / `pnpm-lock.yaml`.
+
 ## [0.3.1] - 2026-08-30
 
 ### Fixed

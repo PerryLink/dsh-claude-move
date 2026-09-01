@@ -23,8 +23,8 @@
 
 ## Compatibilidad
 
-- Dirigido a `dsh 0.1.1-rc.2` (perfil web); las dependencias peer requieren `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
-0.1.2-alpha.2 (adaptado el 2026-08-31): el sobre de sesión conserva su campo ignorable solo para compatibilidad de lectura de logs almacenados - Session.append aún no puede estamparlo, por lo que el comportamiento de la puerta no cambia.
+- Dirigido a `dsh 0.1.2-alpha.3` (perfil web); las dependencias peer requieren `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
+0.1.2-alpha.3 (adaptado el 2026-09-01): el sobre de sesión conserva su campo ignorable solo para compatibilidad de lectura de logs almacenados - Session.append aún no puede estamparlo, por lo que el comportamiento de la puerta no cambia.
 - Última verificación con una instalación nueva desde tarball: escaneo real, importación por lotes real (reimportación idempotente), adjuntado al workspace y artefactos de persistencia confirmados; macOS/Linux cubiertos por la matriz de CI.
 
 ### Matriz de compatibilidad (solo costuras públicas)
