@@ -24,8 +24,8 @@
 
 ## Compatibility
 
-- Targets `dsh 0.1.2-alpha.3` (web profile); peer dependencies require `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
-0.1.2-alpha.3 (adapted 2026-09-01): the session envelope keeps its ignorable field for stored-log read compatibility only - Session.append still cannot stamp it, so audit-gate behavior is unchanged.
+- Targets `dsh 0.1.2-alpha.5` (web profile); peer dependencies require `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
+0.1.2-alpha.5 (adapted 2026-09-02): the session envelope keeps its ignorable field for stored-log read compatibility only - Session.append still cannot stamp it, so audit-gate behavior is unchanged.
 - Last verified against a fresh tarball install: real scan, real batch import (idempotent re-import), workspace attach and persistence artifacts confirmed; macOS/Linux covered by the CI matrix.
 
 ### Compatibility matrix (public seams only)
