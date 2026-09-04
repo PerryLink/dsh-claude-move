@@ -50,6 +50,7 @@ npm test      # node --test 跑 test/*.test.mjs
 - **只消费 host 公开服务**：`tools`、`sessionPersistence`、`workspaceRegistry`、`commands`、`systemPrompt`、`skills`、`webServer`。不发布新服务（除非确有必要并在 PR 说明）。
 - **插件，不是引擎改动**：不修改 DSH 引擎 / apiproxy / 官方 UI 包。
 - **会话日志 append-only**：只 `create` + `append`，绝不改写历史事件；强制重导入 = 新 id 完整副本（复制式），绝不 archive/删除/隐藏任何会话。
+- **sessionPersistence 双基线（0.4.0 起）**：index.mjs 内置运行时 shim，按 API 形状探测（create 返回值 / 服务成员 / list 元素），绝不按版本号猜测。handle 基线（仅存在于未发布 checkout master/0.1.3-alpha.1，bec6805d6a）上每次 append 后必须 `flush()`（耐久屏障）并成对 `close()`（单写所有权，失败路径 finally 释放），create 前 header 盖上后端当前格式版本（后端自报 generationFormat.currentVersion / 宿主 `@deepseek-ai/dsh-session` 惰性导入，绝无硬编码）并显式补 `isSeeded:false`，缺 model 的 assistant source 回退 provider；已发布旧 API（≤0.1.2-rc.1）路径与 0.3.x 逐字节一致。handle 路径只能对照本地 checkout 验证（dev/checkout-handle.mjs，不提交）；compat workflow 只覆盖已发布线。annotateImports 的 cleanStale 只允许在「已持久化 id 集合完整可解析」时执行——列表元素解析不出 header.id 必须响亮抛出，绝不静默清空 imports.json。
 - **模型可见 ⟺ 落盘**：进入模型上下文的任何内容必须能从会话日志重建。
 - **源文件只读**：绝不写入 Claude 数据目录；缓存只写 `$DSH_HOME/claude-move/`。
 - **systemPrompt 提供者必须同步**（rc.6 不 await）：用 readFileSync + mtime 缓存。

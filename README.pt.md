@@ -25,6 +25,7 @@
 
 - Direcionado a `dsh 0.1.2-alpha.5` (perfil web); dependências peer exigem `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
 0.1.2-alpha.5 (adaptado em 2026-09-02): o envelope de sessão mantém seu campo ignorable apenas para compatibilidade de leitura de logs armazenados - o Session.append ainda não consegue estampá-lo, então o comportamento da porta não muda.
+- A 0.4.0 inclui um shim de linha de base dupla para `sessionPersistence` em tempo de execução, detectado pela forma da API (nunca pela versão): funcionam tanto a API legada publicada (`create`/`append`/`readFrom`, `list()` retornando cabeçalhos) quanto a costura de handle do checkout ainda não publicado (`create` retornando um `SessionHandle`, `list()`/`stat()` retornando snapshots). No caminho handle, todo append é seguido de `flush()` (barreira de durabilidade) e um `close()` pareado (propriedade de escritor único); os cabeçalhos são carimbados com a versão de formato atual do backend e um `isSeeded` explícito, e fontes de modelo de assistente ausentes caem para o provider — verificado contra o backend real 0.1.3-alpha.1 do checkout. A limpeza da varredura de importação se recusa a executar quando o `header.id` de um elemento listado não pode ser resolvido, então `imports.json` nunca é esvaziado silenciosamente. Nenhuma versão publicada tem a costura de handle, então o caminho handle só é verificado contra um checkout local (o fluxo de compatibilidade cobre a linha publicada).
 - Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI.
 
 ### Matriz de compatibilidade (somente costuras públicas)
@@ -32,7 +33,8 @@
 | Superfície | Uso | Fallback quando ausente |
 |---|---|---|
 | Serviços de host (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | obrigatório onde listado | serviços opcionais registram reativamente; `fs` ausente falha em voz alta |
-| `sessionPersistence.listSnapshots` / `readFrom` / `fs` com capacidade `streamText` / `ctx.jobs` / `ctx.agents.resume` | detectado por recurso | `list()` / leitura de arquivo inteiro com rejeição em voz alta / mapa de jobs próprio / injeção de handoff |
+| `sessionPersistence` linha de base dupla: legada `listSnapshots` / `readFrom` / `append` versus handle `open` / `stat` / `list()` de snapshots | detectado por recurso em tempo de execução (forma da API, nunca versão) | a guarda de resolução de `header.id` aborta a varredura em voz alta em vez de esvaziar `imports.json` silenciosamente |
+| `fs` com capacidade `streamText` / `ctx.jobs` / `ctx.agents.resume` | detectado por recurso | leitura de arquivo inteiro com rejeição em voz alta / mapa de jobs próprio / injeção de handoff |
 | Serviços de shell do cliente (`sessions.refresh/open`, `workspaces.refresh`) | detectado por recurso ao aplicar o painel | recarga completa da página |
 | Capacidades de plataforma mais novas nunca são requisitos rígidos — o plugin continua inicializável no rc.8. | | |
 

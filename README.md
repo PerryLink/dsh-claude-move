@@ -26,6 +26,7 @@
 
 - Targets `dsh 0.1.2-alpha.5` (web profile); peer dependencies require `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
 0.1.2-alpha.5 (adapted 2026-09-02): the session envelope keeps its ignorable field for stored-log read compatibility only - Session.append still cannot stamp it, so audit-gate behavior is unchanged.
+- 0.4.0 ships a dual-baseline `sessionPersistence` runtime shim, feature-detected by API shape (never by version): the published legacy API (`create`/`append`/`readFrom`, `list()` returning headers) and the unreleased checkout handle seam (`create` returning a `SessionHandle`, `list()`/`stat()` returning snapshots) both work. On the handle path every append is followed by `flush()` (durability barrier) and a paired `close()` (single-writer ownership); headers are stamped with the backend's current format version plus an explicit `isSeeded`, and missing assistant model sources fall back to the provider — checkout-verified against the real 0.1.3-alpha.1 backend. Import-scan cleanup refuses to run when a listed element's `header.id` cannot be resolved, so `imports.json` is never silently cleared. No published version carries the handle seam, so the handle path is verified against a local checkout only (the compat workflow covers the published line).
 - Last verified against a fresh tarball install: real scan, real batch import (idempotent re-import), workspace attach and persistence artifacts confirmed; macOS/Linux covered by the CI matrix.
 
 ### Compatibility matrix (public seams only)
@@ -33,7 +34,8 @@
 | Surface | Used | Fallback when absent |
 |---|---|---|
 | Host services (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | required where listed | optional services register reactively; missing `fs` fails loud |
-| `sessionPersistence.listSnapshots` / `readFrom` / `streamText`-capable `fs` / `ctx.jobs` / `ctx.agents.resume` | feature-detected | `list()` / whole-file read with loud rejection / own job map / handoff inject |
+| `sessionPersistence` dual baseline: legacy `listSnapshots` / `readFrom` / `append` vs handle `open` / `stat` / snapshot `list()` | feature-detected at runtime (API shape, never version) | the `header.id` resolution guard aborts the scan loudly instead of silently clearing `imports.json` |
+| `streamText`-capable `fs` / `ctx.jobs` / `ctx.agents.resume` | feature-detected | whole-file read with loud rejection / own job map / handoff inject |
 | Client shell services (`sessions.refresh/open`, `workspaces.refresh`) | feature-detected at panel apply | full-page reload |
 | Newer platform capabilities are never hard requirements — the plugin stays bootable on rc.8. | | |
 

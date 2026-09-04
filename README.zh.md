@@ -25,6 +25,7 @@
 
 - 面向 `dsh 0.1.2-alpha.5`（web profile）；peer 依赖要求 `>=0.1.0-rc.8 <0.2.0`。Node `^22.19 || >=24`。
 0.1.2-alpha.5（2026-09-02 已适配）：会话信封保留 ignorable 字段但仅用于存量日志读取兼容——Session.append 仍无法盖章，门控行为不变。
+- 0.4.0 内置 `sessionPersistence` 双基线运行时 shim，按 API 形状特性探测（绝不按版本号猜测）：已发布旧 API（`create`/`append`/`readFrom`，`list()` 返回会话头）与未发布 checkout 的 handle seam（`create` 返回 `SessionHandle`，`list()`/`stat()` 返回快照）都能工作。handle 路径上每次 append 之后必须 `flush()`（耐久屏障）并成对 `close()`（单写所有权）；header 盖上后端当前格式版本并显式补 `isSeeded`，缺失的 assistant model 来源回退 provider——已对照真实 0.1.3-alpha.1 后端做 checkout 实测。导入扫描的清理在列表元素的 `header.id` 无法解析时拒绝执行，绝不静默清空 `imports.json`。任何已发布版本都没有 handle seam，因此 handle 路径只能对照本地 checkout 验证（compat workflow 覆盖已发布线）。
 - 最近针对全新 tarball 安装验证：真实扫描、真实批量导入（幂等重导入）、工作区挂载与持久化产物均已确认；macOS/Linux 由 CI 矩阵覆盖。
 
 ### 兼容性矩阵（仅公开接缝）
@@ -32,7 +33,8 @@
 | 接缝 | 使用 | 缺失时的回退 |
 |---|---|---|
 | Host 服务（`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`） | 所列之处必需 | 可选服务响应式注册；缺失 `fs` 大声失败 |
-| `sessionPersistence.listSnapshots` / `readFrom` / 支持 `streamText` 的 `fs` / `ctx.jobs` / `ctx.agents.resume` | 特性探测 | `list()` / 整文件读取并大声拒绝 / 自有 job map / 交接注入 |
+| `sessionPersistence` 双基线：旧 API（`listSnapshots` / `readFrom` / `append`）或 handle（`open` / `stat`、快照 `list()`） | 运行时按 API 形状特性探测 | `header.id` 解析守卫：解析失败大声中止扫描，绝不静默清空 `imports.json` |
+| 支持 `streamText` 的 `fs` / `ctx.jobs` / `ctx.agents.resume` | 特性探测 | 整文件读取并大声拒绝 / 自有 job map / 交接注入 |
 | Client shell 服务（`sessions.refresh/open`、`workspaces.refresh`） | 面板 apply 时特性探测 | 整页刷新 |
 | 较新的平台能力从不是硬性要求 —— 插件在 rc.8 上始终保持可启动。 | | |
 

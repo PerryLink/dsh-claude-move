@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.0] - 2026-09-04
+
+### Added
+
+- Dual-baseline `sessionPersistence` runtime shim in `index.mjs` (feature-detected by API shape, never by version): the published legacy API (`create`/`append`/`readFrom`, `list()` returning headers) and the unreleased checkout handle seam (`create` returning a `SessionHandle`, `list()`/`stat()` returning snapshots) both work. On the handle path every append is followed by `flush()` (durability barrier) and a paired `close()` (single-writer ownership, released in `finally` on failure); headers are stamped with the backend's current format version (backend-declared `generationFormat.currentVersion`, falling back to a lazy `@deepseek-ai/dsh-session` `SESSION_FORMAT_VERSION` import — never hardcoded) plus an explicit `isSeeded: false`, and missing assistant model sources fall back to the provider string (the checkout backend refuses to read v-mismatched headers or empty model sources — found and fixed by checkout round-trip verification). The legacy path keeps the exact 0.3.x call sequence with no normalization. `lib/` is untouched.
+- Guard against silently clearing `imports.json`: `annotateImports` now resolves `header.id` from both header and snapshot list elements, and throws loudly (skipping `cleanStale`) when an element cannot be resolved — on the handle baseline the old code read `header.id` as `undefined` and `cleanStale` would have wiped every mapping.
+- Dual test suites: a handle-shape `sessionPersistence` mock (create→handle with `read`/`append`/`flush`/`close`, `open(id, access)`, snapshot `list()`) covering the full import/incremental/force/streamed/export flows, paired close (no handle leaks), single-writer conflict loud failures, flush ordering, and header/model normalization; plus legacy-shape regression tests for the mis-clear mapping guard.
+
+### Changed
+
+- `compat.yml` profile pins moved from `0.1.1-rc.2` to `0.1.2-rc.1`, with a workflow note that no published version carries the handle seam, so the handle path can only be verified against a local checkout.
+
+### Notes
+
+- No data-format changes: `index.json`/`imports.json`/`move.json` caches and imported session logs stay interoperable; no re-import needed; the Config schema is unchanged.
+
 ## [0.3.3] - 2026-09-02
 
 ### Changed

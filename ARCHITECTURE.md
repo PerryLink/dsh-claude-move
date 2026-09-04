@@ -82,10 +82,13 @@ flowchart LR
 11. **claudecode 工作区（默认，E2）**：`workspaceRegistry.attachSession` 要求 `realpath(header.cwd)` 与工作区路径严格相等，因此默认 `workspaceMode: 'claudecode'` 把全部导入会话的 cwd 覆写为独立目录 `claudecodeDir`（默认 `$DSH_HOME/claudecode`，插件在该目录下 `mkdir`——迁移唯一的有意写入），全部会话挂到标题「claudecode」的单一工作区；`workspaceMode: 'per-project'` 恢复按源项目 cwd 各建工作区的旧行为。源项目 cwd 保真记录进 imports.json 的 `sourceCwd`，memory/CLAUDE.md 注入按 `imports.json → index.json` 同步找回（`sourceCwdSync`，mtime 缓存），续聊交接摘要显式标注源项目目录。
 12. **工具调用平衡修复（issue#1）**：OpenAI 兼容协议要求助手消息里每个 tool_call_id 恰好跟一条 tool 消息。合成期保证：每个声明的 tool/call 恰好一条 tool/result（真实结果去重取首条、被中断的调用补合成错误结果、孤儿结果丢弃），`validateSessionEvents` 自校验 + 测试钉住该不变式；否则导入会话续聊会永久 400。
 13. **技能候选硬性契约（issue#1）**：DSH 技能系统对空 description 直接抛错并使技能目录整体加载失败。技能发现排除 README.md/MEMORY.md，缺失或空白 name/description 的技能文件跳过（与官方 skill-filesystem 的 warn+ignore 一致），绝不产出非法候选。
+14. **sessionPersistence 双基线运行时 shim（0.4.0）**：宿主 master（0.1.3-alpha.1，bec6805d6a refactor）把 sessionPersistence handle 化（create→SessionHandle、服务级 append/readFrom/locate/listSnapshots 移除、list()/stat() 返回快照），但该 seam 不在任何已发布版本；已发布线（≤0.1.2-rc.1）仍是旧 API。index.mjs 内按 API 形状探测（create 返回值是否含 read/append/flush/close、服务是否含 open、list 元素带 header 还是 id），绝不按版本号猜测：handle 路径 append 后必须 `flush()`（耐久屏障）并成对 `close()`（单写所有权，失败路径 finally 释放）；旧路径调用序列与 0.3.x 逐字节一致。lib/ 保持零 DSH 依赖、零改动。handle 路径只能对照本地 checkout 验证（dev/checkout-handle.mjs，不提交），compat workflow 只覆盖已发布旧 API 线。
+15. **handle 基线 header/事件规范化（0.4.0 checkout 实测）**：checkout 后端给所有产物盖当前格式版本文件名并要求 header.version 等于后端当前 SESSION_FORMAT_VERSION（读回时文件名/头部版本不一致即响亮拒绝）、isSeeded 显式给出（序列化丢弃 undefined）；读取还按当前格式语义校验 assistant/message 的 model source 必须是非空字符串。shim 在 handle 路径 create 前盖版本（来源：后端实例自报的 generationFormat.currentVersion，回退宿主 `@deepseek-ai/dsh-session` 的 SESSION_FORMAT_VERSION 惰性导入——绝无硬编码）并补 isSeeded:false，缺 model 的 assistant source 回退 provider 字符串；旧路径 header/事件不做任何规范化。
+16. **imports.json 误清空守卫（0.4.0）**：annotateImports 的 cleanStale 依赖「已持久化 id 集合」完整可解析——旧代码在 handle 基线上会把快照对象当 SessionHeader 读 id（undefined），令全部映射被误判为失效并清空。现在任何列表元素解析不出 header.id 即响亮抛出（StoredSessionIdResolutionError）并中止扫描，cleanStale 结构性跳过；id 集合只接受完整解析的结果。
 
 ## 兼容与验证
 
-- 目标：`dsh 0.1.0-rc.6`（web profile）；peerDeps 显式锁 rc.6；纯 ESM 无构建（git/npm/tarball 三种安装均免 `prepare`/`allowBuilds`）。
+- 目标：`dsh 0.1.2-alpha.5`（web profile，= 已发布 rc.1 源码线）；peerDeps 范围 `>=0.1.0-rc.8 <0.2.0`；纯 ESM 无构建（git/npm/tarball 三种安装均免 `prepare`/`allowBuilds`）。
 - 已验证（本机真实数据 + 隔离 DSH_HOME）：`--dump-config` 行生效、web 启动无 FAILED、`__DSH_BOOT__` 客户端条目、`client.js` 伺服、index 路由扫描 40 项目/2387 会话、批量导入 13/13（同源 id 冲突后缀避让）、重导入 13/13 幂等、`workspace.attached=true`、会话产物落盘、重扫标注 `imported`。
-- 已对当前 harness checkout 重新验证（隔离 DSH_HOME，真实 JSONL+zstd 后端 + workspaceRegistry + 完整 web 启动）：全量导入、claudecode 工作区挂接、增量续写（seq 连续、load 正常）、重启后幂等、既有会话全程不受影响。
+- 0.4.0 双基线：旧 API 线由 mock ctx 回归套件（legacy 形状 create/append/readFrom/list）与 compat workflow（已发布 0.1.2-rc.1 peers）覆盖；handle 线由 test/persistence-handle.test.mjs（handle 形状 mock：close 泄漏、单写冲突、flush 顺序、误清空守卫）+ dev/checkout-handle.mjs 覆盖——后者以隔离 DSH_HOME 直接驱动宿主 checkout（0.1.3-alpha.1）真实 session-persistence-jsonl 后端（只读导入，绝不写入 checkout），验证 create→append→flush→close、list() 快照标注、增量续写与回迁导出。
 - 待有 API key 的机器验收：导入后「点开续聊」的模型回合（详见 RELEASE.md 验收清单）。

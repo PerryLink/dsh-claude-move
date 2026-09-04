@@ -25,6 +25,7 @@
 
 - Dirigido a `dsh 0.1.2-alpha.5` (perfil web); las dependencias peer requieren `>=0.1.0-rc.8 <0.2.0`. Node `^22.19 || >=24`.
 0.1.2-alpha.5 (adaptado el 2026-09-02): el sobre de sesión conserva su campo ignorable solo para compatibilidad de lectura de logs almacenados - Session.append aún no puede estamparlo, por lo que el comportamiento de la puerta no cambia.
+- 0.4.0 incluye un shim de doble línea base para `sessionPersistence` en tiempo de ejecución, detectado por la forma de la API (nunca por versión): funcionan tanto la API heredada publicada (`create`/`append`/`readFrom`, `list()` devolviendo cabeceras) como la costura de handle del checkout aún no publicado (`create` devolviendo un `SessionHandle`, `list()`/`stat()` devolviendo instantáneas). En la ruta handle, cada append va seguido de `flush()` (barrera de durabilidad) y un `close()` emparejado (propiedad de escritor único); las cabeceras se sellan con la versión de formato actual del backend y un `isSeeded` explícito, y las fuentes de modelo de asistente ausentes caen al provider — verificado contra el backend real 0.1.3-alpha.1 del checkout. La limpieza del escaneo de importación se niega a ejecutarse cuando el `header.id` de un elemento listado no se puede resolver, por lo que `imports.json` nunca se vacía en silencio. Ninguna versión publicada lleva la costura de handle, así que la ruta handle solo se verifica contra un checkout local (el workflow de compatibilidad cubre la línea publicada).
 - Última verificación con una instalación nueva desde tarball: escaneo real, importación por lotes real (reimportación idempotente), adjuntado al workspace y artefactos de persistencia confirmados; macOS/Linux cubiertos por la matriz de CI.
 
 ### Matriz de compatibilidad (solo costuras públicas)
@@ -32,7 +33,8 @@
 | Superficie | Uso | Respaldo cuando falta |
 |---|---|---|
 | Servicios de host (`tools` / `sessionPersistence` / `workspaceRegistry` / `commands` / `systemPrompt` / `skills` / `webServer`) | obligatorio donde se indica | los servicios opcionales se registran reactivamente; la falta de `fs` falla en voz alta |
-| `sessionPersistence.listSnapshots` / `readFrom` / `fs` con capacidad `streamText` / `ctx.jobs` / `ctx.agents.resume` | detectado por característica | `list()` / lectura de archivo completo con rechazo en voz alta / mapa de jobs propio / inyección de traspaso |
+| `sessionPersistence` doble línea base: heredada `listSnapshots` / `readFrom` / `append` frente a handle `open` / `stat` / `list()` de instantáneas | detectado por característica en tiempo de ejecución (forma de API, nunca versión) | la guarda de resolución de `header.id` aborta el escaneo en voz alta en vez de vaciar `imports.json` en silencio |
+| `fs` con capacidad `streamText` / `ctx.jobs` / `ctx.agents.resume` | detectado por característica | lectura de archivo completo con rechazo en voz alta / mapa de jobs propio / inyección de traspaso |
 | Servicios de shell del cliente (`sessions.refresh/open`, `workspaces.refresh`) | detectado por característica al aplicar el panel | recarga completa de la página |
 | Las capacidades de plataforma más nuevas nunca son requisitos estrictos — el plugin sigue arrancando en rc.8. | | |
 
