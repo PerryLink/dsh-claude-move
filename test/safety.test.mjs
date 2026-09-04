@@ -71,8 +71,9 @@ test('安全审计：发布面只允许白名单内的写入/删除操作', () =
 
 test('安全审计：源 Claude 数据目录从不被写入（写入只经 sessionPersistence 服务与缓存目录）', () => {
   const index = readShipped('index.mjs')
-  // 落盘只有 create+append（服务调用），没有直接文件写入。
-  assert.match(index, /sp\.create\(meta\)/)
+  // 落盘只有 create+append（服务调用），没有直接文件写入；handle 基线经
+  // normalizeHandleHeader 规范化后仍只把 header 交给 create。
+  assert.match(index, /sp\.create\(header\)/)
   assert.match(index, /sp\.append\(/)
   const discovery = readShipped('lib/discovery.mjs')
   // 缓存写入集中在 resolveCacheDir 返回的目录，且只写 index/imports 两个 JSON。

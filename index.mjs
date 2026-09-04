@@ -10,6 +10,8 @@
 //
 // 只消费公开服务：tools / systemPrompt / skills / sessionPersistence /
 // workspaceRegistry / commands / webServer / approval（后几者经 ctx.get 可选读取）。
+// sessionPersistence 走 0.4.0 双基线运行时 shim（handle 基线 / 旧 API，见下方
+// "双基线运行时 shim" 段），任何已发布 dsh 与 checkout HEAD 均可工作。
 // 源文件只读，缓存只写 resolveCacheDir()；迁移落点只写 $DSH_HOME/skills、
 // $DSH_HOME/AGENTS.md 与 imports 工作区目录。
 
@@ -62,6 +64,205 @@ import { mergeDetections } from './lib/sources/contract.mjs'
 export const name = 'claude-move'
 
 export const inject = ['tools']
+
+// ── sessionPersistence 双基线运行时 shim（0.4.0）──────────────────────────────
+//
+// 宿主 master（0.1.3-alpha.1，bec6805d6a refactor）把 sessionPersistence 改成
+// handle 化：create 返回 SessionHandle（read/append/flush/close；close 释放
+// 单写所有权），服务级 append/readFrom/locate/listSnapshots 移除，list()/stat()
+// 返回快照对象（{ header, revision, eventCount?, sizeBytes? }）。任何已发布
+// 版本（≤0.1.2-rc.1）都没有该 seam，仍是旧 API：create 返回 void、服务级
+// append/readFrom、list() 返回 SessionHeader、listSnapshots 返回 { header }。
+// 两个基线一律按运行时 API 形状探测（create 返回值 / 服务成员 / list 元素），
+// 绝不按版本号猜测。handle 路径上每次 append 后必须 flush()（耐久屏障）并
+// 成对 close()（单写所有权），header/事件经 normalizeHandleHeader /
+// normalizeHandleEvents 规范化到后端当前格式（checkout 实测：版本戳与
+// isSeeded 缺一不可，model source 必须非空）；旧路径的调用序列与 0.3.x
+// 逐字节一致，不做任何规范化。
+
+const persistenceShapeCache = new WeakMap()
+
+/** create 返回值是否 SessionHandle（handle 基线的最权威判定）。 */
+function isSessionHandle(value) {
+  return value !== null && typeof value === 'object'
+    && typeof value.read === 'function'
+    && typeof value.append === 'function'
+    && typeof value.flush === 'function'
+    && typeof value.close === 'function'
+}
+
+/**
+ * 探测服务基线（API 形状，非版本号）：有 open（旧 API 无）→ handle；
+ * 有 readFrom/append（handle 化后均无）→ legacy；其余未知。create 实测结果
+ * 可经 notePersistenceShape 覆写缓存。
+ * @param sp - sessionPersistence 服务。
+ * @returns 'handle' | 'legacy' | null。
+ */
+function detectPersistenceShape(sp) {
+  if (!sp) return null
+  const cached = persistenceShapeCache.get(sp)
+  if (cached !== undefined) return cached
+  if (typeof sp.open === 'function') return 'handle'
+  if (typeof sp.readFrom === 'function' || typeof sp.append === 'function') return 'legacy'
+  return null
+}
+
+/** 记录实测基线（create 返回值判定优先，供后续 append/read 调用复用）。 */
+function notePersistenceShape(sp, shape) {
+  if (sp && (shape === 'handle' || shape === 'legacy')) persistenceShapeCache.set(sp, shape)
+}
+
+/** 列表元素无法解析 header.id 的哨兵错误：annotateImports 用它响亮失败并跳过清理。 */
+class StoredSessionIdResolutionError extends Error {}
+
+/**
+ * 从 list()/listSnapshots() 元素解析存储会话 id：handle 基线的快照对象取
+ * header.id，旧基线的 SessionHeader 取 id。两者都解析不出 → null。
+ * @param element - 列表元素。
+ * @returns 会话 id 或 null。
+ */
+function storedSessionIdOf(element) {
+  if (element !== null && typeof element === 'object') {
+    if (element.header !== null && typeof element.header === 'object'
+      && typeof element.header.id === 'string' && element.header.id.length > 0) {
+      return element.header.id
+    }
+    if (typeof element.id === 'string' && element.id.length > 0) return element.id
+  }
+  return null
+}
+
+/**
+ * 列表元素序列 → id 数组。任一元素无法解析 header.id 即响亮抛出——这是
+ * cleanStale 误清空防线：id 集合必须完整可解析，绝不允许把 undefined 塞进
+ * 集合让「映射指向已不存在会话」全量误判。
+ * @param elements - list()/listSnapshots() 返回的元素序列。
+ * @returns id 数组。
+ */
+function idsOfListedElements(elements) {
+  return elements.map((element) => {
+    const id = storedSessionIdOf(element)
+    if (id === null) {
+      throw new StoredSessionIdResolutionError(
+        'sessionPersistence 列表元素无法解析 header.id（既非 SessionHeader 也非快照对象）：'
+        + 'claude-move 拒绝继续，防止 imports.json 导入映射被误清空')
+    }
+    return id
+  })
+}
+
+/**
+ * 读一份已存储会话的完整事件与头（双基线）：handle 路径 open(id, 'read') →
+ * read(0) → close（读句柄绝不持有写所有权）；旧路径 readFrom(id, 0)。
+ * 基线无法判定返回 null；会话不存在时抛出后端错误。
+ * @param sp - sessionPersistence 服务。
+ * @param id - 会话 id。
+ * @returns `{ meta, events }` 或 null。
+ */
+async function readStoredEvents(sp, id) {
+  const shape = detectPersistenceShape(sp)
+  if (shape === 'handle') {
+    const handle = await sp.open(id, 'read')
+    try {
+      const events = await handle.read(0)
+      return { meta: handle.header, events }
+    } finally {
+      await handle.close()
+    }
+  }
+  if (shape === 'legacy' && typeof sp.readFrom === 'function') {
+    const suffix = await sp.readFrom(id, 0)
+    return { meta: suffix?.meta, events: suffix?.events }
+  }
+  return null
+}
+
+// handle 基线 header/事件规范化（0.4.0 checkout 实测）：checkout 后端给所有
+// 产物盖当前格式版本的文件名，并要求 header.version 等于后端当前
+// SESSION_FORMAT_VERSION、isSeeded 显式给出；读取时还会按当前格式语义校验
+// assistant/message 的 model source 必须是非空字符串。旧基线不需要这些，
+// 规范化只发生在 handle 路径。
+
+const handleFormatVersionCache = new WeakMap()
+
+/**
+ * 惰性读取 handle 基线的当前会话格式版本（绝无硬编码、绝不按版本号猜测）：
+ * 首选后端实例自报的 generationFormat.currentVersion（checkout JSONL 后端
+ * 公开字段），回退宿主 `@deepseek-ai/dsh-session` 的 SESSION_FORMAT_VERSION
+ * 导出。两者都不可得返回 null（header 保持原样，后端读取时响亮拒绝，绝不
+ * 静默写坏）。
+ * @param sp - sessionPersistence 服务。
+ * @returns 当前格式版本号或 null。
+ */
+async function currentHandleFormatVersion(sp) {
+  const cached = handleFormatVersionCache.get(sp)
+  if (cached !== undefined) return cached
+  let version = null
+  const backend = sp?.generationFormat
+  if (backend !== null && typeof backend === 'object'
+    && Number.isSafeInteger(backend.currentVersion) && backend.currentVersion >= 0) {
+    version = backend.currentVersion
+  } else {
+    try {
+      const sessionMod = await import('@deepseek-ai/dsh-session')
+      if (Number.isSafeInteger(sessionMod.SESSION_FORMAT_VERSION) && sessionMod.SESSION_FORMAT_VERSION >= 0) {
+        version = sessionMod.SESSION_FORMAT_VERSION
+      }
+    } catch {
+      // 宿主 session 包不可解析：保持原 header（读取时响亮失败，绝不静默）。
+    }
+  }
+  handleFormatVersionCache.set(sp, version)
+  return version
+}
+
+/**
+ * handle 基线 header 规范化：version 盖为后端当前格式版本；isSeeded 缺省时
+ * 显式置 false（后端序列化会丢弃 undefined，缺 key 的产物不可读）。
+ * @param sp - sessionPersistence 服务。
+ * @param meta - 原 SessionHeader。
+ * @returns 规范化后的新 header 对象（原对象不变）。
+ */
+async function normalizeHandleHeader(sp, meta) {
+  const header = { ...meta }
+  const version = await currentHandleFormatVersion(sp)
+  if (typeof version === 'number' && version >= 0) header.version = version
+  if (header.isSeeded === undefined) header.isSeeded = false
+  return header
+}
+
+/**
+ * handle 基线的事件批规范化：当前格式语义要求 assistant/message 的 model
+ * source 是非空字符串；缺 model 的源记录（真实 Claude transcript 恒有
+ * message.model，仅防御合成/历史记录）回退 provider 字符串，避免落盘出
+ * 无法读取的会话。未改动时原样返回调用方数组。
+ * @param events - 事件批。
+ * @returns 规范化后的事件批。
+ */
+function normalizeHandleEvents(events) {
+  let changed = false
+  const out = events.map((event) => {
+    if (event?.type !== 'assistant/message') return event
+    const source = event.data?.message?.source
+    if (source !== null && typeof source === 'object'
+      && source.kind === 'model'
+      && (typeof source.model !== 'string' || source.model.length === 0)) {
+      changed = true
+      return {
+        ...event,
+        data: {
+          ...event.data,
+          message: {
+            ...event.data.message,
+            source: { ...source, model: typeof source.provider === 'string' && source.provider.length > 0 ? source.provider : 'claude-code' },
+          },
+        },
+      }
+    }
+    return event
+  })
+  return changed ? out : events
+}
 
 /** 批量导入「读取 + 转换」阶段的默认并发上限（落盘阶段保持串行，保证幂等确定性）。 */
 export const DEFAULT_IMPORT_CONCURRENCY = 4
@@ -350,7 +551,10 @@ export async function annotateSettings(index) {
 
 /**
  * 用 sessionPersistence 列表 + imports 映射标注每个会话的导入状态（F4 幂等基础）。
- * 优先 `listSnapshots()`（更便宜的 header+revision 快照），回退 `list()`。
+ * 双基线（0.4.0）：listSnapshots 优先（快照 .header.id），回退 list()——
+ * handle 基线 list() 返回快照对象（header.id），旧基线返回 SessionHeader（id），
+ * 统一经 storedSessionIdOf 解析；任一元素解析不出 header.id 时响亮抛出并
+ * 跳过 cleanStale，绝不把 undefined 计入集合导致 imports.json 被误清空。
  * `cleanStale`（全量扫描时）惰性清理「映射指向已不存在会话」的残留记录并
  * 报告清理条数（B4：用户在 UI 删除导入会话后映射不再残留）。
  * @param ctx - Cordis 上下文。
@@ -366,14 +570,16 @@ export async function annotateImports(ctx, cacheDir, index, cleanStale = false) 
   if (sp) {
     try {
       if (typeof sp.listSnapshots === 'function') {
-        for (const snap of await sp.listSnapshots()) imported.add(snap.header.id)
-        listSucceeded = true
+        for (const id of idsOfListedElements(await sp.listSnapshots())) imported.add(id)
       } else if (typeof sp.list === 'function') {
-        for (const header of await sp.list()) imported.add(header.id)
-        listSucceeded = true
+        for (const id of idsOfListedElements(await sp.list())) imported.add(id)
       }
-    } catch {
+      listSucceeded = true
+    } catch (err) {
+      // 元素无法解析 header.id：响亮抛出（cleanStale 随之中止，绝不静默清空映射）。
+      if (err instanceof StoredSessionIdResolutionError) throw err
       // 持久化不可读：全部按未导入处理，也不做清理。
+      console.error('[claude-move] sessionPersistence 列表读取失败：', String((err && err.message) || err))
       listSucceeded = false
     }
   }
@@ -521,13 +727,14 @@ export function resolveImportTarget(raw, claudeHome) {
   return path.resolve(expanded)
 }
 
-/** 已持久化会话 id 集合（批量导入一次快照，避免逐文件 O(n) 列表）。 */
+/** 已持久化会话 id 集合（批量导入一次快照，避免逐文件 O(n) 列表；双基线快照/头解析）。 */
 async function listPersistedIds(ctx) {
   const sp = ctx.get('sessionPersistence')
   if (!sp || typeof sp.list !== 'function') return new Set()
   try {
-    return new Set((await sp.list()).map((h) => h.id))
-  } catch {
+    return new Set(idsOfListedElements(await sp.list()))
+  } catch (err) {
+    if (err instanceof StoredSessionIdResolutionError) throw err
     return new Set()
   }
 }
@@ -752,12 +959,12 @@ function unwrapImport(entry) {
   return null
 }
 
-/** 读取已存储日志的事件数（服务支持 readFrom 时）；不可用返回 null。 */
+/** 读取已存储日志的事件数（双基线 readFrom / open+read）；不可用返回 null。 */
 async function storedEventCount(ctx, dshId) {
   const sp = ctx.get('sessionPersistence')
-  if (!sp || typeof sp.readFrom !== 'function') return null
+  if (!sp || detectPersistenceShape(sp) === null) return null
   try {
-    const read = await sp.readFrom(dshId, 0)
+    const read = await readStoredEvents(sp, dshId)
     return Array.isArray(read?.events) ? read.events.length : null
   } catch {
     return null
@@ -769,7 +976,8 @@ async function storedEventCount(ctx, dshId) {
  * 复制式语义，绝不删除/改写既有内容：
  * - 首次导入：目标 id 由「显式 sessionId > 源 sessionId > 文件名 slug」确定，
  *   若目标 id 已被占用则后缀避让（import-<src>-<n>），绝不静默丢弃历史；
- *   落盘 = create + append（append-only），随后按 cwd 挂接工作区。
+ *   落盘 = create + append（append-only；handle 基线 append 后 flush + close，
+ *   见双基线 shim），随后按 cwd 挂接工作区。
  * - 重复导入且源文件已增长（turns 变多）：把新增轮次以连续 seq 续写到同一
  *   DSH 会话（增量同步），旧事件一个字节不动。
  * - force：为同一源文件创建一份**新的**完整副本（新 id），旧副本原样保留。
@@ -793,9 +1001,9 @@ export async function persistConverted(ctx, converted, args, persisted, sourcePa
 /** 探测同名持久化会话是否为空日志（上次 create 成功、append 失败残留）；无法确定返回 false。 */
 async function isEmptyStoredSession(ctx, dshId) {
   const sp = ctx.get('sessionPersistence')
-  if (!sp || typeof sp.readFrom !== 'function') return false
+  if (!sp || detectPersistenceShape(sp) === null) return false
   try {
-    const read = await sp.readFrom(dshId, 0)
+    const read = await readStoredEvents(sp, dshId)
     return Array.isArray(read?.events) && read.events.length === 0
   } catch {
     // 读不到/读失败：按「非空」处理，走保守路径。
@@ -872,11 +1080,7 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
       }
       const tail = tailSessionEvents(converted, { fromTurn: known.turns + 1, fromSeq })
       if (tail.events.length > 0) {
-        const sp = ctx.get('sessionPersistence')
-        if (!sp || typeof sp.append !== 'function') {
-          throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 增量续写需要该服务')
-        }
-        await sp.append(knownId, tail.events)
+        await spAppend(ctx, knownId, tail.events)
       }
       await rememberImport(ctx, sourcePath, {
         dshId: knownId, turns: turns.length, events: fromSeq + tail.events.length,
@@ -949,22 +1153,66 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
   }
 }
 
-/** append 一份事件批次；服务缺失响亮抛出。 */
+/**
+ * append 一份事件批次（双基线）；服务缺失响亮抛出。handle 路径
+ * open(id, 'write') 独占单写所有权，append 后必须 flush()（耐久屏障）并
+ * 成对 close()（释放所有权）；事件批经 normalizeHandleEvents 规范化。
+ * 已被他人持有时 open 响亮拒绝（单写冲突）。
+ */
 async function spAppend(ctx, id, events) {
   const sp = ctx.get('sessionPersistence')
-  if (!sp || typeof sp.append !== 'function') {
+  if (!sp) {
+    throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
+  }
+  if (detectPersistenceShape(sp) === 'handle') {
+    if (typeof sp.open !== 'function') {
+      throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 增量续写需要该服务')
+    }
+    const handle = await sp.open(id, 'write')
+    try {
+      await handle.append(normalizeHandleEvents(events))
+      await handle.flush()
+    } finally {
+      await handle.close()
+    }
+    return
+  }
+  if (typeof sp.append !== 'function') {
     throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
   }
   await sp.append(id, events)
 }
 
-/** create + append 一份完整会话日志；服务缺失/落盘失败响亮抛出。 */
+/**
+ * create + append 一份完整会话日志（双基线）；服务缺失/落盘失败响亮抛出。
+ * handle 路径：按服务形状先探测（有 open 即 handle），create 前经
+ * normalizeHandleHeader 盖当前格式版本与 isSeeded（checkout 后端要求），
+ * create 返回值实测判定（isSessionHandle），append 后 flush() 并在 finally
+ * 成对 close()——任何失败路径都释放单写所有权；空事件批次（流式导入的首个
+ * create）只 flush 物化空会话。旧路径 create+append 调用序列与 0.3.x 逐字节
+ * 一致（header/事件不做任何规范化）。
+ */
 async function spPersist(ctx, meta, events) {
   const sp = ctx.get('sessionPersistence')
-  if (!sp || typeof sp.create !== 'function' || typeof sp.append !== 'function') {
+  if (!sp || typeof sp.create !== 'function') {
     throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
   }
-  await sp.create(meta)
+  const header = detectPersistenceShape(sp) === 'handle' ? await normalizeHandleHeader(sp, meta) : meta
+  const created = await sp.create(header)
+  if (isSessionHandle(created)) {
+    notePersistenceShape(sp, 'handle')
+    try {
+      if (events.length > 0) await created.append(normalizeHandleEvents(events))
+      await created.flush()
+    } finally {
+      await created.close()
+    }
+    return
+  }
+  notePersistenceShape(sp, 'legacy')
+  if (typeof sp.append !== 'function') {
+    throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
+  }
   await sp.append(meta.id, events)
 }
 
@@ -1580,9 +1828,9 @@ export function resolveExportTarget(raw, sessionId, config) {
 }
 
 /**
- * 执行一次回迁导出：读 DSH 会话日志（sessionPersistence.readFrom）→ 反向折叠为
- * Claude 可 resume JSONL → 写入目标文件。只读源会话、只写导出落点文件，绝不
- * 改写 DSH 会话日志。会话不可读/无可导出内容时大声失败。
+ * 执行一次回迁导出：读 DSH 会话日志（sessionPersistence 双基线 readFrom /
+ * open+read）→ 反向折叠为 Claude 可 resume JSONL → 写入目标文件。只读源会话、
+ * 只写导出落点文件，绝不改写 DSH 会话日志。会话不可读/无可导出内容时大声失败。
  * @param ctx - Cordis 上下文。
  * @param config - 插件配置。
  * @param args - 工具参数 `{ sessionId, path? }`。
@@ -1591,7 +1839,7 @@ export function resolveExportTarget(raw, sessionId, config) {
  */
 export async function runExport(ctx, config, args, signal) {
   const sp = ctx.get('sessionPersistence')
-  if (!sp || typeof sp.readFrom !== 'function') {
+  if (!sp || (typeof sp.readFrom !== 'function' && typeof sp.open !== 'function')) {
     throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 回迁导出需要该服务')
   }
   const sessionId = typeof args?.sessionId === 'string' ? args.sessionId.trim() : ''
@@ -1599,7 +1847,10 @@ export async function runExport(ctx, config, args, signal) {
   signal?.throwIfAborted()
   let read
   try {
-    read = await sp.readFrom(sessionId, 0)
+    read = await readStoredEvents(sp, sessionId)
+    if (read === null) {
+      throw new Error('sessionPersistence 基线无法判定（既无 readFrom 也无 open 形状）')
+    }
   } catch (err) {
     throw new Error(`读取会话 ${sessionId} 失败（不存在或不可读）：${String((err && err.message) || err)}`)
   }

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
 import path from 'node:path'
-import { apply, runScan, resolveScanTarget, trimIndex, workspaceModeOf, resolveClaudecodeDir, applyWorkspaceCwd, sourceCwdSync, makeClaudeState, runExport, resolveExportTarget, resolveExportDir } from '../index.mjs'
+import { apply, runScan, resolveScanTarget, trimIndex, workspaceModeOf, resolveClaudecodeDir, applyWorkspaceCwd, sourceCwdSync, makeClaudeState, runExport, resolveExportTarget, resolveExportDir, importDirectory } from '../index.mjs'
 import { loadImportsSync, saveImports } from '../lib/discovery.mjs'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
 
@@ -266,8 +266,7 @@ test('annotateImports：listSnapshots 优先 + 失效映射惰性清理（B4）'
   assert.deepEqual(Object.keys(imports), [file], '映射文件只保留有效记录')
 })
 
-test('annotateImports：源轮次多于导入记录时打 updatesPending（D4）', async (t) => {
-  const home = await makeTempDir(t)
+test('annotateImports：源轮次多于导入记录时打 updatesPending（D4）', async (t) => {  const home = await makeTempDir(t)
   const dshHome = await makeTempDir(t)
   const prevDshHome = process.env.DSH_HOME
   process.env.DSH_HOME = dshHome
@@ -302,6 +301,111 @@ test('annotateImports：源轮次多于导入记录时打 updatesPending（D4）
   assert.equal(session.import.status, 'imported')
   assert.equal(session.import.updatesPending, true, '源有新增轮次未同步')
   assert.equal(session.turns, 2, '扫描头统计轮次数')
+})
+
+test('annotateImports 误清空守卫（旧基线 listSnapshots）：元素解析不出 header.id → 响亮拒绝且映射原样', async (t) => {
+  const home = await makeTempDir(t)
+  const dshHome = await makeTempDir(t)
+  const prevDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prevDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevDshHome })
+
+  const projDir = path.join(home, 'projects', 'demo')
+  await mkdir(projDir, { recursive: true })
+  const file = path.join(projDir, 'sess-1.jsonl')
+  await writeFile(file, claudeLine('user', { sessionId: 'sess-1', message: { content: 'q' } }) + '\n', 'utf8')
+
+  await mkdir(path.join(dshHome, 'claude-move'), { recursive: true })
+  const importsPath = path.join(dshHome, 'claude-move', 'imports.json')
+  const original = JSON.stringify({ [file]: { dshId: 'import-sess-1', turns: 1, events: 3 } })
+  await writeFile(importsPath, original, 'utf8')
+
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return { listSnapshots: async () => [{ revision: 'r1' }] }
+      }
+      return undefined
+    },
+  }
+  await assert.rejects(
+    () => runScan(ctx, { claudeHome: home, scanGit: false }, {}),
+    /header\.id/,
+    '解析失败必须响亮抛出',
+  )
+  assert.equal(await readFile(importsPath, 'utf8'), original, 'imports.json 一个字节不改（绝不静默清空）')
+})
+
+test('annotateImports 误清空守卫（旧基线 list）：SessionHeader 缺 id → 响亮拒绝且映射原样', async (t) => {
+  const home = await makeTempDir(t)
+  const dshHome = await makeTempDir(t)
+  const prevDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prevDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevDshHome })
+
+  const projDir = path.join(home, 'projects', 'demo')
+  await mkdir(projDir, { recursive: true })
+  const file = path.join(projDir, 'sess-1.jsonl')
+  await writeFile(file, claudeLine('user', { sessionId: 'sess-1', message: { content: 'q' } }) + '\n', 'utf8')
+
+  await mkdir(path.join(dshHome, 'claude-move'), { recursive: true })
+  const importsPath = path.join(dshHome, 'claude-move', 'imports.json')
+  const original = JSON.stringify({ [file]: { dshId: 'import-sess-1', turns: 1, events: 3 } })
+  await writeFile(importsPath, original, 'utf8')
+
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return { list: async () => [{ version: 0, createdAt: 1 }] }
+      }
+      return undefined
+    },
+  }
+  await assert.rejects(
+    () => runScan(ctx, { claudeHome: home, scanGit: false }, {}),
+    /header\.id/,
+    '解析失败必须响亮抛出',
+  )
+  assert.equal(await readFile(importsPath, 'utf8'), original, 'imports.json 一个字节不改（绝不静默清空）')
+})
+
+test('listPersistedIds 误判守卫：list() 元素解析不出 id → 批量导入响亮拒绝（绝不按空快照重复建会话）', async (t) => {
+  const home = await makeTempDir(t)
+  const dshHome = await makeTempDir(t)
+  const prevDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = dshHome
+  t.after(() => { if (prevDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevDshHome })
+
+  const dir = path.join(home, 'projects')
+  const file = path.join(dir, 'sess-1.jsonl')
+  const ctx = {
+    tools: { register: () => () => {} },
+    on: () => () => {},
+    get(service) {
+      if (service === 'sessionPersistence') {
+        return { list: async () => [{ revision: 'r1' }] }
+      }
+      if (service === 'fs') {
+        return {
+          async resolve(p) { return { targetKey: p, displayPath: p } },
+          async listDir() {
+            return [{ name: 'sess-1.jsonl', type: 'file', target: { targetKey: file, displayPath: file } }]
+          },
+          processPath(target) { return target.targetKey },
+        }
+      }
+      return undefined
+    },
+  }
+  await assert.rejects(
+    () => importDirectory(ctx, { targetKey: dir, displayPath: dir }, { recursive: true }, 1 << 20),
+    /header\.id/,
+    '持久化 id 快照解析失败必须响亮拒绝',
+  )
 })
 
 test('trimIndex：projectsLimit/sessionsLimit/brief 裁剪（C4）', () => {
