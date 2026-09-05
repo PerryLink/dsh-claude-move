@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.1] - 2026-09-04
+
+### Changed
+
+- Align the `@deepseek-ai/dsh-*` devDependency pins and the `dshWorkshop.compatibility.dshVersions` list from `0.1.2-alpha.5` to the published `0.1.2-rc.1` line (all 15 packages verified on the registry), and regenerate both lockfiles. No behavior change.
+
 ## [0.4.0] - 2026-09-04
 
 ### Added
