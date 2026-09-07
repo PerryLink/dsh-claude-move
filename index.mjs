@@ -63,6 +63,8 @@ import { mergeDetections } from './lib/sources/contract.mjs'
 
 export const name = 'claude-move'
 
+// Consumer — 只消费 host 公开服务：tools（inject 硬依赖）；sessionPersistence /
+// workspaceRegistry / commands / systemPrompt / skills / webServer / approval / fs 经 ctx.get 可选读取。
 export const inject = ['tools']
 
 // ── sessionPersistence 双基线运行时 shim（0.4.0）──────────────────────────────
@@ -303,6 +305,8 @@ export const DEFAULT_IMPORT_CONCURRENCY = 4
  * @property {string} [exportDir] 回迁导出落点目录；缺省 `$DSH_HOME/claude-export`（DSH_HOME 缺失时 `~/.dsh/claude-export`）。
  */
 
+// Service Definition — 插件公共契约：下方 Schemastery Config schema 声明全部可配置面，
+// 与上方 @typedef 文档同构（工具/命令/面板路由的公共接口均由此契约声明）。
 export const Config = Schema.object({
   claudeHome: Schema.string(),
   scanGit: Schema.union([Schema.boolean(), Schema.const('branch')]).default(true),
@@ -3303,6 +3307,9 @@ export function registerManifestCommands(ctx, state) {
  * @param config - 经 Schemastery 校验的插件配置。
  */
 export function apply(ctx, config = {}) {
+  // Service Provider — 挂载即注册：扫描/导入/导出工具经 ctx.tools.register 注册，
+  // 个人上下文贡献、命令与面板路由经 registerContextContributions / registerCommands /
+  // registerWebRoutes 注册（全部随 fiber 卸载撤销）。
   const state = makeClaudeState(config)
   ctx.tools.register(makeScanTool(ctx, config, state))
   ctx.tools.register(makeImportTool(ctx, config))
