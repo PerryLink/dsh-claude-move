@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.4] - 2026-09-08
+
+### Docs
+
+- Repair GBK mojibake in the package.json description: the em dash was corrupted to the U+9225 U+003F marker pair; the description is restored to the clean pre-corruption text; no behavior change.
+
+
 ## [0.4.3] - 2026-09-07
 
 ### Docs
