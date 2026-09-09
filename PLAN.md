@@ -127,7 +127,7 @@ index.mjs                     # Config 扩展 + move_detect/move_preview/move_ru
 2. **persistence 无 delete**：复制式强制重导入 = 以新 id（`import-<src>-<n>`）另存一份完整副本，旧副本原样保留；**不归档**（归档会从全部界面隐藏会话）。只 append 不改写（S1）。
 2b. **源文件持续增长**：imports.json 记录 `{ dshId, turns, events }`；重导时 turns 变多则按 turn/start 边界截取新增轮次、seq 续写同一 DSH 会话（增量同步，与运行中的 Claude Code 一致）；源文件被截断（turns 变少）报 `sourceShrunk` 并跳过。
 3. **attachSession 要求 header.cwd 的 realpath 与工作区路径严格相等**（workspace.md 实测）：per-project 归组下源目录已删除的会话跳过归组（留在「未分组」），索引打「目录不存在」徽标，导入不失败。默认 `workspaceMode: 'claudecode'`（E2）改为把全部导入会话 cwd 覆写为独立目录 `claudecodeDir`（默认 `$DSH_HOME/claudecode`，插件只在此 mkdir），统一挂到标题「claudecode」的单一工作区；源项目 cwd 保真记录进 imports.json `sourceCwd`，memory/CLAUDE.md 注入按 `sourceCwdSync` 找回。
-4. **SessionHeader.version** 必须等于运行构建的 `SESSION_FORMAT_VERSION`（rc.6 为 0，与 chat-import 一致）。
+4. **SessionHeader.version** 必须等于运行构建的 `SESSION_FORMAT_VERSION`（当前为 3；lib 合成期常量仍是 0，落盘时 handle 路径由 shim 盖成后端自报版本，legacy 路径保持 0 走宿主迁移链）。自格式 v2 起 `assistant/message.data.stream` 必须是数组（V3 恢复边界断言），由 shim 在 handle 路径按版本补 `[]`。
 5. **事件纪律**：seq 连续；surface 事件 `surfaceOp:'append'`；`tool/result.sourceEventSeqs` 指向 `tool/call`；模型可见 ⟺ 落盘。
 6. **命令 ≠ 模型回合**：`command/run`/`command/done` 只写日志、结果直接渲染 UI，不产生模型消息。F17 的「在当前会话以交接摘要继续」= 命令 handler 内先确保导入，再 `agent.inject({content: 摘要, source:{kind:'plugin',...}})` 把摘要注入下一次请求（inject 不是唤醒，用户随后发消息即生效）。
 7. **settings.* RPC 域是白名单**，第三方 namespace 不能远程读写（S3 一致）；F14 走「报告/面板给出建议（cordis.yml patch 片段 + 权限预设建议），用户自己确认应用」，未知项显式列出。

@@ -23,10 +23,10 @@
 
 ## 兼容性
 
-- 面向 `dsh 0.1.2-rc.1`（web profile）；peer 依赖要求 `>=0.1.2-rc.1 <0.2.0`。Node `^22.19 || >=24`。
-`0.1.2-rc.1`（2026-09-04 已适配）：会话信封保留 ignorable 字段但仅用于存量日志读取兼容——Session.append 仍无法盖章，门控行为不变。0.4.0 版还通过运行时双基线 shim 兼容未发布的 master/checkout HEAD（SessionHandle 持久化接缝）；见「兼容性」。
-- 0.4.0 内置 `sessionPersistence` 双基线运行时 shim，按 API 形状特性探测（绝不按版本号猜测）：已发布旧 API（`create`/`append`/`readFrom`，`list()` 返回会话头）与未发布 checkout 的 handle seam（`create` 返回 `SessionHandle`，`list()`/`stat()` 返回快照）都能工作。handle 路径上每次 append 之后必须 `flush()`（耐久屏障）并成对 `close()`（单写所有权）；header 盖上后端当前格式版本并显式补 `isSeeded`，缺失的 assistant model 来源回退 provider——已于 2026-09-06 对照真实 0.1.3-alpha.1 后端做 checkout 实测（完整门禁链 + profile 安装冒烟）。导入扫描的清理在列表元素的 `header.id` 无法解析时拒绝执行，绝不静默清空 `imports.json`。任何已发布版本都没有 handle seam，因此 handle 路径只能对照本地 checkout 验证（compat workflow 覆盖已发布线）。
-- 最近针对全新 tarball 安装验证：真实扫描、真实批量导入（幂等重导入）、工作区挂载与持久化产物均已确认；macOS/Linux 由 CI 矩阵覆盖。
+- 面向 `dsh 0.1.5-alpha.1`（web profile，会话格式 V3）；peer 依赖要求 `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0`。已于 2026-09-09 对照 `dsh-v0.1.5-alpha.1` 验证。Node `^22.19 || >=24`。
+`0.1.2-rc.1`（2026-09-04 已适配）：会话信封保留 ignorable 字段但仅用于存量日志读取兼容——Session.append 仍无法盖章，门控行为不变。
+- 0.4.0 内置 `sessionPersistence` 双基线运行时 shim，按 API 形状特性探测（绝不按版本号猜测）：旧 API（`create`/`append`/`readFrom`，`list()` 返回会话头）与 handle seam（`create` 返回 `SessionHandle`，`list()`/`stat()` 返回快照）都能工作。handle seam 已随 alpha 线发布（`@deepseek-ai/dsh-session-persistence` / `-jsonl` `0.1.5-alpha.1`），因此 compat workflow 可以覆盖它。handle 路径上每次 append 之后必须 `flush()`（耐久屏障）并成对 `close()`（单写所有权）；header 盖上后端当前格式版本并显式补 `isSeeded`；缺失的 assistant model 来源回退 provider；自 0.4.5 起，后端格式版本 >= 2 时合成的 `assistant/message` 带 `stream: []`——V3 的 `Session.fromRestore` 断言 `Array.isArray(data.stream)`，缺它则日志能写入、能读回却不可续聊。导入扫描的清理在列表元素的 `header.id` 无法解析时拒绝执行，绝不静默清空 `imports.json`。
+- 最近针对全新 tarball 安装验证：真实扫描、真实批量导入（幂等重导入）、工作区挂载与持久化产物均已确认；macOS/Linux 由 CI 矩阵覆盖。导入日志为会话格式 V3，`dsh <= 0.1.2-rc.1` 无法读取（升级是单向的；回退办法是从源 transcript 重新导入）。
 
 ### 兼容性矩阵（仅公开接缝）
 
@@ -36,7 +36,7 @@
 | `sessionPersistence` 双基线：旧 API（`listSnapshots` / `readFrom` / `append`）或 handle（`open` / `stat`、快照 `list()`） | 运行时按 API 形状特性探测 | `header.id` 解析守卫：解析失败大声中止扫描，绝不静默清空 `imports.json` |
 | 支持 `streamText` 的 `fs` / `ctx.jobs` / `ctx.agents.resume` | 特性探测 | 整文件读取并大声拒绝 / 自有 job map / 交接注入 |
 | Client shell 服务（`sessions.refresh/open`、`workspaces.refresh`） | 面板 apply 时特性探测 | 整页刷新 |
-| 较新的平台能力从不是硬性要求 —— 插件在 rc.8 上始终保持可启动。 | | |
+| 较新的平台能力从不是硬性要求 —— 插件在最早支持线（`0.1.2-rc.1`）上始终保持可启动。 | | |
 
 ## 你能获得什么
 
@@ -255,7 +255,7 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 ## 开发
 
 ```sh
-npm install   # peer 依赖：@deepseek-ai/dsh-tools@>=0.1.2-rc.1、@deepseek-ai/cordis、schemastery
+npm install   # peer 依赖：@deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0、@deepseek-ai/cordis、schemastery
 npm test      # node --test test/*.test.mjs
 ```
 

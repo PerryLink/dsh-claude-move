@@ -2,14 +2,14 @@
 
 ## 0.2 变更后的待办（本机已完成的除外）
 
-- [x] **真实运行时复验**（隔离 DSH_HOME + 隔离 CLAUDE_CONFIG_DIR，真实 `dsh 0.1.0-rc.6` web boot，端口 3097，绝无触碰用户真实配置）：tarball 从零安装 → `--dump-config` 出现 `# == dsh-claude-move` 层 → web 启动就绪无 FAILED。`GET /api/claude-move/index`：1 项目/2 会话/1 技能（README.md 被排除）/1 memory/全局 CLAUDE.md。`POST /api/claude-move/import {path:"all"}`：2/2 导入、`repaired.synthesized:1`（中断调用补合成结果）、两个会话 `workspace.attached:true, mode:"claudecode"`；`storages/workspace.json` 生成标题「claudecode」的单一工作区（archivedSessionIds 为空）；`sessions/<claudecode 目录编码>/import-*/session.jsonl.zstd` 落盘（seq 连续、tool/call↔tool/result 一一对应、isError 合成结果带 sourceEventSeqs）；imports.json 记录 `sourceCwd`；重复导入 2/2 `alreadyImported`；`POST /api/claude-move/reset` 只清插件缓存、已导入会话保留。**真实 `C:\Users\zzhdz\.dsh` 全程零改动**（无新增工作区/会话/归档记录）。单测 **161/161** 全绿。
+- [x] **真实运行时复验**（隔离 DSH_HOME + 隔离 CLAUDE_CONFIG_DIR，真实 `dsh 0.1.0-rc.6` web boot，端口 3097，绝无触碰用户真实配置）：tarball 从零安装 → `--dump-config` 出现 `# == dsh-claude-move` 层 → web 启动就绪无 FAILED。`GET /api/claude-move/index`：1 项目/2 会话/1 技能（README.md 被排除）/1 memory/全局 CLAUDE.md。`POST /api/claude-move/import {path:"all"}`：2/2 导入、`repaired.synthesized:1`（中断调用补合成结果）、两个会话 `workspace.attached:true, mode:"claudecode"`；`storages/workspace.json` 生成标题「claudecode」的单一工作区（archivedSessionIds 为空）；`sessions/<claudecode 目录编码>/import-*/session.jsonl.zstd` 落盘（seq 连续、tool/call↔tool/result 一一对应、isError 合成结果带 sourceEventSeqs）；imports.json 记录 `sourceCwd`；重复导入 2/2 `alreadyImported`；`POST /api/claude-move/reset` 只清插件缓存、已导入会话保留。**真实 `C:\Users\zzhdz\.dsh` 全程零改动**（无新增工作区/会话/归档记录）。单测 **241/241** 全绿（0.4.5 实测）。
 - [ ] **有 API key 的机器验收**：导入后「点开续聊」的模型回合（步骤不变，见下）。
 - [ ] **npm 发布**：`private: true` 已移除，`npm publish` 可用；发布前跑 `npm pack --dry-run --json` 核对文件清单（`lib/*` 全量含入；`test/`、`dev/`、`node_modules/` 不含）。
 - [ ] **上游协作提案（B6）**：向 deepseek-harness GitHub Discussions 提 `SessionHeader.origin: 'import'` 提案——让会话列表 UI 可标注「外部导入」来源。草案要点：cold 导入经公开 `sessionPersistence.create` 落盘，目前 UI 无法区分导入会话与原生会话；建议 `origin` 增加 `'import'` 值（现状仅 `'subagent'`），本插件落地后即写入 `meta.origin`。官方未落地前本插件不改引擎、不自行扩展该字段。
 
 ## 发布前检查（0.1.0 本机已全部通过）
 
-- [x] `npm test`：**161/161** 用例全绿（0.1.0 的 100 例 + A1-A7/B1-B5/C1-C5/D1-D6/E2/issue#1 的新增覆盖：并发 imports 串行、半建会话恢复、resume 快路径、skills cwd/signal、memoryScope、listSnapshots 清理、并行扫描确定性、gitBranch 三级、流式转换器分块/续写、CSRF、ctx.jobs 透传、缓存重置、索引裁剪、双语描述与面板字典、claudecode 工作区、中断工具调用修复、技能候选硬化、发布面安全 tripwire）。
+- [x] `npm test`：**241/241** 用例全绿（0.1.0 的 100 例 + A1-A7/B1-B5/C1-C5/D1-D6/E2/issue#1 的新增覆盖：并发 imports 串行、半建会话恢复、resume 快路径、skills cwd/signal、memoryScope、listSnapshots 清理、并行扫描确定性、gitBranch 三级、流式转换器分块/续写、CSRF、ctx.jobs 透传、缓存重置、索引裁剪、双语描述与面板字典、claudecode 工作区、中断工具调用修复、技能候选硬化、发布面安全 tripwire；0.4.5 新增 handle 双基线 stream 门控与 L6 真实宿主 `Session.fromRestore` 往返）。
 - [x] `npm pack` 发布面：tarball 含 index.mjs、lib/*（含 imports-store.mjs）、client/client.js、assets/social-card.png、cordis.patch.yml、五语 README、CHANGELOG、LICENSE、THIRD_PARTY_NOTICES、package.json，**不含** dev/、test/、node_modules。
 - [x] tarball 从零安装：`dsh plugin --profile <p> add -w ./dsh-claude-move-0.1.0.tgz` → `--dump-config` 出现 `# == dsh-claude-move` 层。
 - [x] web 启动无 FAILED；`__DSH_BOOT__` 含客户端条目；`/plugins/dsh-claude-move/client.js` 正常伺服。
@@ -24,11 +24,11 @@
 | 验收标准 | 状态 | 证据 |
 |---|---|---|
 | 仅 `dsh plugin add` 后一条命令发现全部会话并列出项目/目录/git 状态 | ✅ | `/claude-import-all` 命令 + `claude_scan` 工具；真实 40 项目索引含 git 分支/脏行数 |
-| 任一会话导入后消息/工具/思考块完整、可续聊、工作区挂接正确 | ⚠️ 导入与挂接已实测 ✅；**「点开续聊」的模型回合需有 API key 的机器验证**（本机无 key，步骤见下） | 平衡事件日志 + `workspace.attached=true` + 持久化产物 |
+| 任一会话导入后消息/工具/思考块完整、可续聊、工作区挂接正确 | ⚠️ 导入与挂接已实测 ✅；**「点开续聊」的模型回合需有 API key 的机器验证**（本机无 key，步骤见下） | 平衡事件日志 + `workspace.attached=true` + 持久化产物 + L6 真实宿主 `Session.fromRestore` 往返（0.4.5 起） |
 | 记忆、技能、CLAUDE.md 在续聊中生效、新记忆即时生效 | ✅（注册与注入已实测；模型回合同上待 key 机器） | systemPrompt 段 + SkillProvider 注册于真实 boot；单测覆盖渲染与缓存 |
 | 重复导入幂等；畸形 JSONL 不中断且报告行号 | ✅ | 真实重导入 13/13 already-imported；`skippedLines[{line,error}]` |
-| Windows/macOS/Linux 各至少一名开发者验证 | ✅ CI 矩阵（`test.yml` linux/macos/windows × Node 22）自动验证；本机 Windows 实测 | 143/143 跨平台用例 |
-| `npm test` 通过；卸载不污染原数据 | ✅ | 143/143；源文件只读、缓存仅 `$DSH_HOME/claude-move/` |
+| Windows/macOS/Linux 各至少一名开发者验证 | ✅ CI 矩阵（`test.yml` linux/macos/windows × Node 22）自动验证；本机 Windows 实测 | 241/241 跨平台用例 |
+| `npm test` 通过；卸载不污染原数据 | ✅ | 241/241；源文件只读、缓存仅 `$DSH_HOME/claude-move/` |
 | 交付物 1-4 | ✅/⚠️ | 仓库 ✅；README（五语）✅；测试与 fixtures ✅；演示 GIF 见 `docs/`（发布时录制） |
 
 ## 待有 key 机器的验收步骤（模型续聊回合）

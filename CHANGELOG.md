@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.5] - 2026-09-09
+
+### Fixed
+
+- Handle-baseline imports are resumable again on dsh 0.1.3+/0.1.5: synthesized `assistant/message` events now carry `stream: []` whenever the backend's current session format version is >= 2 (feature-gated on the backend-declared version, never guessed). Session format V3's restore boundary (`assertAssistantSettlementShape`) asserts `Array.isArray(data.stream)` and rejected the previous payload with `seed assistant/message at index N has invalid settlement fields` — the log was written and read back fine, but `resume`/fork/seed-session paths failed loudly, so imported sessions could not be continued. The legacy path (<=0.1.2-rc.1) keeps its exact 0.3.x payload with no `stream` (the frozen v0/v1 dispositions reject the field), and handle backends reporting format < 2 are left untouched.
+
+### Changed
+
+- Raise the adaptation baseline to `dsh 0.1.5-alpha.1` (session format V3): the 15 `@deepseek-ai/dsh-*` devDependency pins move from `0.1.2-rc.1` to `0.1.5-alpha.1`, the `@deepseek-ai/dsh-tools` peer range becomes `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0` (the single old band cannot match both lines under prerelease resolution), and `dshWorkshop.compatibility.dshVersions` lists both `0.1.2-rc.1` and `0.1.5-alpha.1`.
+- `compat.yml` now exercises the handle persistence seam in CI: the stale "handle seam is unreleased, checkout-only" note is replaced by a two-baseline note, and a new `profile-alpha` job installs `@deepseek-ai/dsh@0.1.5-alpha.1` + `dsh-base`/`dsh-headless` + the packed tarball (row mount, keyless smoke, uninstall). The existing `0.1.2-rc.1` profile job stays as the legacy-line regression.
+
+### Docs
+
+- Correct the "the handle seam is unreleased" claim in `AGENTS.md`, `ARCHITECTURE.md` (decisions 14/15 and the verification section), the five READMEs, `PLAN.md` and the compat workflow: `@deepseek-ai/dsh-session-persistence` / `-jsonl` publish the handle API on the `0.1.5-alpha.1` alpha line, so the handle path is CI-verifiable instead of checkout-only. This supersedes the "unreleased checkout handle seam" wording kept in the historical 0.4.0 entry above.
+- Five-language READMEs: the compatibility section now states the verified host `dsh-v0.1.5-alpha.1` (2026-09-09), the dual peer range, the `0.1.5-alpha.1` devDependency pins and the one-way V3 log direction (logs written here cannot be read by `dsh <= 0.1.2-rc.1`; re-import from the source transcript is the fallback).
+- Add an L6 compatibility suite (`test/compat-v3.test.mjs`) that runs the real host `Session.fromRestore` on imported logs: a new handle-path log resumes, the pre-fix shape (no `stream`) is rejected with the exact settlement error, a legacy-path log keeps its v0 shape and still exports, and format < 2 backends receive no `stream`. Sync the fixtures/assertions in the handle, import, export and convert suites (241 tests).
+
 ## [0.4.4] - 2026-09-08
 
 ### Docs

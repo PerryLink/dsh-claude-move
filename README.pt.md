@@ -23,10 +23,10 @@
 
 ## Compatibilidade
 
-- Direcionado a `dsh 0.1.2-rc.1` (perfil web); dependências peer exigem `>=0.1.2-rc.1 <0.2.0`. Node `^22.19 || >=24`.
-`0.1.2-rc.1` (adaptado em 2026-09-04): o envelope de sessão mantém seu campo ignorable apenas para compatibilidade de leitura de logs armazenados - o Session.append ainda não consegue estampá-lo, então o comportamento da porta não muda. A versão 0.4.0 também roda contra o HEAD não publicado de master/checkout (costura de persistência SessionHandle) por meio de um shim de linha de base dupla em tempo de execução; veja Compatibilidade.
-- A 0.4.0 inclui um shim de linha de base dupla para `sessionPersistence` em tempo de execução, detectado pela forma da API (nunca pela versão): funcionam tanto a API legada publicada (`create`/`append`/`readFrom`, `list()` retornando cabeçalhos) quanto a costura de handle do checkout ainda não publicado (`create` retornando um `SessionHandle`, `list()`/`stat()` retornando snapshots). No caminho handle, todo append é seguido de `flush()` (barreira de durabilidade) e um `close()` pareado (propriedade de escritor único); os cabeçalhos são carimbados com a versão de formato atual do backend e um `isSeeded` explícito, e fontes de modelo de assistente ausentes caem para o provider — verificado em 2026-09-06 contra o backend real 0.1.3-alpha.1 do checkout (cadeia completa de portas + smoke de instalação do perfil). A limpeza da varredura de importação se recusa a executar quando o `header.id` de um elemento listado não pode ser resolvido, então `imports.json` nunca é esvaziado silenciosamente. Nenhuma versão publicada tem a costura de handle, então o caminho handle só é verificado contra um checkout local (o fluxo de compatibilidade cobre a linha publicada).
-- Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI.
+- Direcionado a `dsh 0.1.5-alpha.1` (perfil web, formato de sessão V3); dependências peer exigem `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0`. Verificado contra `dsh-v0.1.5-alpha.1` em 2026-09-09. Node `^22.19 || >=24`.
+`0.1.2-rc.1` (adaptado em 2026-09-04): o envelope de sessão mantém seu campo ignorable apenas para compatibilidade de leitura de logs armazenados - o Session.append ainda não consegue estampá-lo, então o comportamento da porta não muda.
+- A 0.4.0 inclui um shim de linha de base dupla para `sessionPersistence` em tempo de execução, detectado pela forma da API (nunca pela versão): funcionam tanto a API legada (`create`/`append`/`readFrom`, `list()` retornando cabeçalhos) quanto a costura de handle (`create` retornando um `SessionHandle`, `list()`/`stat()` retornando snapshots). A costura de handle já está publicada na linha alpha (`@deepseek-ai/dsh-session-persistence` / `-jsonl` `0.1.5-alpha.1`), então o fluxo de compatibilidade a cobre. No caminho handle, todo append é seguido de `flush()` (barreira de durabilidade) e um `close()` pareado (propriedade de escritor único); os cabeçalhos são carimbados com a versão de formato atual do backend e um `isSeeded` explícito; fontes de modelo de assistente ausentes caem para o provider; e desde 0.4.5 os eventos `assistant/message` sintetizados carregam `stream: []` quando a versão de formato do backend é >= 2 — o `Session.fromRestore` do V3 exige `Array.isArray(data.stream)`, então sem isso o log era escrito e lido, mas não podia ser retomado. A limpeza da varredura de importação se recusa a executar quando o `header.id` de um elemento listado não pode ser resolvido, então `imports.json` nunca é esvaziado silenciosamente.
+- Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI. Os logs importados usam o formato de sessão V3 e `dsh <= 0.1.2-rc.1` não consegue lê-los (a atualização é unidirecional; a alternativa é reimportar do transcript de origem).
 
 ### Matriz de compatibilidade (somente costuras públicas)
 
@@ -36,7 +36,7 @@
 | `sessionPersistence` linha de base dupla: legada `listSnapshots` / `readFrom` / `append` versus handle `open` / `stat` / `list()` de snapshots | detectado por recurso em tempo de execução (forma da API, nunca versão) | a guarda de resolução de `header.id` aborta a varredura em voz alta em vez de esvaziar `imports.json` silenciosamente |
 | `fs` com capacidade `streamText` / `ctx.jobs` / `ctx.agents.resume` | detectado por recurso | leitura de arquivo inteiro com rejeição em voz alta / mapa de jobs próprio / injeção de handoff |
 | Serviços de shell do cliente (`sessions.refresh/open`, `workspaces.refresh`) | detectado por recurso ao aplicar o painel | recarga completa da página |
-| Capacidades de plataforma mais novas nunca são requisitos rígidos — o plugin continua inicializável no rc.8. | | |
+| Capacidades de plataforma mais novas nunca são requisitos rígidos — o plugin continua inicializável na linha mais antiga suportada (`0.1.2-rc.1`). | | |
 
 ## O que você recebe
 
@@ -255,7 +255,7 @@ Este projeto está licenciado sob a Apache License 2.0; os seguintes componentes
 ## Desenvolvimento
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.2-rc.1, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 
