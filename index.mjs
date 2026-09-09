@@ -182,8 +182,10 @@ async function readStoredEvents(sp, id) {
 // handle 基线 header/事件规范化（0.4.0 checkout 实测）：checkout 后端给所有
 // 产物盖当前格式版本的文件名，并要求 header.version 等于后端当前
 // SESSION_FORMAT_VERSION、isSeeded 显式给出；读取时还会按当前格式语义校验
-// assistant/message 的 model source 必须是非空字符串。旧基线不需要这些，
-// 规范化只发生在 handle 路径。
+// assistant/message 的 model source 必须是非空字符串，且自格式 v2 起
+// data.stream 必须是数组（V3 的 Session.fromRestore 恢复边界断言
+// Array.isArray(data.stream)，缺字段的日志可写出但不可续聊）。旧基线不需要
+// 这些，规范化只发生在 handle 路径。
 
 const handleFormatVersionCache = new WeakMap()
 
@@ -235,33 +237,40 @@ async function normalizeHandleHeader(sp, meta) {
 
 /**
  * handle 基线的事件批规范化：当前格式语义要求 assistant/message 的 model
- * source 是非空字符串；缺 model 的源记录（真实 Claude transcript 恒有
- * message.model，仅防御合成/历史记录）回退 provider 字符串，避免落盘出
- * 无法读取的会话。未改动时原样返回调用方数组。
+ * source 是非空字符串，且自格式 v2 起 data.stream 必须是数组（V3 的
+ * Session.fromRestore 恢复边界要求 Array.isArray(stream)：缺 stream 的日志
+ * 能写入、能原样读回，但 resume/fork 会响亮抛 invalid settlement fields）。
+ * 缺 model 的源记录（真实 Claude transcript 恒有 message.model，仅防御合成/
+ * 历史记录）回退 provider 字符串。stream 只在后端当前格式版本 >= 2 时补空
+ * 数组——v0/v1 的冻结清单不接受该字段，旧基线必须保持逐字节不变。未改动时
+ * 原样返回调用方数组。
  * @param events - 事件批。
+ * @param formatVersion - 后端当前会话格式版本（currentHandleFormatVersion）。
  * @returns 规范化后的事件批。
  */
-function normalizeHandleEvents(events) {
+function normalizeHandleEvents(events, formatVersion) {
+  const needsStream = typeof formatVersion === 'number' && formatVersion >= 2
   let changed = false
   const out = events.map((event) => {
     if (event?.type !== 'assistant/message') return event
-    const source = event.data?.message?.source
-    if (source !== null && typeof source === 'object'
+    const data = event.data
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) return event
+    const source = data.message?.source
+    const fixModel = source !== null && typeof source === 'object'
       && source.kind === 'model'
-      && (typeof source.model !== 'string' || source.model.length === 0)) {
-      changed = true
-      return {
-        ...event,
-        data: {
-          ...event.data,
-          message: {
-            ...event.data.message,
-            source: { ...source, model: typeof source.provider === 'string' && source.provider.length > 0 ? source.provider : 'claude-code' },
-          },
-        },
+      && (typeof source.model !== 'string' || source.model.length === 0)
+    const fixStream = needsStream && !Array.isArray(data.stream)
+    if (!fixModel && !fixStream) return event
+    changed = true
+    const nextData = { ...data }
+    if (fixStream) nextData.stream = []
+    if (fixModel) {
+      nextData.message = {
+        ...data.message,
+        source: { ...source, model: typeof source.provider === 'string' && source.provider.length > 0 ? source.provider : 'claude-code' },
       }
     }
-    return event
+    return { ...event, data: nextData }
   })
   return changed ? out : events
 }
@@ -1160,7 +1169,8 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
 /**
  * append 一份事件批次（双基线）；服务缺失响亮抛出。handle 路径
  * open(id, 'write') 独占单写所有权，append 后必须 flush()（耐久屏障）并
- * 成对 close()（释放所有权）；事件批经 normalizeHandleEvents 规范化。
+ * 成对 close()（释放所有权）；事件批经 normalizeHandleEvents 按后端当前格式
+ * 版本规范化（>= 2 时给 assistant/message 补 stream，否则 V3 恢复边界拒绝）。
  * 已被他人持有时 open 响亮拒绝（单写冲突）。
  */
 async function spAppend(ctx, id, events) {
@@ -1174,7 +1184,8 @@ async function spAppend(ctx, id, events) {
     }
     const handle = await sp.open(id, 'write')
     try {
-      await handle.append(normalizeHandleEvents(events))
+      const version = await currentHandleFormatVersion(sp)
+      await handle.append(normalizeHandleEvents(events, version))
       await handle.flush()
     } finally {
       await handle.close()
@@ -1191,10 +1202,11 @@ async function spAppend(ctx, id, events) {
  * create + append 一份完整会话日志（双基线）；服务缺失/落盘失败响亮抛出。
  * handle 路径：按服务形状先探测（有 open 即 handle），create 前经
  * normalizeHandleHeader 盖当前格式版本与 isSeeded（checkout 后端要求），
- * create 返回值实测判定（isSessionHandle），append 后 flush() 并在 finally
- * 成对 close()——任何失败路径都释放单写所有权；空事件批次（流式导入的首个
- * create）只 flush 物化空会话。旧路径 create+append 调用序列与 0.3.x 逐字节
- * 一致（header/事件不做任何规范化）。
+ * create 返回值实测判定（isSessionHandle），事件批经 normalizeHandleEvents 按
+ * 后端当前格式版本规范化（>= 2 时补 assistant/message.stream），append 后
+ * flush() 并在 finally 成对 close()——任何失败路径都释放单写所有权；空事件
+ * 批次（流式导入的首个 create）只 flush 物化空会话。旧路径 create+append 调用
+ * 序列与 0.3.x 逐字节一致（header/事件不做任何规范化）。
  */
 async function spPersist(ctx, meta, events) {
   const sp = ctx.get('sessionPersistence')
@@ -1206,7 +1218,10 @@ async function spPersist(ctx, meta, events) {
   if (isSessionHandle(created)) {
     notePersistenceShape(sp, 'handle')
     try {
-      if (events.length > 0) await created.append(normalizeHandleEvents(events))
+      if (events.length > 0) {
+        const version = await currentHandleFormatVersion(sp)
+        await created.append(normalizeHandleEvents(events, version))
+      }
       await created.flush()
     } finally {
       await created.close()
