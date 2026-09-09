@@ -4,7 +4,9 @@
 // 返回快照对象（{ header, revision, eventCount }），服务级 append/readFrom/listSnapshots
 // 一律不存在。钉住：append 后必须 flush（耐久屏障）且成对 close（单写所有权）、
 // 单写冲突响亮失败、失败路径不泄漏句柄、list() 快照的导入标注与 cleanStale
-// 守卫（header.id 解析失败时绝不误清 imports.json）。
+// 守卫（header.id 解析失败时绝不误清 imports.json）、以及 handle 路径的事件规范化
+// （assistant/message 补 stream：格式版本 >= 2 时 V3 恢复边界要求数组，见
+// compat-v3.test.mjs 的真实宿主 resume 实测）。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
@@ -249,6 +251,11 @@ test('handle 基线首次导入：create → append → flush → close 成对�
   assert.equal(stored.meta.isSeeded, false, 'handle 基线 header 显式补 isSeeded:false（后端序列化不丢 undefined）')
   assert.equal(stored.events.length, result.events ?? stored.events.length)
   assert.ok(stored.events.every((e, i) => e.seq === i), '落盘 seq 从 0 连续')
+  const assistants = stored.events.filter((e) => e.type === 'assistant/message')
+  assert.ok(assistants.length > 0)
+  for (const event of assistants) {
+    assert.deepEqual(event.data.stream, [], '格式版本 >= 2 时补 stream:[]（V3 恢复边界要求数组，否则不可续聊）')
+  }
 })
 
 test('handle 基线 model source 规范化：缺失 model 的 assistant 回退 provider 字符串', async (t) => {
@@ -308,6 +315,11 @@ test('handle 基线增量续写：open(write) → append → flush → close，�
   assert.equal(persistence.ops.filter((op) => op.kind === 'create').length, 1, '增量不另建会话')
   const stored = persistence.sessions.get(first.sessionId)
   assert.ok(stored.events.length > eventsAfterFirst, '事件已续写')
+  const appendedAssistants = stored.events.slice(eventsAfterFirst).filter((e) => e.type === 'assistant/message')
+  assert.ok(appendedAssistants.length > 0)
+  for (const event of appendedAssistants) {
+    assert.deepEqual(event.data.stream, [], 'open(write) 续写批次同样补 stream（两个落盘点都规范化）')
+  }
   assert.ok(stored.events.every((e, i) => e.seq === i), '续写后 seq 仍连续')
   assert.equal(persistence.writers.size, 0)
   assert.equal(persistence.openHandles.size, 0)

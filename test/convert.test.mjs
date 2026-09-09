@@ -17,6 +17,8 @@ test('convertClaudeJsonl: 简单问答合成平衡回合', () => {
   assert.equal(out.messages, 2)
   assert.equal(out.toolCalls, 0)
   assert.equal(out.meta.id, 'import-sess-simple-001')
+  // lib 的 header 版本常量（0）：纯数据层，不知道宿主当前格式版本。落盘时
+  // handle 路径由 index.mjs 的 shim 盖成后端自报版本（V3 = 3）。
   assert.equal(out.meta.version, SESSION_FORMAT_VERSION)
   assert.equal(out.meta.cwd, 'D:\\demo\\proj')
   assert.ok(out.meta.createdAt)
@@ -25,6 +27,11 @@ test('convertClaudeJsonl: 简单问答合成平衡回合', () => {
   assert.deepEqual(types, [
     'turn/start', 'step/start', 'user/message', 'assistant/message', 'step/end', 'turn/end',
   ])
+  // lib 绝不合成 stream：V3 的 assistant/message.stream 由 index.mjs 按后端
+  // 格式版本补（lib/ 零 DSH 依赖，拿不到宿主版本；v0/v1 冻结清单不接受该字段）。
+  for (const event of out.events.filter((e) => e.type === 'assistant/message')) {
+    assert.equal('stream' in event.data, false)
+  }
   // seq 连续从 0 开始
   out.events.forEach((e, i) => assert.equal(e.seq, i))
   // surface 事件带 surfaceOp
@@ -142,6 +149,7 @@ test('convertCodexJsonl: 简单问答合成平衡回合（元数据来自 sessio
   assert.equal(out.messages, 2)
   assert.equal(out.toolCalls, 0)
   assert.equal(out.meta.id, 'import-019e3b3f-636d-7cb3-aaab-0255eb45ad4f')
+  // 同 convertClaudeJsonl：lib 常量（0），落盘版本由 handle 路径的 shim 盖章。
   assert.equal(out.meta.version, SESSION_FORMAT_VERSION)
   assert.equal(out.meta.cwd, 'D:\\demo\\codex-proj')
   assert.ok(out.meta.createdAt)

@@ -433,7 +433,9 @@ test('trimIndex：projectsLimit/sessionsLimit/brief 裁剪（C4）', () => {
 
 // ── 会话回迁导出（F18）────────────────────────────────────────────────────────
 
-/** 手工构造一份含工具调用的 DSH 事件日志（与 convert.mjs 合成形状一致）。 */
+/** 手工构造一份含工具调用的 DSH 事件日志（与 handle 路径落盘形状一致：V3 的
+ *  assistant/message 必带 stream 数组；convert.mjs 合成的原始事件不含它，
+ *  由 index.mjs 的 normalizeHandleEvents 按后端格式版本补齐）。 */
 function dshExportEvents() {
   const events = []
   let seq = 0
@@ -443,6 +445,7 @@ function dshExportEvents() {
   push('user/message', { id: 'u1', role: 'user', content: [{ type: 'text', text: '列出文件' }], source: { kind: 'user' } })
   push('assistant/message', {
     turn: 1, step: 1,
+    stream: [],
     message: {
       id: 'a1', role: 'assistant',
       content: [

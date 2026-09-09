@@ -261,6 +261,9 @@ test('增量续写：源文件新增轮次后重导，同一会话只 append 新
   assert.equal(saved.events.length, 12)
   assert.ok(saved.events.every((e, i) => e.seq === i), 'seq 连续')
   assert.deepEqual(saved.events.slice(0, 6), savedFirst, '旧事件一个字节不动')
+  for (const event of saved.events.filter((e) => e.type === 'assistant/message')) {
+    assert.equal('stream' in event.data, false, 'legacy 路径不注入 stream（v0/v1 冻结清单不接受该字段）')
+  }
   assert.equal(saved.events[6].type, 'turn/start')
   assert.equal(saved.events[6].data.turn, 2, '新轮次从第 2 轮开始')
 
