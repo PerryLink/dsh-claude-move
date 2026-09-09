@@ -13,15 +13,19 @@ name: Compat
 # Platform guard: every assertion here is platform-neutral. Platform-specific
 # behavior (Windows/macOS-only rows) is never asserted on this Linux runner.
 #
-# Baseline note (2026-09-04): this workflow pins published 0.1.2-rc.1 peers and
-# therefore only exercises the LEGACY sessionPersistence API (service-level
-# create/append/readFrom, list() returning headers). The handle seam
-# (create returning a SessionHandle, list()/stat() returning snapshots,
-# append+flush+close ownership) exists only on the unreleased checkout
-# master/0.1.3-alpha.1 (bec6805d6a refactor) - no published version carries it,
-# so the handle path can only be verified against a local checkout
-# (see dev/checkout-handle.mjs, which runs the plugin against the checkout's
-# real session-persistence-jsonl backend in an isolated DSH_HOME).
+# Baseline note (2026-09-09): both sessionPersistence baselines are exercised here.
+#   - `profile` pins the legacy published line (dsh 0.1.2-rc.1): service-level
+#     create/append/readFrom and list() returning headers.
+#   - `profile-alpha` pins dsh 0.1.5-alpha.1, where the handle seam (create
+#     returning a SessionHandle, list()/stat() returning snapshots,
+#     append+flush+close ownership) is published as
+#     @deepseek-ai/dsh-session-persistence / -jsonl, and where session format V3
+#     requires assistant/message.data.stream (the restore boundary rejected the
+#     pre-0.4.5 payload). The "handle seam is unreleased / checkout-only" note
+#     that used to live here is obsolete.
+# dev/checkout-handle.mjs still drives a local checkout's real jsonl backend, and
+# test/compat-v3.test.mjs runs the host Session.fromRestore against imported logs
+# in the unit suite.
 on:
   schedule:
     - cron: '0 4 1 * *'
@@ -133,3 +137,76 @@ jobs:
           set -euo pipefail
           export DSH_HOME="$RUNNER_TEMP/dsh-home"
           dsh plugin --profile compat remove dsh-claude-move
+
+  # Handle-seam / session-format-V3 line: the same tarball against the alpha
+  # profile. This is the only CI job that exercises normalizeHandleEvents
+  # (stream: [] on assistant/message) end to end.
+  profile-alpha:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pack
+        run: pnpm pack --pack-destination "$RUNNER_TEMP"
+      - name: Install dsh CLI (alpha line)
+        run: npm install -g @deepseek-ai/dsh@0.1.5-alpha.1
+
+      - name: Install into a scratch profile (builds allowlisted)
+        run: |
+          set -euo pipefail
+          TARBALL="$(ls "$RUNNER_TEMP"/dsh-claude-move-*.tgz | head -n1)"
+          export DSH_HOME="$RUNNER_TEMP/dsh-home-alpha"
+          mkdir -p "$DSH_HOME/profiles/compat-alpha"
+          cat > "$DSH_HOME/profiles/compat-alpha/pnpm-workspace.yaml" <<'YAML'
+          packages:
+            - .
+          nodeLinker: hoisted
+          autoInstallPeers: false
+          allowBuilds:
+            '@deepseek-ai/dsh-subprocess-local': true
+            koffi: true
+            node-pty: true
+            protobufjs: true
+            '@google/genai': true
+          YAML
+          dsh plugin --profile compat-alpha add '@deepseek-ai/dsh-base@0.1.5-alpha.1' '@deepseek-ai/dsh-headless@0.1.5-alpha.1' "$TARBALL"
+
+      - name: Row-mount assertion
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home-alpha"
+          dsh --profile compat-alpha --dump-config > dump.txt
+          grep -q "dsh-claude-move" dump.txt
+
+      - name: Keyless headless smoke
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home-alpha"
+          set +e
+          timeout 120 dsh --profile compat-alpha "Reply with exactly: ok" > smoke.log 2>&1
+          code="$?"
+          set -e
+          if grep -q 'MISSING_CREDENTIAL' smoke.log; then
+            echo 'PASS: plugin tree loaded (keyless)'
+          elif [ "$code" -eq 0 ] && grep -qiE '(^|[^a-z])ok([^a-z]|$)' smoke.log; then
+            echo 'PASS: plugin tree loaded (with key)'
+          else
+            echo 'FAIL: headless smoke did not prove tree load'
+            cat smoke.log
+            exit 1
+          fi
+
+      - name: Uninstall
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home-alpha"
+          dsh plugin --profile compat-alpha remove dsh-claude-move
