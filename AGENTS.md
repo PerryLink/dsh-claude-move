@@ -18,7 +18,7 @@ lib/report.mjs       导入报告：密钥扫描/权限统计（零依赖）
 cordis.patch.yml     bundle 声明（insert claude-move）
 package.json         npm 元数据；files 白名单 = 发布内容
 README.md            英文主介绍（GitHub 默认页）
-README.{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链）
+README-{zh,es,pt,hi}.md   中/西/葡/印地语介绍（顶部互链）
 PLAN.md / COMPLIANCE.md / OPTIMIZATION.md   方案与审计（行为变更必须同步）
 LICENSE / NOTICE / THIRD_PARTY_NOTICES.md   Apache-2.0 + 复用出处标注
 test/                单测 + mock ctx 集成测试（进 GitHub，不进 npm 包）
