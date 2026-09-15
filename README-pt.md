@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # 🚚 dsh-claude-move
 - **Canal 1024 store**: `npm i -g dsh1024` uma vez, depois `dsh1024 plugin --profile web add dsh-claude-move` (conta para o ranking de instalações do [deepseek1024.com](https://deepseek1024.com)).
