@@ -385,6 +385,7 @@ const projectSchema = {
   },
 }
 
+/** @type {import('@deepseek-ai/dsh-tools').ValueSchemaSpec} */
 const scanIndexSchema = {
   type: 'object',
   additionalProperties: true,
@@ -641,6 +642,12 @@ export async function annotateImports(ctx, cacheDir, index, cleanStale = false) 
 }
 
 /** claude_scan 结果的模型可读摘要（中文）。 */
+/**
+ * 工具输出的模型可见投影。
+ * @param {any} args - 校验后的参数。
+ * @param {any} value - 已校验的规范输出值。
+ * @returns {import('@deepseek-ai/dsh-llm').ContentBlock[]} 内容块数组。
+ */
 export function renderScan(args, value) {
   const projects = value.projects ?? []
   const sessions = projects.flatMap((p) => p.sessions ?? [])
@@ -1654,6 +1661,12 @@ const importResultSchema = {
 }
 
 /** import_claude 结果的模型可读摘要（含畸形行行号与密钥告警，不展示内容）。 */
+/**
+ * 工具输出的模型可见投影。
+ * @param {any} args - 校验后的参数。
+ * @param {any} value - 已校验的规范输出值。
+ * @returns {import('@deepseek-ai/dsh-llm').ContentBlock[]} 内容块数组。
+ */
 export function renderImport(args, value) {
   const lines = []
   if (value.mode === 'batch') {
@@ -1896,6 +1909,12 @@ export async function runExport(ctx, config, args, signal) {
 }
 
 /** claude_export 结果的模型可读摘要（中文）。 */
+/**
+ * 工具输出的模型可见投影。
+ * @param {any} args - 校验后的参数。
+ * @param {any} value - 已校验的规范输出值。
+ * @returns {import('@deepseek-ai/dsh-llm').ContentBlock[]} 内容块数组。
+ */
 export function renderExport(args, value) {
   const lines = [
     `已把 DSH 会话 ${value.sessionId} 回迁为 Claude 可 resume JSONL：`,
@@ -2995,6 +3014,12 @@ const moveRunSchema = {
 const SOURCE_LABELS = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', hermes: 'Hermes' }
 
 /** move_detect 结果摘要（中文，一句角色陈述开头）。 */
+/**
+ * 工具输出的模型可见投影。
+ * @param {any} args - 校验后的参数。
+ * @param {any} value - 已校验的规范输出值。
+ * @returns {import('@deepseek-ai/dsh-llm').ContentBlock[]} 内容块数组。
+ */
 export function renderMoveDetect(args, value) {
   const lines = [personaSentence('迁移', 'zh') + '检测到以下可迁移内容：']
   for (const d of value.sources ?? []) {
@@ -3010,6 +3035,12 @@ export function renderMoveDetect(args, value) {
 }
 
 /** move_preview 结果摘要（状态计数 + 冲突 diff）。 */
+/**
+ * 工具输出的模型可见投影。
+ * @param {any} args - 校验后的参数。
+ * @param {any} value - 已校验的规范输出值。
+ * @returns {import('@deepseek-ai/dsh-llm').ContentBlock[]} 内容块数组。
+ */
 export function renderMovePreview(args, value) {
   const c = value.counts ?? {}
   const lines = [personaSentence('迁移', 'zh') + `预览完成：新增 ${c.new ?? 0}、更新 ${c.changed ?? 0}、` +
@@ -3030,6 +3061,12 @@ export function renderMovePreview(args, value) {
 }
 
 /** move_run 结果摘要（报告：短 persona 开头 + 计数 + 不支持清单）。 */
+/**
+ * 工具输出的模型可见投影。
+ * @param {any} args - 校验后的参数。
+ * @param {any} value - 已校验的规范输出值。
+ * @returns {import('@deepseek-ai/dsh-llm').ContentBlock[]} 内容块数组。
+ */
 export function renderMoveRun(args, value) {
   const lines = reportLines(value)
   return [{ type: 'text', text: lines.join('\n') }]
