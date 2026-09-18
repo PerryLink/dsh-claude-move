@@ -52,7 +52,7 @@ test('mapSource：session 计划无 digest、provider=codex', async (t) => {
   assert.equal(p.provider, 'codex')
   assert.equal(p.title, '标题')
   assert.equal('digest' in p, false)
-  assert.deepEqual(p.source, { file: sessionFile, title: '标题', cwd: '/x' })
+  assert.deepEqual(p.source, { file: sessionFile, title: '标题', cwd: '/x', importKey: sessionFile, turns: undefined })
   assert.deepEqual(p.target, {})
 })
 
