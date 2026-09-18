@@ -43,8 +43,8 @@ function makeFixtureDb(dir) {
 }
 
 test('locateHome / locateConfigHome：环境变量优先', () => {
-  assert.equal(locateHome({ OPENCODE_DATA_HOME: 'D:\\oc-data' }), 'D:\\oc-data')
-  assert.equal(locateConfigHome({ OPENCODE_CONFIG_HOME: 'D:\\oc-config' }), 'D:\\oc-config')
+  assert.equal(locateHome({ OPENCODE_DATA_HOME: 'D:\\oc-data' }), path.resolve('D:\\oc-data'))
+  assert.equal(locateConfigHome({ OPENCODE_CONFIG_HOME: 'D:\\oc-config' }), path.resolve('D:\\oc-config'))
 })
 
 test('detect：SQLite 会话（标题/目录/统计/归档过滤）', async (t) => {
