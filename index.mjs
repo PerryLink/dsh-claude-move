@@ -495,7 +495,7 @@ export async function runScan(ctx, config, args, signal) {
  * @param options - `{ projectsLimit, sessionsLimit, fields }`。
  * @returns 裁剪后的索引。
  */
-export function trimIndex(index, { projectsLimit, sessionsLimit, fields } = {}) {
+export function trimIndex(index, /** @type {{ projectsLimit?: number, sessionsLimit?: number, fields?: 'brief' | 'full' }} */ { projectsLimit, sessionsLimit, fields } = {}) {
   let projects = index.projects ?? []
   if (Number.isInteger(projectsLimit) && projectsLimit > 0 && projects.length > projectsLimit) {
     projects = projects.slice(0, projectsLimit)
