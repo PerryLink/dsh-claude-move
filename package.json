@@ -89,6 +89,8 @@
     "test": "node --test \"test/*.test.mjs\"",
     "coverage": "node --test --experimental-test-coverage \"test/*.test.mjs\"",
     "lint": "oxlint",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "check:ci": "tsc -p tsconfig.check.ci.json",
     "check:readmes": "node scripts/check-readme-sync.mjs",
     "verify:self-contained": "node scripts/verify-self-contained.mjs",
     "verify:artifacts": "node scripts/verify-artifacts.mjs"
@@ -125,7 +127,9 @@
     "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
     "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.2",
     "@deepseek-ai/dsh-user-approval": "0.1.5-rc.2",
-    "oxlint": "^0.18.1"
+    "oxlint": "^0.18.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
   },
   "funding": {
     "type": "individual",
