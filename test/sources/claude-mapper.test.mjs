@@ -30,7 +30,8 @@ test('mapSource：四类条目 → 计划', async (t) => {
     hooks: [{ id: 'PreToolUse:Bash', file: path.join(dir, 'settings.json'), kind: 'claude-hook:PreToolUse', matcher: 'Bash' }],
     errors: [],
   }
-  const { plans } = await mapSource('claude', detection, { skillsDir: 'D:\\dsh\\skills', agentsMdPath: 'D:\\dsh\\AGENTS.md' })
+  const agentsMdPath = 'D:\\dsh\\AGENTS.md'
+  const { plans } = await mapSource('claude', detection, { skillsDir: 'D:\\dsh\\skills', agentsMdPath })
 
   const session = plans.find((p) => p.kind === 'session')
   assert.equal(session.action, 'import-session')
@@ -43,7 +44,7 @@ test('mapSource：四类条目 → 计划', async (t) => {
 
   const memory = plans.find((p) => p.kind === 'memory')
   assert.equal(memory.action, 'append-section')
-  assert.equal(memory.target.path, path.join('D:\\dsh', 'AGENTS.md'))
+  assert.equal(memory.target.path, agentsMdPath)
   assert.equal(memory.content, '记忆内容')
 
   const instruction = plans.find((p) => p.kind === 'instruction')

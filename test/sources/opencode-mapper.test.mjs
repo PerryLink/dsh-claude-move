@@ -67,10 +67,11 @@ test('mapSource：agent → convert-copy、纯提示词命令 → register-comma
 test('mapSource：全局 AGENTS.md → append-section（独立段 key + content）', async (t) => {
   const { dir, detection: d } = await detection()
   t.after(() => rm(dir, { recursive: true, force: true }))
-  const { plans } = await mapSource('opencode', d, { skillsDir: 'D:\\dsh\\skills', agentsMdPath: 'D:\\dsh\\AGENTS.md' })
+  const agentsMdPath = 'D:\\dsh\\AGENTS.md'
+  const { plans } = await mapSource('opencode', d, { skillsDir: 'D:\\dsh\\skills', agentsMdPath })
   const ins = plans.find((p) => p.kind === 'instruction')
   assert.equal(ins.action, 'append-section')
-  assert.equal(ins.target.path, path.join('D:\\dsh', 'AGENTS.md'))
+  assert.equal(ins.target.path, agentsMdPath)
   assert.match(ins.content, /Be careful/)
   assert.match(ins.key, /^opencode:instruction:/)
 })

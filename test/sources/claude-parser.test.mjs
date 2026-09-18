@@ -12,7 +12,7 @@ import { assertAllowedRead } from '../../lib/sources/contract.mjs'
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures')
 
 test('locateHome：CLAUDE_CONFIG_DIR 优先', () => {
-  assert.equal(locateHome({ CLAUDE_CONFIG_DIR: 'D:\\claude-cfg' }), 'D:\\claude-cfg')
+  assert.equal(locateHome({ CLAUDE_CONFIG_DIR: 'D:\\claude-cfg' }), path.resolve('D:\\claude-cfg'))
 })
 
 test('detect：projects 会话/memories/skills/CLAUDE.md/settings hooks 全检出', async (t) => {

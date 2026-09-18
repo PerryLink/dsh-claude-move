@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The panel's "open session" button no longer disappears when the host does not expose `sessions.open()`. It renders disabled with a title explaining that the action falls back to a full page reload, so the missing capability is visible instead of looking like a rendering bug; the reload fallback warns once in the console.
+- The project card's git label read `git` before its own declaration, which threw a `ReferenceError` whenever a discovered project carried git facts; the label now reads the project's own git record.
+- The import tool's output schema declared `alreadyImported` twice (once boolean, once integer) and `skipped` twice. JavaScript kept the last entry, so the effective schema was already the integer; the dead duplicates are removed and the schema now matches the emitted summary counts.
+
+### Changed
+
+- `dsh-code-runtime` is dropped from `package.json` and `pnpm-workspace.yaml`. That package group has no 0.1.6 line, so leaving the entry made the dependency install fail outright; both locks are rebuilt.
+- The test script collects `test/**/*.test.mjs`: the previous single-level glob silently skipped 9 nested suites (29 → 38 files, 287 assertions). One stale codex-session expectation in a previously-uncollected suite was aligned with the mapper.
+- Added the checkJs type gate (`tsconfig.check.json` + `typecheck`, and the published-line `check:ci`) to a repo that had none, which immediately surfaced two real defects (above) plus a list of missing optional-property declarations; the declared option fields are annotated.
+- Declare `dsh.manifestVersion: 1` and the canonical three-clause `engines.dsh` (G-3).
+
 ## [0.4.7] - 2026-09-12
 
 ### Changed
