@@ -672,7 +672,7 @@ export function renderScan(args, value) {
       const latest = project.sessions.find((s) => typeof s.lastActivity === 'number')
       const when = latest?.lastActivity ? new Date(latest.lastActivity).toLocaleString() : '未知'
       const git = project.git
-        ? `git ${git.branch ?? '?'}${typeof git.dirtyCount === 'number' ? `（脏 ${git.dirtyCount}）` : ''}`
+        ? `git ${project.git.branch ?? '?'}${typeof project.git.dirtyCount === 'number' ? `（脏 ${project.git.dirtyCount}）` : ''}`
         : project.dirExists ? '非 git' : '目录不存在'
       lines.push(`  - ${project.slug}（${when}，会话 ${project.sessions.length} 个，${git}）`)
     }
@@ -1635,7 +1635,7 @@ const importResultSchema = {
     permissions: { type: 'object', additionalProperties: true },
     typeCounts: { type: 'object', additionalProperties: true },
     repaired: { type: 'object', additionalProperties: true },
-    alreadyImported: { type: 'boolean' },
+    alreadyImported: { type: 'integer' },
     status: { type: 'string' },
     appendedTurns: { type: 'integer' },
     appendedEvents: { type: 'integer' },
@@ -1647,9 +1647,7 @@ const importResultSchema = {
     forceImported: { type: 'object', additionalProperties: true },
     total: { type: 'integer' },
     imported: { type: 'integer' },
-    alreadyImported: { type: 'integer' },
     appended: { type: 'integer' },
-    skipped: { type: 'integer' },
     failed: { type: 'integer' },
     results: { type: 'array' },
   },
