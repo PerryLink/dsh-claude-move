@@ -80,6 +80,7 @@ const PANEL_STRINGS = {
     importContinue: '导入并继续',
     openSession: '打开会话',
     openSessionTitle: '在当前窗口打开已导入会话',
+    openUnsupportedTitle: '当前宿主不支持直接打开：点击后将整页刷新到会话列表',
     refreshSessions: '刷新会话列表',
     refreshSessionsTitle: '导入后刷新会话列表以点开续聊',
     cacheReset: '缓存已重置，正在重新扫描…',
@@ -130,6 +131,7 @@ const PANEL_STRINGS = {
     importContinue: 'Import & continue',
     openSession: 'Open session',
     openSessionTitle: 'Open the imported session in this window',
+    openUnsupportedTitle: 'This host cannot open a session directly: the page reloads to the session list instead',
     refreshSessions: 'Refresh session list',
     refreshSessionsTitle: 'Refresh the session list after importing',
     cacheReset: 'Cache reset — rescanning…',
@@ -362,12 +364,12 @@ function installPanel(ctx) {
       <div class="kv">${panelText('kvDir')}${esc(project.cwd ?? panelText('unknown'))}${project.dirExists ? '' : panelText('dirNotExists')}</div>
       <p style="margin-top:8px">
         <button data-act="import">${panelText('importContinue')}</button>
-        ${dshId && canOpen ? `<button data-act="open" title="${panelText('openSessionTitle')}">${panelText('openSession')}</button>` : ''}
+        ${dshId ? `<button data-act="open"${canOpen ? '' : ' disabled'} title="${canOpen ? panelText('openSessionTitle') : panelText('openUnsupportedTitle')}">${panelText('openSession')}</button>` : ''}
         <button data-act="reload" title="${panelText('refreshSessionsTitle')}">${panelText('refreshSessions')}</button>
       </p>`
     detail.querySelector('[data-act="import"]').addEventListener('click', () => importJob(session.file))
     const openBtn = detail.querySelector('[data-act="open"]')
-    if (openBtn) openBtn.addEventListener('click', () => openSession(dshId))
+    if (openBtn && canOpen) openBtn.addEventListener('click', () => openSession(dshId))
     detail.querySelector('[data-act="reload"]').addEventListener('click', () => { void refreshSessions() })
   }
 
@@ -383,11 +385,21 @@ function installPanel(ctx) {
     window.location.reload()
   }
 
-  /** 官方服务可用时直接打开已导入会话。 */
+  /** 一次性告警标记：宿主没有 sessions.open() 时只提示一次。 */
+  let warnedOpenFallback = false
+
+  /**
+   * 官方服务可用时直接打开已导入会话；不可用时整页刷新兜底（一次性告警，
+   * 不再让「按钮点了没反应」成为静默降级）。
+   */
   function openSession(dshId) {
     if (typeof sessions?.open === 'function') {
       sessions.open(dshId)
       return
+    }
+    if (!warnedOpenFallback) {
+      warnedOpenFallback = true
+      console.warn('[claude-move] the host exposes no sessions.open(); falling back to a full page reload for this and later opens')
     }
     window.location.reload()
   }
