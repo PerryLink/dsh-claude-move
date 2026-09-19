@@ -21,6 +21,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+
+      # The published-line type ruler. `check:ci` existed as a script but no
+      # workflow ever invoked it, so the second type face was decorative on CI
+      # (G-4b). It reports 0 errors after the JSDoc-only fixes in this branch.
+      - name: Typecheck (published line)
+        run: npm run check:ci
+
       - run: npm test
       - run: npm run coverage
       - run: npm run lint
