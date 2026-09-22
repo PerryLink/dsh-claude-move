@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-09-22
+
 ### Fixed
 
 - Adopt the host `0.1.7-alpha.1` message-source contract. That release deleted the catch-all `{ kind: 'plugin', plugin }` source, and two independent host checks enforce the deletion — the `MessageSourceMap` type (`user | model | tool | 'system-prompt'`, every producer declares its own `kind`) and durable-row admission (`session-format-v3-to-v4/src/message-sources.ts` refuses `kind === 'plugin'`, so a cast cannot get past it). The resume handoff injected by `/resume-claude` and `/claude-import-all` now declares its own kind, `dsh-claude-move`, merged into `MessageSourceMap` from the new `types.d.ts` (the same shape the host's own `tool-jobs` uses). Injected context stayed writable but would have become unreadable, and the checkJs gate now fails on a revert: with the old literal restored, `npm run typecheck` reports `Type '"plugin"' is not assignable to type '"user" | "tool" | "model" | "system-prompt" | "dsh-claude-move" | ...`.
