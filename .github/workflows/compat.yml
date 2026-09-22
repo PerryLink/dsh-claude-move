@@ -13,16 +13,19 @@ name: Compat
 # Platform guard: every assertion here is platform-neutral. Platform-specific
 # behavior (Windows/macOS-only rows) is never asserted on this Linux runner.
 #
-# Baseline note (2026-09-09): both sessionPersistence baselines are exercised here.
+# Baseline note (2026-09-22): both sessionPersistence baselines are exercised here.
 #   - `profile` pins the legacy published line (dsh 0.1.2-rc.1): service-level
-#     create/append/readFrom and list() returning headers.
-#   - `profile-alpha` pins dsh 0.1.6-alpha.2, where the handle seam (create
+#     create/append/readFrom, list() returning headers, session format v0.
+#   - `profile-alpha` pins dsh 0.1.7-alpha.1, where the handle seam (create
 #     returning a SessionHandle, list()/stat() returning snapshots,
 #     append+flush+close ownership) is published as
-#     @deepseek-ai/dsh-session-persistence / -jsonl, and where session format V3
-#     requires assistant/message.data.stream (the restore boundary rejected the
-#     pre-0.4.5 payload). The "handle seam is unreleased / checkout-only" note
-#     that used to live here is obsolete.
+#     @deepseek-ai/dsh-session-persistence / -jsonl, session format is V4 (a
+#     tool/result row is a first-class tool-role message, and assistant/message
+#     needs data.stream), and a message source must carry a producer-owned kind
+#     (the catch-all `kind: 'plugin'` is gone). This is the only CI job that
+#     exercises normalizeHandleEvents (stream: []) and conformToolResultForm
+#     end to end. The "handle seam is unreleased / checkout-only" note that used
+#     to live here is obsolete.
 # dev/checkout-handle.mjs still drives a local checkout's real jsonl backend, and
 # test/compat-v3.test.mjs runs the host Session.fromRestore against imported logs
 # in the unit suite.
@@ -161,7 +164,7 @@ jobs:
       - name: Pack
         run: pnpm pack --pack-destination "$RUNNER_TEMP"
       - name: Install dsh CLI (alpha line)
-        run: npm install -g @deepseek-ai/dsh@0.1.6-alpha.2
+        run: npm install -g @deepseek-ai/dsh@0.1.7-alpha.1
 
       - name: Install into a scratch profile (builds allowlisted)
         run: |
@@ -182,7 +185,7 @@ jobs:
             protobufjs: true
             '@google/genai': true
           YAML
-          dsh plugin --profile compat-alpha add '@deepseek-ai/dsh-base@0.1.6-alpha.2' '@deepseek-ai/dsh-headless@0.1.6-alpha.2' "$TARBALL"
+          dsh plugin --profile compat-alpha add '@deepseek-ai/dsh-base@0.1.7-alpha.1' '@deepseek-ai/dsh-headless@0.1.7-alpha.1' "$TARBALL"
 
       - name: Row-mount assertion
         run: |
