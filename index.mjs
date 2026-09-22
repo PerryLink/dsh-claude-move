@@ -38,7 +38,7 @@ import {
   scanTranscriptFile,
   resetCacheFiles,
 } from './lib/discovery.mjs'
-import { convertClaudeJsonl, convertCodexJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents, validateSessionEvents, appendTitleEvent } from './lib/convert.mjs'
+import { convertClaudeJsonl, convertCodexJsonl, createClaudeStreamConverter, mintSessionId, tailSessionEvents, validateSessionEvents, appendTitleEvent, conformToolResultForm } from './lib/convert.mjs'
 import { scanSecrets, summarizePermissions } from './lib/report.mjs'
 import { makeFileCache, readMemoriesSync, renderMemories, renderClaudeMd, fileExists, selectMemoryDirs, DEFAULT_MEMORY_MAX_BYTES, DEFAULT_MEMORY_SCOPE } from './lib/context.mjs'
 import { makeClaudeSkillsProvider } from './lib/skills-provider.mjs'
@@ -1181,9 +1181,10 @@ async function persistConvertedInner(ctx, converted, args, persisted, sourcePath
 /**
  * append 一份事件批次（双基线）；服务缺失响亮抛出。handle 路径
  * open(id, 'write') 独占单写所有权，append 后必须 flush()（耐久屏障）并
- * 成对 close()（释放所有权）；事件批经 normalizeHandleEvents 按后端当前格式
- * 版本规范化（>= 2 时给 assistant/message 补 stream，否则 V3 恢复边界拒绝）。
- * 已被他人持有时 open 响亮拒绝（单写冲突）。
+ * 成对 close()（释放所有权）；事件批经 normalizeHandleEvents /
+ * conformToolResultForm 按后端当前格式版本规范化（>= 2 时给 assistant/message
+ * 补 stream，否则 V3 恢复边界拒绝；>= 4 时保持 V4 一等 tool 角色结果消息，
+ * 否则折回 v3 包裹块）。已被他人持有时 open 响亮拒绝（单写冲突）。
  */
 async function spAppend(ctx, id, events) {
   const sp = ctx.get('sessionPersistence')
@@ -1197,7 +1198,7 @@ async function spAppend(ctx, id, events) {
     const handle = await sp.open(id, 'write')
     try {
       const version = await currentHandleFormatVersion(sp)
-      await handle.append(normalizeHandleEvents(events, version))
+      await handle.append(normalizeHandleEvents(conformToolResultForm(events, version), version))
       await handle.flush()
     } finally {
       await handle.close()
@@ -1207,18 +1208,21 @@ async function spAppend(ctx, id, events) {
   if (typeof sp.append !== 'function') {
     throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
   }
-  await sp.append(id, events)
+  // 旧路径（服务级 append，header 版本不动）保持与 0.3.x 逐字段一致：其目标
+  // 后端是格式 v3 及更早，tool/result 必须是 v3 包裹形状。
+  await sp.append(id, conformToolResultForm(events, 0))
 }
 
 /**
  * create + append 一份完整会话日志（双基线）；服务缺失/落盘失败响亮抛出。
  * handle 路径：按服务形状先探测（有 open 即 handle），create 前经
  * normalizeHandleHeader 盖当前格式版本与 isSeeded（checkout 后端要求），
- * create 返回值实测判定（isSessionHandle），事件批经 normalizeHandleEvents 按
- * 后端当前格式版本规范化（>= 2 时补 assistant/message.stream），append 后
+ * create 返回值实测判定（isSessionHandle），事件批经 normalizeHandleEvents /
+ * conformToolResultForm 按后端当前格式版本规范化（>= 2 时补
+ * assistant/message.stream；>= 4 时保持 V4 一等 tool 角色结果消息），append 后
  * flush() 并在 finally 成对 close()——任何失败路径都释放单写所有权；空事件
  * 批次（流式导入的首个 create）只 flush 物化空会话。旧路径 create+append 调用
- * 序列与 0.3.x 逐字节一致（header/事件不做任何规范化）。
+ * 序列与 0.3.x 逐字节一致（header 不动，tool/result 折回 v3 包裹形状）。
  */
 async function spPersist(ctx, meta, events) {
   const sp = ctx.get('sessionPersistence')
@@ -1232,7 +1236,7 @@ async function spPersist(ctx, meta, events) {
     try {
       if (events.length > 0) {
         const version = await currentHandleFormatVersion(sp)
-        await created.append(normalizeHandleEvents(events, version))
+        await created.append(normalizeHandleEvents(conformToolResultForm(events, version), version))
       }
       await created.flush()
     } finally {
@@ -1244,7 +1248,7 @@ async function spPersist(ctx, meta, events) {
   if (typeof sp.append !== 'function') {
     throw new Error('会话持久化服务（sessionPersistence）不可用：claude-move 导入需要该服务')
   }
-  await sp.append(meta.id, events)
+  await sp.append(meta.id, conformToolResultForm(events, 0))
 }
 
 /**

@@ -66,7 +66,8 @@ test('convertClaudeJsonl: 工具历史（tool/call + tool/result + thinking + �
   const call = out.events.find((e) => e.type === 'tool/call')
   const result = out.events.find((e) => e.type === 'tool/result')
   assert.equal(call.data.callId, 'toolu_01')
-  assert.equal(result.data.message.content[0].toolCallId, 'toolu_01')
+  assert.equal(result.data.message.role, 'tool', '构造即 V4 一等 tool 角色消息')
+  assert.equal(result.data.message.toolCallId, 'toolu_01')
   assert.deepEqual(result.sourceEventSeqs, [call.seq])
   assert.equal(result.surfaceOp, 'append')
 })
@@ -186,11 +187,12 @@ test('convertCodexJsonl: function_call + function_call_output 按 call_id 跨行
   assert.equal(call.data.arguments, '{"cmd":"ls -la","workdir":"D:\\\\demo\\\\codex-proj"}')
 
   const result = out.events.find((e) => e.type === 'tool/result')
-  assert.equal(result.data.message.content[0].toolCallId, 'call_7ZuPytXrZQEdP2DBuForbrV8')
+  assert.equal(result.data.message.role, 'tool')
+  assert.equal(result.data.message.toolCallId, 'call_7ZuPytXrZQEdP2DBuForbrV8')
   assert.deepEqual(result.sourceEventSeqs, [call.seq])
   assert.equal(result.surfaceOp, 'append')
   // output 是纯文本，直接作为 text block
-  assert.equal(result.data.message.content[0].content[0].text, 'README.md\nsrc\n')
+  assert.equal(result.data.message.content[0].text, 'README.md\nsrc\n')
 })
 
 test('convertCodexJsonl: 注入块被过滤、reasoning 加密被跳过、custom_tool_call 用 input', () => {
@@ -211,7 +213,7 @@ test('convertCodexJsonl: 注入块被过滤、reasoning 加密被跳过、custom
   assert.equal(call.data.callId, 'call_sYb5HPObaiJRLYhllTHqbIxP')
   assert.ok(call.data.arguments.includes('*** Begin Patch'))
   const result = out.events.find((e) => e.type === 'tool/result')
-  assert.equal(result.data.message.content[0].content[0].text, 'Patch applied successfully.')
+  assert.equal(result.data.message.content[0].text, 'Patch applied successfully.')
   assert.deepEqual(result.sourceEventSeqs, [call.seq])
 })
 

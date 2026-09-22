@@ -459,8 +459,8 @@ function dshExportEvents() {
   push('tool/result', {
     turn: 1, step: 1,
     message: {
-      id: 't1', role: 'user',
-      content: [{ type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: 'a.txt' }], isError: false }],
+      id: 't1', role: 'tool', toolCallId: 'c1',
+      content: [{ type: 'text', text: 'a.txt' }],
       source: { kind: 'tool', callId: 'c1' },
     },
   })

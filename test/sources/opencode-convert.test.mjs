@@ -90,8 +90,8 @@ test('convertOpencodeRows：pending 工具调用补合成错误结果；error �
     const results = converted.events.filter((e) => e.type === 'tool/result')
     assert.equal(results.length, 2)
     assert.equal(converted.repaired.synthesized, 1)
-    const errResult = results.find((e) => e.data.message.content[0].toolCallId === 'err_1')
-    assert.equal(errResult.data.message.content[0].isError, true)
+    const errResult = results.find((e) => e.data.message.toolCallId === 'err_1')
+    assert.equal(errResult.data.message.isError, true)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

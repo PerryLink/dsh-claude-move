@@ -165,7 +165,7 @@ test('convertClaudeJsonl：中断工具调用补为恰好一条合成 tool/resul
   const byCallId = new Map()
   for (const ev of out.events) {
     if (ev.type === 'tool/result') {
-      const id = ev.data.message.content[0].toolCallId
+      const id = ev.data.message.toolCallId
       byCallId.set(id, (byCallId.get(id) ?? 0) + 1)
     }
   }
@@ -175,9 +175,9 @@ test('convertClaudeJsonl：中断工具调用补为恰好一条合成 tool/resul
   assert.equal(byCallId.has('toolu_orphan'), false, '孤儿结果被丢弃')
 
   const synth = out.events.find((e) => e.type === 'tool/result'
-    && e.data.message.content[0].toolCallId === 'toolu_int_1')
-  assert.equal(synth.data.message.content[0].isError, true, '合成结果标记 isError')
-  assert.equal(synth.data.message.content[0].content[0].text, SYNTHETIC_TOOL_RESULT_TEXT)
+    && e.data.message.toolCallId === 'toolu_int_1')
+  assert.equal(synth.data.message.isError, true, '合成结果标记 isError')
+  assert.equal(synth.data.message.content[0].text, SYNTHETIC_TOOL_RESULT_TEXT)
   assert.deepEqual(synth.sourceEventSeqs, [out.events.find((e) => e.type === 'tool/call'
     && e.data.callId === 'toolu_int_1').seq], '合成结果关联声明的 tool/call')
 
@@ -209,7 +209,7 @@ test('validateSessionEvents：不平衡日志被逐条报出（issue#1 自校验
 
   const orphan = [
     mk('turn/start', 0, { turn: 1 }),
-    mk('tool/result', 1, { message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'ghost', content: [] }] } }),
+    mk('tool/result', 1, { message: { role: 'tool', toolCallId: 'ghost', content: [], source: { kind: 'tool', callId: 'ghost' } } }),
     mk('turn/end', 2, { turn: 1 }),
   ]
   const issues2 = validateSessionEvents(orphan)
@@ -218,12 +218,28 @@ test('validateSessionEvents：不平衡日志被逐条报出（issue#1 自校验
   const duplicate = [
     mk('turn/start', 0, { turn: 1 }),
     mk('tool/call', 1, { callId: 'c1', name: 'Bash', arguments: '{}' }),
-    mk('tool/result', 2, { message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', content: [] }] } }),
-    mk('tool/result', 3, { message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', content: [] }] } }),
+    mk('tool/result', 2, { message: { role: 'tool', toolCallId: 'c1', content: [], source: { kind: 'tool', callId: 'c1' } } }),
+    mk('tool/result', 3, { message: { role: 'tool', toolCallId: 'c1', content: [], source: { kind: 'tool', callId: 'c1' } } }),
     mk('turn/end', 4, { turn: 1 }),
   ]
   const issues3 = validateSessionEvents(duplicate)
   assert.ok(issues3.some((i) => i.includes('tool/call c1 has 2 tool/result events')), issues3)
+})
+
+test('validateSessionEvents：读取宽容——升级前落盘的 v3 包裹形状同样识别（只读不写）', () => {
+  const mk = (type, seq, data) => ({ type, seq, time: 1, data })
+  const legacyWrapper = [
+    mk('turn/start', 0, { turn: 1 }),
+    mk('tool/call', 1, { callId: 'c1', name: 'Bash', arguments: '{}' }),
+    {
+      ...mk('tool/result', 2, {
+        message: { role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', content: [] }] },
+      }),
+      sourceEventSeqs: [1],
+    },
+    mk('turn/end', 3, { turn: 1 }),
+  ]
+  assert.deepEqual(validateSessionEvents(legacyWrapper), [], 'v3 包裹形状的旧批次仍通过校验')
 })
 
 test('validateSessionEvents：seq 断档与 step 未闭合被报出', () => {
