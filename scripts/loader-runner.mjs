@@ -36,6 +36,37 @@ const configRequire = createRequire(resolve(import.meta.dirname, '../package.jso
 const scanDir = mkdtempSync(join(tmpdir(), 'dsh-claude-move-loader-'))
 
 const ctx = new Context()
+// Loud row failures, independent of the Loader's `await()` contract.
+//
+// Loader 1.0.3's EntryTree.await() collected rejected entry tasks and rethrew
+// them, so a row whose config failed to apply surfaced as a runner crash. From
+// 1.0.4 `await()` is `Promise.allSettled(tasks)` with the outcomes discarded,
+// and EntryGroup.update() reports a failed row through `ctx.logger.error(...)`
+// only. cordis's LoggerService registers a buffer exporter by default
+// (vendor/cordis/src/logger.ts) and a minimal composition has no sink, so at
+// 1.0.4 the diagnosis would vanish and the negative cases could only fail on
+// the follow-up "tool is missing" assertion — the wrong reason. Register a
+// stderr sink here so the row failure itself always reaches stderr; the
+// composition suite matches its reason regexes against stderr, so this keeps
+// the negative cases diagnostic on both loader versions.
+const renderLogArgument = (value) => {
+  if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value)
+  } catch {
+    // 循环引用等无法序列化的日志参数：退化为 String()，绝不因写日志而抛出。
+    return String(value)
+  }
+}
+ctx.logger.exporter({
+  colors: 0,
+  // cordis 的级别是小者为重：0 = error。只要 error 级，避免噪声淹没负例断言。
+  levels: { default: 0 },
+  export: (message) => {
+    process.stderr.write(`[loader] ${(message.args ?? []).map(renderLogArgument).join(' ')}\n`)
+  },
+})
 try {
   ctx.baseUrl = `${pathToFileURL(dirname(configPath)).href}/`
   await ctx.plugin(Loader)
