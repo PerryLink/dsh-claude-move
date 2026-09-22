@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "paths": {}
   },
-  "include": ["index.mjs", "lib/**/*.mjs"]
+  "include": ["types.d.ts", "index.mjs", "lib/**/*.mjs"]
 }

@@ -2225,6 +2225,13 @@ export function registerContextContributions(ctx, config, state) {
 
 /**
  * 把上下文注入当前会话（模型可见 ⟺ 落盘：inject 走 inbox，随日志持久化）。
+ *
+ * source 必须是生产者自有的 kind：宿主 0.1.7-alpha.1 删除了笼统的
+ * `{ kind: 'plugin', plugin }`——类型层（`MessageSourceMap` 只剩
+ * user|model|tool|'system-prompt'）与落盘准入层
+ * （session-format-v3-to-v4 的 message-sources.ts 直接拒 `kind === 'plugin'`）
+ * 双层拦截，as any 也绕不过去。本插件在 types.d.ts 里合并声明
+ * `'dsh-claude-move'`，与宿主 tool-jobs 的写法一致。
  * @param agent - CommandInvocation.agent。
  * @param text - 注入文本。
  * @returns 是否注入成功。
@@ -2232,12 +2239,17 @@ export function registerContextContributions(ctx, config, state) {
 export function injectContext(agent, text) {
   if (!agent || typeof agent.inject !== 'function') return false
   try {
-    agent.inject({
-      id: 'claude-move:' + randomUUID(),
+    /** @type {import('@deepseek-ai/dsh-llm').UserMessage} */
+    const message = {
+      // id 是本插件自铸的字符串：不引 dsh-llm 的 MessageId 品牌构造器，旧线
+      // （≤0.1.2-rc.1）的品牌名与导出面不同，为一枚已通过的字符串 id 新增运行期
+      // 宿主 import 不划算。source 才是本处被类型门禁盯住的契约面。
+      id: /** @type {any} */ ('claude-move:' + randomUUID()),
       role: 'user',
       content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: 'claude-move' },
-    })
+      source: { kind: 'dsh-claude-move' },
+    }
+    agent.inject(message)
     return true
   } catch {
     // 会话已销毁等：注入失败不阻断命令结果。

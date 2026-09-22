@@ -169,8 +169,8 @@ test('claude-import-all：批量导入 + 注入报告（F15）', async (t) => {
   assert.ok(result.text.includes('刷新'), '明确告知已打开的 Web 页面刷新一次会话列表')
   assert.equal(persistence.sessions.size, 1)
   assert.equal(injected.length, 1)
-  assert.equal(injected[0].source.kind, 'plugin')
-  assert.equal(injected[0].source.plugin, 'claude-move')
+  assert.equal(injected[0].source.kind, 'dsh-claude-move')
+  assert.equal('plugin' in injected[0].source, false, '笼统的 plugin kind 已从宿主删除')
   assert.equal(injected[0].role, 'user')
 })
 
@@ -381,6 +381,6 @@ test('injectContext：agent 无 inject 返回 false；注入消息形状正确',
   assert.equal(injectContext(agent, 'hello'), true)
   assert.equal(messages[0].role, 'user')
   assert.equal(messages[0].content[0].text, 'hello')
-  assert.deepEqual(messages[0].source, { kind: 'plugin', plugin: 'claude-move' })
+  assert.deepEqual(messages[0].source, { kind: 'dsh-claude-move' })
   assert.ok(messages[0].id.startsWith('claude-move:'))
 })
