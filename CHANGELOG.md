@@ -2,7 +2,14 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.4.10] - 2026-09-23
+
+### Changed
+
+- Move the fifteen `@deepseek-ai/dsh-*` dev/test pins from `0.1.7-alpha.1` to `0.1.7-alpha.2`, so the suite executes the alpha.2 host packages instead of the alpha.1 ones it was still testing against.
+- The declared host range gains `|| >=0.1.7-0 <0.2.0` on both sites (`engines.dsh` and the `@deepseek-ai/dsh-tools` peer band), which now read `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`. This is a correctness fix, not a tightening: under npm semver's prerelease rule a comparator set whose only prerelease comparators sit on earlier `[major, minor, patch]` tuples cannot admit a later alpha, so the three-clause range could not match the very host line this release targets. Nothing was narrowed and no existing segment moved.
+- `dshWorkshop.compatibility.dshVersions` records `0.1.7-alpha.2`; the five-language README compatibility rows name `dsh 0.1.7-alpha.2` and quote the four-clause band; the `compat.yml` `profile-alpha` job installs the `0.1.7-alpha.2` CLI and bundle, while the `profile` job keeps covering the legacy `0.1.2-rc.1` line.
+- `AGENTS.md`, `ARCHITECTURE.md`, `COMPLIANCE.md` and the `npm install` comments in the five READMEs now state the four-clause band, the `0.1.7-alpha.2` target and the `0.1.7-alpha.2` `profile-alpha` baseline. `COMPLIANCE.md` also picks up the peer carets the manifest actually declares (`@deepseek-ai/cordis` `^4.0.4`, `@deepseek-ai/schemastery` `^3.18.4`).
 
 ## [0.4.9] - 2026-09-22
 
