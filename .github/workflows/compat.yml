@@ -16,7 +16,7 @@ name: Compat
 # Baseline note (2026-09-22): both sessionPersistence baselines are exercised here.
 #   - `profile` pins the legacy published line (dsh 0.1.2-rc.1): service-level
 #     create/append/readFrom, list() returning headers, session format v0.
-#   - `profile-alpha` pins dsh 0.1.7-alpha.1, where the handle seam (create
+#   - `profile-alpha` pins dsh 0.1.7-alpha.2, where the handle seam (create
 #     returning a SessionHandle, list()/stat() returning snapshots,
 #     append+flush+close ownership) is published as
 #     @deepseek-ai/dsh-session-persistence / -jsonl, session format is V4 (a
@@ -164,7 +164,7 @@ jobs:
       - name: Pack
         run: pnpm pack --pack-destination "$RUNNER_TEMP"
       - name: Install dsh CLI (alpha line)
-        run: npm install -g @deepseek-ai/dsh@0.1.7-alpha.1
+        run: npm install -g @deepseek-ai/dsh@0.1.7-alpha.2
 
       - name: Install into a scratch profile (builds allowlisted)
         run: |
@@ -185,7 +185,7 @@ jobs:
             protobufjs: true
             '@google/genai': true
           YAML
-          dsh plugin --profile compat-alpha add '@deepseek-ai/dsh-base@0.1.7-alpha.1' '@deepseek-ai/dsh-headless@0.1.7-alpha.1' "$TARBALL"
+          dsh plugin --profile compat-alpha add '@deepseek-ai/dsh-base@0.1.7-alpha.2' '@deepseek-ai/dsh-headless@0.1.7-alpha.2' "$TARBALL"
 
       - name: Row-mount assertion
         run: |
