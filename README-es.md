@@ -259,7 +259,7 @@ Este proyecto está licenciado bajo la Apache License 2.0; los siguientes compon
 ## Desarrollo
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 

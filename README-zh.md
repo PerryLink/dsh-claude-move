@@ -259,7 +259,7 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 ## 开发
 
 ```sh
-npm install   # peer 依赖：@deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0、@deepseek-ai/cordis、schemastery
+npm install   # peer 依赖：@deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0、@deepseek-ai/cordis、schemastery
 npm test      # node --test test/*.test.mjs
 ```
 
