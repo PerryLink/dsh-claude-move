@@ -89,7 +89,7 @@ flowchart LR
 
 ## 兼容与验证
 
-- 目标：`dsh 0.1.7-rc.1`（web profile，当前线会话格式 V4）；peerDeps 保持宽 band `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`（legacy 线仍会挂载，只是写出那条线自己的形状）；纯 ESM 无构建（git/npm/tarball 三种安装均免 `prepare`/`allowBuilds`）。
+- 目标：`dsh 0.1.7-rc.2`（web profile，当前线会话格式 V4）；peerDeps 保持宽 band `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`（legacy 线仍会挂载，只是写出那条线自己的形状）；纯 ESM 无构建（git/npm/tarball 三种安装均免 `prepare`/`allowBuilds`）。
 - 已验证（本机真实数据 + 隔离 DSH_HOME）：`--dump-config` 行生效、web 启动无 FAILED、`__DSH_BOOT__` 客户端条目、`client.js` 伺服、index 路由扫描 40 项目/2387 会话、批量导入 13/13（同源 id 冲突后缀避让）、重导入 13/13 幂等、`workspace.attached=true`、会话产物落盘、重扫标注 `imported`。
 - 0.4.0 双基线：legacy 线由 mock ctx 回归套件（legacy 形状 create/append/readFrom/list）与 compat workflow 的 0.1.2-rc.1 profile job 覆盖；handle 线由 test/persistence-handle.test.mjs（handle 形状 mock：close 泄漏、单写冲突、flush 顺序、误清空守卫、stream 规范化）+ compat workflow 的 0.1.7-alpha.2 profile job（profile-alpha） + test/compat-v3.test.mjs（真实宿主 `Session.fromRestore`：新日志可 resume、带工具回合的 v4 一等 tool 角色消息可 resume、修复前形状被拒、source 准入、旧形状仍可导出）覆盖。dev/checkout-handle.mjs（不提交）以隔离 DSH_HOME 直接驱动宿主 checkout 真实 session-persistence-jsonl 后端（只读导入，绝不写入 checkout），验证 create→append→flush→close、list() 快照标注、增量续写与回迁导出。
 - 待有 API key 的机器验收：导入后「点开续聊」的模型回合（详见 RELEASE.md 验收清单）。
