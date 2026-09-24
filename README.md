@@ -25,6 +25,14 @@
 
 ---
 
+<!-- star-cta -->
+## ⭐ 如果它帮到了你
+
+这个插件是 [DSH 插件家族](https://github.com/PerryLink)的一员（40+ 个，全部 Apache-2.0）。如果你在用，**给个 star** —— 它不会解锁任何功能，但会让下一个人在搜索里更容易找到它。
+
+*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+
+
 ## Compatibility
 
 - Targets `dsh 0.1.7-rc.1` (web profile, session format V4 on the current line); peer dependencies require `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`. Verified 2026-09-24 (checkJs type gate + 291 assertions, 38 suites). Imported logs satisfy the current restore boundary again: `tool/result` is written as the V4 first-class tool-role message, and the resume handoff carries a producer-owned message source kind (`dsh-claude-move`) because 0.1.7-alpha.1 retired the catch-all `{ kind: 'plugin', plugin }` source in both the type layer and durable-row admission. The panel's "open session" button renders disabled with an explanatory title when the host exposes no `sessions.open()`. Node `^22.19 || >=24`.
