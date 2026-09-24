@@ -25,6 +25,13 @@
 
 ---
 
+
+<!-- star-cta -->
+## ⭐ 如果它帮到了你
+
+这个插件是 [DSH 插件家族](https://github.com/PerryLink)的一员（40+ 个，全部 Apache-2.0）。如果你在用，**给个 star** —— 它不会解锁任何功能，但会让下一个人在搜索里更容易找到它。
+
+*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 ## 兼容性
 
 - 面向 `dsh 0.1.7-rc.1`（web profile，当前线会话格式 V4）；peer 依赖要求 `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`。已于 2026-09-24 核验（checkJs 类型门 + 291 项断言、38 个套件）。导入日志重新满足当前恢复边界：`tool/result` 写成 V4 一等 tool 角色消息，续聊交接摘要带生产者自有消息来源 kind（`dsh-claude-move`）——0.1.7-alpha.1 在类型层与落盘行准入层双双删除了笼统的 `{ kind: 'plugin', plugin }`。宿主没有 `sessions.open()` 时，面板「打开会话」按钮置灰渲染并带说明 title。

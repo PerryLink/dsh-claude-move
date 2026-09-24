@@ -25,6 +25,13 @@
 
 ---
 
+
+<!-- star-cta -->
+## ⭐ 如果它帮到了你
+
+Este plugin faz parte da [família de plugins DSH](https://github.com/PerryLink) (mais de 40, todos Apache-2.0). Se for útil, **deixe uma estrela**: não desbloqueia nada, mas ajuda a próxima pessoa a encontrá-lo.
+
+*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 ## Compatibilidade
 
 - Direcionado a `dsh 0.1.7-rc.1` (perfil web, formato de sessão V4 na linha atual); dependências peer exigem `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`. Verificado em 2026-09-24 (portão de tipos checkJs + 291 asserções, 38 suítes). Os logs importados voltam a satisfazer a fronteira de restauração atual: `tool/result` é escrito como mensagem de papel tool de primeira classe do V4, e o repasse de retomada carrega um kind de origem próprio do produtor (`dsh-claude-move`), porque a 0.1.7-alpha.1 retirou a origem genérica `{ kind: 'plugin', plugin }` tanto na camada de tipos quanto na admissão de linhas duráveis. O botão «abrir sessão» do painel é renderizado desabilitado com um título explicativo quando o host não expõe `sessions.open()`. Node `^22.19 || >=24`.
