@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.16] - 2026-10-05
+
+### Changed
+
+- Raise the declared host floor to `0.1.6` and drop the legacy-line Compat job. The band admitted `0.1.2-rc.1`, `0.1.5-alpha.1` and `0.1.5-rc.2`, but those lines cannot run this package: the host CLI aborts with `user patch-layer watching requires the Cordis HMR service` before any plugin loads, measured in `@deepseek-ai/dsh-app-boot@0.1.2-rc.1` (its own declared version, republished in place). The cause is upstream - `dsh@0.1.2-rc.1` declares `^0.1.2-rc.1` for its sub-packages, so a fresh install drifts forward - and no plugin-side change can fix it. `profile-alpha` (0.1.7-alpha.2) keeps the end-to-end coverage; the legacy session shapes remain covered by `test/compat-v3.test.mjs`.
+
 ## [0.4.15] - 2026-10-05
 
 ### Changed

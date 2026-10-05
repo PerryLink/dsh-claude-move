@@ -1,7 +1,7 @@
 {
   "name": "dsh-claude-move",
   "description": "Four-source migration wizard: copy Claude Code, Codex, OpenCode and Hermes sessions, memories, skills, instructions and slash commands into DeepSeek Harness as resumable sessions — copy-only, approval-gated, idempotent",
-  "version": "0.4.15",
+  "version": "0.4.16",
   "type": "module",
   "main": "./index.mjs",
   "exports": {
@@ -67,8 +67,13 @@
       "filesystem:write"
     ],
     "compatibility": {
-      "dshVersions": ["0.1.2-rc.1", "0.1.7-alpha.1", "0.1.7-alpha.2", "0.1.7-rc.1", "0.1.7-rc.2",
-        "0.2.1-alpha.1"]
+      "dshVersions": [
+        "0.1.7-alpha.1",
+        "0.1.7-alpha.2",
+        "0.1.7-rc.1",
+        "0.1.7-rc.2",
+        "0.2.1-alpha.1"
+      ]
     },
     "capability": {
       "id": "move-wizard",
@@ -85,7 +90,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5-alpha.1",
-    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.6-0 <0.2.0 || >=0.2.0-0 <0.3.0",
     "@deepseek-ai/schemastery": "^3.18.5-alpha.1"
   },
   "scripts": {
@@ -109,7 +114,7 @@
   ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
-    "dsh": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0"
+    "dsh": ">=0.1.6-0 <0.2.0 || >=0.2.0-0 <0.3.0"
   },
   "license": "Apache-2.0",
   "devDependencies": {
