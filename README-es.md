@@ -27,6 +27,14 @@
 
 
 <!-- star-cta -->
+## What is dsh-claude-move?
+
+Migra Claude Code, Codex, OpenCode y Hermes a DeepSeek Harness — copia sesiones, memorias, habilidades, instrucciones y comandos de barra como sesiones DSH reanudables, solo-copia y con aprobación.
+
+Conserva tu historial de Claude Code al cambiarte: una sola instalación, sesiones reanudables, sincronización en vivo con un Claude Code en marcha y un asistente de migración de cuatro fuentes.
+
+![Demostración de terminal de dsh-claude-move: dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/master/docs/assets/dsh-claude-move-demo.png)
+
 ## Estado de mantenimiento: 🧊 CONGELADO
 
 > **Congelado el 2026-10-05. Sin nuevas funciones.** Este paquete sigue funcionando y **no está retirado**, pero ya no recibe trabajo de funciones; solo se corregirá una avería real.
@@ -98,8 +106,12 @@ move_run           # ejecuta tras la puerta de aprobación; resolución de confl
 ## Inicio rápido
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-claude-move
+```
+
+```sh
 # 1. instala el bundle en tu perfil
-dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"
+dsh plugin --profile web add github:PerryLink/dsh-claude-move
 
 # o desde npm (versiones publicadas)
 dsh plugin --profile web add dsh-claude-move
@@ -118,7 +130,7 @@ No es necesario reiniciar DSH después de importar — refresca la página web a
 
 ## Instalación y desinstalación
 
-- **Canal git** (último `master`): `dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"` — ESM puro, sin paso de `prepare` ni `allowBuilds`.
+- **Canal git** (último `master`): `dsh plugin --profile web add github:PerryLink/dsh-claude-move` — ESM puro, sin paso de `prepare` ni `allowBuilds`.
 - **Canal npm** (versiones publicadas): `dsh plugin --profile web add dsh-claude-move`.
 - **Canal tarball**: `npm pack` en este repo y luego `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`.
 - **Desinstalación**: elimina la fila `claude-move` de los bundles del perfil y reinicia `dsh`. Las sesiones importadas permanecen en el directorio de datos de DSH; el plugin solo escribe su caché (`$DSH_HOME/claude-move/`) y la carpeta del workspace `claudecode`, y nunca toca los datos fuente de Claude.

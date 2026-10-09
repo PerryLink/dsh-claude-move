@@ -27,6 +27,14 @@
 
 
 <!-- star-cta -->
+## What is dsh-claude-move?
+
+将 Claude Code、Codex、OpenCode 和 Hermes 迁移到 DeepSeek Harness —— 将会话、记忆、技能、指令和斜杠命令复制为可续聊的 DSH 会话，只复制、审批门控。
+
+迁移时保留你的 Claude Code 历史：一次安装、可续聊会话、与运行中的 Claude Code 实时同步，以及一个四来源迁移向导。
+
+![dsh-claude-move 终端演示：dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/master/docs/assets/dsh-claude-move-demo.png)
+
 ## 维护状态：🧊 已冻结
 
 > **2026-10-05 起冻结，不再新增功能。** 本包仍可正常使用，**没有退役**——但不再投入功能开发，只有真实故障才会修复。
@@ -100,8 +108,12 @@ move_run           # 在审批门控之后执行；冲突解决：
 ## 快速开始
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-claude-move
+```
+
+```sh
 # 1. 将 bundle 安装到你的 profile
-dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"
+dsh plugin --profile web add github:PerryLink/dsh-claude-move
 
 # 或从 npm 安装（已发布版本）
 dsh plugin --profile web add dsh-claude-move
@@ -120,7 +132,7 @@ dsh --profile web --dump-config | grep -A4 'id: claude-move'
 
 ## 安装与卸载
 
-- **git 渠道**（最新 `master`）：`dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"` —— 纯 ESM，无需 `prepare` 或 `allowBuilds` 步骤。
+- **git 渠道**（最新 `master`）：`dsh plugin --profile web add github:PerryLink/dsh-claude-move` —— 纯 ESM，无需 `prepare` 或 `allowBuilds` 步骤。
 - **npm 渠道**（已发布版本）：`dsh plugin --profile web add dsh-claude-move`。
 - **tarball 渠道**：在本仓库执行 `npm pack`，然后 `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`。
 - **卸载**：从 profile 的 bundles 中删除 `claude-move` 行并重启 `dsh`。导入的会话保留在 DSH 的数据目录中；插件只写自己的缓存（`$DSH_HOME/claude-move/`）和 `claudecode` 工作区文件夹，绝不触碰 Claude 源数据。

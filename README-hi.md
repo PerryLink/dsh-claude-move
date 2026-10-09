@@ -27,6 +27,14 @@
 
 
 <!-- star-cta -->
+## What is dsh-claude-move?
+
+Claude Code, Codex, OpenCode और Hermes को DeepSeek Harness में माइग्रेट करें — सत्र, यादें, कौशल, निर्देश और स्लैश कमांड को फिर-से-शुरू होने योग्य DSH सत्रों के रूप में कॉपी करें, केवल-कॉपी और अनुमोदन-गेटेड।
+
+स्थानांतरित होते समय अपना Claude Code इतिहास बनाए रखें: एक ही इंस्टॉल, फिर-से-शुरू सत्र, चालू Claude Code के साथ लाइव तालमेल, और एक चार-स्रोत माइग्रेशन विज़ार्ड।
+
+![dsh-claude-move का टर्मिनल डेमो: dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/master/docs/assets/dsh-claude-move-demo.png)
+
 ## रखरखाव स्थिति: 🧊 फ़्रीज़
 
 > **2026-10-05 से फ़्रीज़। कोई नई सुविधा नहीं।** यह पैकेज अभी भी काम करता है और **सेवानिवृत्त नहीं है**, पर अब इसमें नई सुविधाओं का काम नहीं होगा; केवल वास्तविक खराबी ठीक की जाएगी।
@@ -98,8 +106,12 @@ move_run           # अनुमोदन गेट के पीछे नि�
 ## त्वरित शुरुआत
 
 ```sh
+dsh plugin --profile web add github:PerryLink/dsh-claude-move
+```
+
+```sh
 # 1. अपने प्रोफ़ाइल में बंडल इंस्टॉल करें
-dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"
+dsh plugin --profile web add github:PerryLink/dsh-claude-move
 
 # या npm से (प्रकाशित रिलीज़)
 dsh plugin --profile web add dsh-claude-move
@@ -118,7 +130,7 @@ dsh --profile web --dump-config | grep -A4 'id: claude-move'
 
 ## इंस्टॉल और अनइंस्टॉल
 
-- **git चैनल** (नवीनतम `master`): `dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"` — शुद्ध ESM, कोई `prepare` या `allowBuilds` चरण नहीं।
+- **git चैनल** (नवीनतम `master`): `dsh plugin --profile web add github:PerryLink/dsh-claude-move` — शुद्ध ESM, कोई `prepare` या `allowBuilds` चरण नहीं।
 - **npm चैनल** (प्रकाशित रिलीज़): `dsh plugin --profile web add dsh-claude-move`।
 - **tarball चैनल**: इस रेपो में `npm pack`, फिर `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`।
 - **अनइंस्टॉल**: प्रोफ़ाइल के bundles से `claude-move` पंक्ति हटाएँ और `dsh` पुनः प्रारंभ करें। आयातित सत्र DSH की डेटा निर्देशिका में बने रहते हैं; प्लगइन केवल अपना कैश (`$DSH_HOME/claude-move/`) और `claudecode` workspace फ़ोल्डर लिखता है, और Claude स्रोत डेटा को कभी नहीं छूता।
