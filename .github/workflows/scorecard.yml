@@ -3,7 +3,7 @@
 name: Scorecard supply-chain security
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
   schedule:
     - cron: '23 4 * * 6'
   workflow_dispatch:

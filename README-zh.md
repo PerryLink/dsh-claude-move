@@ -13,7 +13,7 @@
 [![dsh-doctor](https://raw.githubusercontent.com/PerryLink/dsh-plugin-doctor/main/badges/PerryLink__dsh-claude-move.svg)](https://github.com/PerryLink/dsh-plugin-doctor#verified-徽章)
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-top-rated.svg)](https://dsh.market/)
 [![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
-[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=master&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=main&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
 [![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-claude-move?label=version)](https://github.com/PerryLink/dsh-claude-move/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
@@ -33,7 +33,7 @@
 
 迁移时保留你的 Claude Code 历史：一次安装、可续聊会话、与运行中的 Claude Code 实时同步，以及一个四来源迁移向导。
 
-![dsh-claude-move 终端演示：dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/master/docs/assets/dsh-claude-move-demo.png)
+![dsh-claude-move 终端演示：dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/main/docs/assets/dsh-claude-move-demo.png)
 
 ## 维护状态：🧊 已冻结
 
@@ -132,7 +132,7 @@ dsh --profile web --dump-config | grep -A4 'id: claude-move'
 
 ## 安装与卸载
 
-- **git 渠道**（最新 `master`）：`dsh plugin --profile web add github:PerryLink/dsh-claude-move` —— 纯 ESM，无需 `prepare` 或 `allowBuilds` 步骤。
+- **git 渠道**（最新 `main`）：`dsh plugin --profile web add github:PerryLink/dsh-claude-move` —— 纯 ESM，无需 `prepare` 或 `allowBuilds` 步骤。
 - **npm 渠道**（已发布版本）：`dsh plugin --profile web add dsh-claude-move`。
 - **tarball 渠道**：在本仓库执行 `npm pack`，然后 `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`。
 - **卸载**：从 profile 的 bundles 中删除 `claude-move` 行并重启 `dsh`。导入的会话保留在 DSH 的数据目录中；插件只写自己的缓存（`$DSH_HOME/claude-move/`）和 `claudecode` 工作区文件夹，绝不触碰 Claude 源数据。

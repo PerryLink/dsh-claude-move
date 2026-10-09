@@ -13,7 +13,7 @@
 [![dsh-doctor](https://raw.githubusercontent.com/PerryLink/dsh-plugin-doctor/main/badges/PerryLink__dsh-claude-move.svg)](https://github.com/PerryLink/dsh-plugin-doctor#verified-徽章)
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-top-rated.svg)](https://dsh.market/)
 [![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
-[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=master&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=main&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
 [![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-claude-move?label=version)](https://github.com/PerryLink/dsh-claude-move/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
@@ -33,7 +33,7 @@ Migre Claude Code, Codex, OpenCode e Hermes para o DeepSeek Harness — copie se
 
 Mantenha seu histórico do Claude Code ao migrar: uma única instalação, sessões retomáveis, sincronização em tempo real com um Claude Code em execução e um assistente de migração de quatro fontes.
 
-![Demonstração de terminal do dsh-claude-move: dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/master/docs/assets/dsh-claude-move-demo.png)
+![Demonstração de terminal do dsh-claude-move: dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/main/docs/assets/dsh-claude-move-demo.png)
 
 ## Status de manutenção: 🧊 CONGELADO
 
@@ -130,7 +130,7 @@ Não é preciso reiniciar o DSH após importar — atualize a página web aberta
 
 ## Instalar e desinstalar
 
-- **Canal git** (último `master`): `dsh plugin --profile web add github:PerryLink/dsh-claude-move` — ESM puro, sem etapa de `prepare` nem `allowBuilds`.
+- **Canal git** (último `main`): `dsh plugin --profile web add github:PerryLink/dsh-claude-move` — ESM puro, sem etapa de `prepare` nem `allowBuilds`.
 - **Canal npm** (versões publicadas): `dsh plugin --profile web add dsh-claude-move`.
 - **Canal tarball**: `npm pack` neste repo e depois `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`.
 - **Desinstalar**: remova a linha `claude-move` dos bundles do perfil e reinicie o `dsh`. As sessões importadas permanecem no diretório de dados do DSH; o plugin só grava seu cache (`$DSH_HOME/claude-move/`) e a pasta do workspace `claudecode`, e nunca toca nos dados fonte do Claude.
