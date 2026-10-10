@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [0.4.17] - 2026-10-10
+
+### Changed
+
+- The README now carries the terminal demo and an animated version of it.
+
+
 ## [0.4.16] - 2026-10-05
 
 ### Changed
