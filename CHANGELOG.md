@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [0.4.18] - 2026-10-18
+
+### Changed
+
+- Release from the current `origin/main` line (0.4.17 + this version bump), not the stale local 0.4.7 branch.
+
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
 ## [0.4.17] - 2026-10-10
