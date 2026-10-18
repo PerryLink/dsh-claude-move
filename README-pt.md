@@ -390,6 +390,8 @@ Este projeto é um dos **87 plugins ativamente mantidos** do DeepSeek Harness da
 
 </details>
 
-</details>## Licença
+</details>
+
+## Licença
 
 [Apache License 2.0](LICENSE) © 2026 dsh-claude-move contributors
