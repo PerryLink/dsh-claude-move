@@ -13,63 +13,32 @@
 [![dsh-doctor](https://raw.githubusercontent.com/PerryLink/dsh-plugin-doctor/main/badges/PerryLink__dsh-claude-move.svg)](https://github.com/PerryLink/dsh-plugin-doctor#verified-徽章)
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-top-rated.svg)](https://dsh.market/)
 [![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
-[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=main&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=master&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
 [![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-claude-move?label=version)](https://github.com/PerryLink/dsh-claude-move/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
-[![dshfind](https://dshfind.com/api/badge/PerryLink/dsh-claude-move?metric=downloads&lang=pt)](https://dshfind.com/pt/plugins/PerryLink/dsh-claude-move?ref=badge)
 
 [English](README.md) · [简体中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+
+```sh
+dsh plugin --profile <name> add dsh-claude-move
+```
+
 
 </div>
 
 ---
 
+![Terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-hero.png)
 
-<!-- star-cta -->
-## What is dsh-claude-move?
+![Animated terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-demo.gif)
 
-Migre Claude Code, Codex, OpenCode e Hermes para o DeepSeek Harness — copie sessões, memórias, habilidades, instruções e comandos de barra como sessões DSH retomáveis, somente-cópia e com aprovação.
-
-Mantenha seu histórico do Claude Code ao migrar: uma única instalação, sessões retomáveis, sincronização em tempo real com um Claude Code em execução e um assistente de migração de quatro fontes.
-
-![Demonstração de terminal do dsh-claude-move: dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/main/docs/assets/dsh-claude-move-demo.png)
-
-![Animated terminal demo of dsh-claude-move](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/main/docs/assets/dsh-claude-move-demo.gif)
-
-*A mesma execução, animada.*
-
-## Status de manutenção: 🧊 CONGELADO
-
-> **Congelado em 2026-10-05. Sem novos recursos.** Este pacote continua funcionando e **não foi aposentado**, mas não recebe mais trabalho de recursos; apenas uma falha real será corrigida.
-
-Os mantenedores consideram que nesta capacidade **já existem alternativas com melhor adoção**, então o esforço foi redirecionado. Comparação medida em 2026-10-05:
-
-| | pacote | downloads semanais |
-|---|---|---|
-| **este pacote** | `dsh-claude-move` | 843 |
-| alternativa mais adotada | [`dsh-chat-import`](https://github.com/Nwflower/dsh-chat-import) | **5,111** |
-
-👉 **Para trabalho novo, prefira dsh-chat-import.** As instalações existentes continuam funcionando sem alterações.
-
-*Evidência completa: `dsh-plugin-supersession-review-20261005.md`. Texto completo na seção **Maintenance status: 🧊 FROZEN** de [README.md](README.md).*
-
-## ⭐ 如果它帮到了你
-
-Este plugin faz parte da [família de plugins DSH](https://github.com/PerryLink) (mais de 40, todos Apache-2.0). Se for útil, **deixe uma estrela**: não desbloqueia nada, mas ajuda a próxima pessoa a encontrá-lo.
-
-*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 ## Compatibilidade
 
-| Aspeto | Estado |
-|---|---|
-| Harness | DeepSeek Harness `dsh-v0.2.1-alpha.1` (dev fixado na linha `0.2.1-alpha.1` — todos os pacotes `@deepseek-ai/dsh-*` consumidos por este repositório estão fixados nela, exceto `@deepseek-ai/dsh-invariants`, que fica em `0.2.0-rc.2` — com os portões `npm run typecheck`, `npm run check:ci` e `npm test` sobre esse pin; a cláusula de peers `>=0.2.0-0 <0.3.0` cobre o segmento `>=0.2.1-0 <0.3.0`) |
-| Node | `^22.19.0 \|\| >=24.0.0` |
-
-- Direcionado a `dsh 0.1.7-rc.2` (perfil web, formato de sessão V4 na linha atual); dependências peer exigem `>=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0`. Verificado em 2026-09-24 (portão de tipos checkJs + 291 asserções, 38 suítes). Os logs importados voltam a satisfazer a fronteira de restauração atual: `tool/result` é escrito como mensagem de papel tool de primeira classe do V4, e o repasse de retomada carrega um kind de origem próprio do produtor (`dsh-claude-move`), porque a 0.1.7-alpha.1 retirou a origem genérica `{ kind: 'plugin', plugin }` tanto na camada de tipos quanto na admissão de linhas duráveis. O botão «abrir sessão» do painel é renderizado desabilitado com um título explicativo quando o host não expõe `sessions.open()`. Node `^22.19 || >=24`.
+- Direcionado a `dsh 0.1.6-alpha.2` (perfil web, formato de sessão V3); dependências peer exigem `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0`. Verificado em 2026-09-18 (portão de tipos checkJs + 287 asserções, 38 suítes). O botão «abrir sessão» do painel agora é renderizado desabilitado com um título explicativo quando o host não expõe `sessions.open()`, em vez de desaparecer. Node `^22.19 || >=24`.
 `0.1.2-rc.1` (adaptado em 2026-09-04): o envelope de sessão mantém seu campo ignorable apenas para compatibilidade de leitura de logs armazenados - o Session.append ainda não consegue estampá-lo, então o comportamento da porta não muda.
-- A 0.4.0 inclui um shim de linha de base dupla para `sessionPersistence` em tempo de execução, detectado pela forma da API (nunca pela versão): funcionam tanto a API legada (`create`/`append`/`readFrom`, `list()` retornando cabeçalhos) quanto a costura de handle (`create` retornando um `SessionHandle`, `list()`/`stat()` retornando snapshots). A costura de handle já está publicada na linha alpha (`@deepseek-ai/dsh-session-persistence` / `-jsonl` `0.1.5-rc.2`), então o fluxo de compatibilidade a cobre. No caminho handle, todo append é seguido de `flush()` (barreira de durabilidade) e um `close()` pareado (propriedade de escritor único); os cabeçalhos são carimbados com a versão de formato atual do backend e um `isSeeded` explícito; fontes de modelo de assistente ausentes caem para o provider. Ambos os caminhos de escrita tomam a forma da versão de formato que o próprio backend declara: os eventos `assistant/message` sintetizados carregam `stream: []` a partir do formato 2 (a fronteira de restauração exige `Array.isArray(data.stream)`, então sem isso o log era escrito e lido, mas não podia ser retomado), e `tool/result` é uma mensagem de papel tool de primeira classe do V4 a partir do formato 4, mas o invólucro `tool-result` do v3 abaixo disso — um log nunca é escrito numa forma que o próprio backend recusaria. A limpeza da varredura de importação se recusa a executar quando o `header.id` de um elemento listado não pode ser resolvido, então `imports.json` nunca é esvaziado silenciosamente.
-- Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI. Os logs importados usam o formato de sessão atual do backend (V4 em `0.1.7-alpha.1`, V3 na linha `0.1.6`, v0 em `<= 0.1.2-rc.1`) e `dsh <= 0.1.2-rc.1` não consegue lê-los (a atualização é unidirecional; a alternativa é reimportar do transcript de origem). A exportação lê de volta cada uma dessas formas.
+- A 0.4.0 inclui um shim de linha de base dupla para `sessionPersistence` em tempo de execução, detectado pela forma da API (nunca pela versão): funcionam tanto a API legada (`create`/`append`/`readFrom`, `list()` retornando cabeçalhos) quanto a costura de handle (`create` retornando um `SessionHandle`, `list()`/`stat()` retornando snapshots). A costura de handle já está publicada na linha alpha (`@deepseek-ai/dsh-session-persistence` / `-jsonl` `0.1.5-rc.2`), então o fluxo de compatibilidade a cobre. No caminho handle, todo append é seguido de `flush()` (barreira de durabilidade) e um `close()` pareado (propriedade de escritor único); os cabeçalhos são carimbados com a versão de formato atual do backend e um `isSeeded` explícito; fontes de modelo de assistente ausentes caem para o provider; e desde 0.4.5 os eventos `assistant/message` sintetizados carregam `stream: []` quando a versão de formato do backend é >= 2 — o `Session.fromRestore` do V3 exige `Array.isArray(data.stream)`, então sem isso o log era escrito e lido, mas não podia ser retomado. A limpeza da varredura de importação se recusa a executar quando o `header.id` de um elemento listado não pode ser resolvido, então `imports.json` nunca é esvaziado silenciosamente.
+- Última verificação contra uma instalação nova de tarball: varredura real, importação em lote real (reimportação idempotente), anexo ao workspace e artefatos de persistência confirmados; macOS/Linux cobertos pela matriz de CI. Os logs importados usam o formato de sessão V3 e `dsh <= 0.1.2-rc.1` não consegue lê-los (a atualização é unidirecional; a alternativa é reimportar do transcript de origem).
 
 ### Matriz de compatibilidade (somente costuras públicas)
 
@@ -110,12 +79,8 @@ move_run           # executa atrás da porta de aprovação; resolução de conf
 ## Início rápido
 
 ```sh
-dsh plugin --profile web add github:PerryLink/dsh-claude-move
-```
-
-```sh
 # 1. instale o bundle no seu perfil
-dsh plugin --profile web add github:PerryLink/dsh-claude-move
+dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"
 
 # ou pelo npm (versões publicadas)
 dsh plugin --profile web add dsh-claude-move
@@ -134,7 +99,7 @@ Não é preciso reiniciar o DSH após importar — atualize a página web aberta
 
 ## Instalar e desinstalar
 
-- **Canal git** (último `main`): `dsh plugin --profile web add github:PerryLink/dsh-claude-move` — ESM puro, sem etapa de `prepare` nem `allowBuilds`.
+- **Canal git** (último `master`): `dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"` — ESM puro, sem etapa de `prepare` nem `allowBuilds`.
 - **Canal npm** (versões publicadas): `dsh plugin --profile web add dsh-claude-move`.
 - **Canal tarball**: `npm pack` neste repo e depois `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`.
 - **Desinstalar**: remova a linha `claude-move` dos bundles do perfil e reinicie o `dsh`. As sessões importadas permanecem no diretório de dados do DSH; o plugin só grava seu cache (`$DSH_HOME/claude-move/`) e a pasta do workspace `claudecode`, e nunca toca nos dados fonte do Claude.
@@ -302,7 +267,7 @@ Este projeto está licenciado sob a Apache License 2.0; os seguintes componentes
 ## Desenvolvimento
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 
@@ -318,58 +283,60 @@ A CI executa a suíte completa no Node 22 em Linux/macOS/Windows via GitHub Acti
 - [@OLDnana1](https://github.com/OLDnana1) — análise de causa raiz da corrupção de chamadas de ferramenta interrompidas que fazia as sessões importadas retornarem permanentemente HTTP 400 ao retomar.
 - [@GooodWei](https://github.com/GooodWei) — identificou que `README.md` (e qualquer `.md` sem descrição) era registrado incorretamente como habilidade, o que quebrava o carregamento de habilidades do DSH.
 
-## Licença
+## Família de Plugins DSH PerryLink
 
-[Apache License 2.0](LICENSE) © 2026 dsh-claude-move contributors
-
-
-## PerryLink DSH Plugin Family
-
-Este projeto é um dos **34 plugins ativamente mantidos** do DeepSeek Harness da [PerryLink](https://github.com/PerryLink): o registro tem **42**, dos quais **5** estão congelados e **3** aposentados; cada um mantém sua linha abaixo, com o motivo na coluna Status. Se este ajudou você, provavelmente os outros também ajudarão:
+Este projeto é um dos [42 plugins de DeepSeek Harness](https://github.com/PerryLink) mantidos por [PerryLink](https://github.com/PerryLink). Se este ajuda você, os outros provavelmente também:
 
 | Plugin | Em uma linha | Status |
 |---|---|---|
-| **[dsh-auto-review](https://github.com/PerryLink/dsh-auto-review)** | Second-model auto-review on the approval chain, fail-closed by default | |
+| **[dsh-auto-review](https://github.com/PerryLink/dsh-auto-review)** | Auto-revisão de segundo modelo na cadeia de aprovação, com falha fechada por padrão | |
+| **[dsh-background-agents](https://github.com/PerryLink/dsh-background-agents)** | Agentes filhos em segundo plano duráveis com barra lateral de UI web, mensagens e interrupção | |
+| **[dsh-budget](https://github.com/PerryLink/dsh-budget)** | Governança de custos para DeepSeek Harness: orçamentos, carbono e latência em um painel. | |
+| **[dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind)** | Equivalente ao /rewind do Claude Code: instantâneos, bifurcações de sessão, restauração de uso único | |
+| **[dsh-click](https://github.com/PerryLink/dsh-click)** | Controle de desktop nativo multiplataforma para DeepSeek Harness — Windows primeiro. | |
+| **[dsh-composer-history](https://github.com/PerryLink/dsh-composer-history)** | Histórico de entrada estilo terminal para o compositor web: setas, busca Ctrl+R | |
+| **[dsh-data-quality](https://github.com/PerryLink/dsh-data-quality)** | Verificações de qualidade de datasets e verificação de citações (a ponte numérica opcional consumida aqui) | |
+| **[dsh-defend](https://github.com/PerryLink/dsh-defend)** | Defesa contra injeção de prompt, jailbreak e vazamento de segredos para DeepSeek Harness. | |
+| **[dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck)** | Guardião de disciplina de engenharia: sabatina de requisitos, portões de teste, revisão adversária | |
+| **[dsh-draw](https://github.com/PerryLink/dsh-draw)** | Roteamento unificado de geração de imagens estáticas para DeepSeek Harness. | |
+| **[dsh-fast](https://github.com/PerryLink/dsh-fast)** | Diagnóstico de desempenho só de leitura para DeepSeek Harness. | |
+| **[dsh-fund-research](https://github.com/PerryLink/dsh-fund-research)** | Relatórios de pesquisa deterministas para fundos mútuos públicos chineses | |
+| **[dsh-github](https://github.com/PerryLink/dsh-github)** | Integração de PR/issues do GitHub para o DSH, cada escrita controlada por aprovação | |
+| **[dsh-industry-research](https://github.com/PerryLink/dsh-industry-research)** | Orquestração de pesquisa setorial que sela as suas entregas através do `ctx.researchReport.assemble` deste plugin | |
+| **[dsh-library](https://github.com/PerryLink/dsh-library)** | Base de conhecimento documental local para DeepSeek Harness. | |
+| **[dsh-local-ai](https://github.com/PerryLink/dsh-local-ai)** | Integração de modelos locais (Ollama) para DeepSeek Harness. | |
+| **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | Diagnósticos, formatação, autocompletar, ações de código e renomeação LSP sobre servidores de linguagem | |
+| **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | Middleware de mascaramento de PII: anonimiza no limite do modelo, restaura na camada de exibição | |
+| **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Painel de tempo de execução MCP somente leitura: comando /mcp + aba Settings com status, ferramentas e erros | |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Memória entre sessões controlada por aprovação: costura ctx.memory + SQLite + ferramenta de memória | |
+| **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | Exportador de observabilidade OpenTelemetry e Langfuse para DeepSeek Harness. | |
+| **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Troca de estilo em tempo de execução equivalente ao outputStyles do Claude Code | |
+| **[dsh-reach](https://github.com/PerryLink/dsh-reach)** | Ponte multicanal de aprovação/perguntas: WeChat/Telegram/Feishu, console de sessão | |
+| **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Regras de permissão declarativas allow/deny/ask estilo Claude Code com auditoria | |
+| **[dsh-personal-directive](https://github.com/PerryLink/dsh-personal-directive)** | Injetor de diretivas pessoais com alternância na barra superior (edição framework) | |
+| **[dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)** | Base de conhecimento de desenvolvimento de plugins como habilidade de agente sob demanda | |
+| **[dsh-research-report](https://github.com/PerryLink/dsh-research-report)** | Motor de relatórios de pesquisa verificáveis com evidência endereçada por conteúdo | |
+| **[dsh-score](https://github.com/PerryLink/dsh-score)** | Pontuação de qualidade multidimensional para plugins de DeepSeek Harness. | |
+| **[dsh-session-pin](https://github.com/PerryLink/dsh-session-pin)** | Fixe sessões na barra lateral web com ordenação durável | |
+| **[dsh-session-sync](https://github.com/PerryLink/dsh-session-sync)** | Sincronização de sessões entre dispositivos para DeepSeek Harness — um espelho git dedicado do seu armazenamento de sessões. | |
+| **[dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security)** | Pacote de habilidades de auditoria de segurança: varredura de segredos, revisão de dependências e cadeia de suprimentos | |
+| **[dsh-talk](https://github.com/PerryLink/dsh-talk)** | Loop de sessão com voz para DeepSeek Harness: fale e ouça a resposta. | |
+| **[dsh-test-drive](https://github.com/PerryLink/dsh-test-drive)** | Test drives isolados de instalação e smoke para plugins de DeepSeek Harness. | |
+| **[dsh-ticktick](https://github.com/PerryLink/dsh-ticktick)** | Ponte de tarefas TickTick/Dida365: painel no cabeçalho da sessão + 11 ferramentas | |
+| **[dsh-translate](https://github.com/PerryLink/dsh-translate)** | Tradução de parâmetros entre fornecedores e reparo determinístico de JSON para DeepSeek Harness. | |
+| **[dsh-wechat](https://github.com/pan17/dsh-wechat)** | Ponte WeChat ↔ DSH (bot Tencent iLink): texto/imagem/arquivo/voz, aprovações no chat | |
 | **[dsh-autotier](https://github.com/PerryLink/dsh-autotier)** | Automatic strong/cheap model-tier routing with deterministic risk guards and a `/tier` command | |
-| **[dsh-background-agents](https://github.com/PerryLink/dsh-background-agents)** | Durable background child agents with a Web UI sidebar, messaging and interrupt | 🚫 **APOSENTADO** — ver a nota acima |
-| **[dsh-budget](https://github.com/PerryLink/dsh-budget)** | Cost governance for DeepSeek Harness: budgets, carbon, and latency in one panel. | 🧊 CONGELADO — ver o README do repositório |
 | **[dsh-catalog](https://github.com/PerryLink/dsh-catalog)** | DSH Desktop Market standard catalog source for the PerryLink family | |
 | **[dsh-cert-mcp](https://github.com/PerryLink/dsh-cert-mcp)** | Read-only MCP server exposing the certification registry: grades, snapshots and five-dimension evidence | |
-| **[dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind)** | Claude Code /rewind-equivalent: snapshots, session forks, one-shot restore | |
-| **[dsh-claude-move](https://github.com/PerryLink/dsh-claude-move)** | Migrate Claude Code sessions, memory, skills and CLAUDE.md into DSH | 🧊 CONGELADO — ver o README do repositório |
-| **[dsh-click](https://github.com/PerryLink/dsh-click)** | Cross-platform native desktop control for DeepSeek Harness — Windows first. | |
-| **[dsh-composer-history](https://github.com/PerryLink/dsh-composer-history)** | Terminal-style input history for the web composer: arrows, Ctrl+R search | |
-| **[dsh-data-quality](https://github.com/PerryLink/dsh-data-quality)** | Dataset quality checks and citation cross-checks (the optional numeric bridge consumed here) | |
-| **[dsh-defend](https://github.com/PerryLink/dsh-defend)** | Prompt-injection, jailbreak, and secret-leak defense for DeepSeek Harness. | 🧊 CONGELADO — ver o README do repositório |
-| **[dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck)** | Engineering-discipline guard: requirements grill, test gates, adversary review | |
-| **[dsh-draw](https://github.com/PerryLink/dsh-draw)** | Unified static-image generation routing for DeepSeek Harness. | 🧊 CONGELADO — ver o README do repositório |
-| **[dsh-fast](https://github.com/PerryLink/dsh-fast)** | Read-only performance diagnostics for DeepSeek Harness. | |
-| **[dsh-fund-research](https://github.com/PerryLink/dsh-fund-research)** | Deterministic research reports for Chinese public mutual funds | |
-| **[dsh-github](https://github.com/PerryLink/dsh-github)** | GitHub PR/issues integration for DSH, every write gated by approval | |
-| **[dsh-industry-research](https://github.com/PerryLink/dsh-industry-research)** | Industry research orchestration that seals its deliverables through this plugin's `ctx.researchReport.assemble` | |
-| **[dsh-laya](https://github.com/PerryLink/dsh-laya)** | Laya typed decisions (`noul`/`choice`/`score`) as a first-class Cordis service and model-visible tools | |
-| **[dsh-library](https://github.com/PerryLink/dsh-library)** | Local document knowledge base for DeepSeek Harness. | |
-| **[dsh-local-ai](https://github.com/PerryLink/dsh-local-ai)** | Local-model (Ollama) integration for DeepSeek Harness. | |
-| **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
-| **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
-| **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
-| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | |
-| **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
-| **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
-| **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |
+| **[dsh-kit](https://github.com/PerryLink/dsh-kit)** | One-command starter pack that installs the core family | |
 | **[dsh-plugin-certification](https://github.com/PerryLink/dsh-plugin-certification)** | Community certification registry with repro-checkable grades and badges | |
-| **[dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor)** | Zero-dependency static + sandbox smoke detector for DSH plugins | |
-| **[dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)** | Plugin-development knowledge base as an on-demand agent skill | |
 | **[dsh-plugin-kit](https://github.com/PerryLink/dsh-plugin-kit)** | Shared zero-runtime-dependency toolkit for the PerryLink DSH plugins | |
-| **[dsh-plugin-upgrade](https://github.com/PerryLink/dsh-plugin-upgrade)** | One-package, one-corridor-index plugin upgrade skill: routes a repository to the matching closed corridor card | |
-| **[dsh-reach](https://github.com/PerryLink/dsh-reach)** | Multi-channel approval/question bridge: WeChat/Telegram/Feishu, session console | 🧊 CONGELADO — ver o README do repositório |
-| **[dsh-research-report](https://github.com/PerryLink/dsh-research-report)** | Verifiable research-report engine: content-addressed evidence ledger and sealed versions | |
-| **[dsh-score](https://github.com/PerryLink/dsh-score)** | Multi-dimensional quality scoring for DeepSeek Harness plugins. | |
-| **[dsh-session-pin](https://github.com/PerryLink/dsh-session-pin)** | Pin sessions in the Web sidebar with durable ordering | 🚫 **APOSENTADO** — ver a nota acima |
-| **[dsh-session-sync](https://github.com/PerryLink/dsh-session-sync)** | Cross-device session sync for DeepSeek Harness — a dedicated git mirror of your session store. | |
-| **[dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security)** | Security-audit skill pack: secret scan, dependency and supply-chain review | |
-| **[dsh-talk](https://github.com/PerryLink/dsh-talk)** | Voice-first session loop for DeepSeek Harness: talk to it, hear it answer. | |
-| **[dsh-team-rooms](https://github.com/PerryLink/dsh-team-rooms)** | Cross-session team rooms: shared message bus, task board and timeline | 🚫 **APOSENTADO** — ver a nota acima |
-| **[dsh-test-drive](https://github.com/PerryLink/dsh-test-drive)** | Isolated install-and-smoke test drives for DeepSeek Harness plugins. | |
-| **[dsh-ticktick](https://github.com/PerryLink/dsh-ticktick)** | TickTick/Dida365 task bridge: session-header panel + 11 tools | |
-| **[dsh-translate](https://github.com/PerryLink/dsh-translate)** | Vendor parameter translation and deterministic JSON repair for DeepSeek Harness. | |
+| **[dsh-plugin-portal](https://github.com/PerryLink/dsh-plugin-portal)** | Zero-dependency static portal rendering the whole plugin family as one page | |
+| **[dsh-plugin-upgrade-015](https://github.com/PerryLink/dsh-plugin-upgrade-015)** | Merged `0.1.3-alpha.1` → `0.1.5-rc.1` upgrade corridor card plus a zero-dependency seam scanner | |
+| **[dsh-team-rooms](https://github.com/PerryLink/dsh-team-rooms)** | Cross-session team rooms: shared message bus, task board and timeline | |
+| **[dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor)** | Zero-dependency static + sandbox smoke detector for DSH plugins | |
+| **[dsh-laya](https://github.com/PerryLink/dsh-laya)** | Laya typed decisions (`noul`/`choice`/`score`) as a first-class Cordis service and model-visible tools | |
+
+## Licença
+
+[Apache License 2.0](LICENSE) © 2026 dsh-claude-move contributors

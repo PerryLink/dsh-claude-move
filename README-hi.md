@@ -13,63 +13,39 @@
 [![dsh-doctor](https://raw.githubusercontent.com/PerryLink/dsh-plugin-doctor/main/badges/PerryLink__dsh-claude-move.svg)](https://github.com/PerryLink/dsh-plugin-doctor#verified-徽章)
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-top-rated.svg)](https://dsh.market/)
 [![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
-[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=main&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-claude-move/test.yml?branch=master&label=CI)](https://github.com/PerryLink/dsh-claude-move/actions)
 [![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-claude-move?label=version)](https://github.com/PerryLink/dsh-claude-move/releases)
 [![npm version](https://img.shields.io/npm/v/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-claude-move)](https://www.npmjs.com/package/dsh-claude-move)
-[![dshfind](https://dshfind.com/api/badge/PerryLink/dsh-claude-move?metric=downloads&lang=hi)](https://dshfind.com/hi/plugins/PerryLink/dsh-claude-move?ref=badge)
 
 [English](README.md) · [简体中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+
+```sh
+dsh plugin --profile <name> add dsh-claude-move
+```
+
 
 </div>
 
 ---
 
+![Terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-hero.png)
 
-<!-- star-cta -->
-## What is dsh-claude-move?
+![Animated terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-demo.gif)
 
-Claude Code, Codex, OpenCode और Hermes को DeepSeek Harness में माइग्रेट करें — सत्र, यादें, कौशल, निर्देश और स्लैश कमांड को फिर-से-शुरू होने योग्य DSH सत्रों के रूप में कॉपी करें, केवल-कॉपी और अनुमोदन-गेटेड।
+## इंस्टॉल और अनइंस्टॉल
 
-स्थानांतरित होते समय अपना Claude Code इतिहास बनाए रखें: एक ही इंस्टॉल, फिर-से-शुरू सत्र, चालू Claude Code के साथ लाइव तालमेल, और एक चार-स्रोत माइग्रेशन विज़ार्ड।
+- **git चैनल** (नवीनतम `master`): `dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"` — शुद्ध ESM, कोई `prepare` या `allowBuilds` चरण नहीं।
+- **npm चैनल** (प्रकाशित रिलीज़): `dsh plugin --profile web add dsh-claude-move`।
+- **tarball चैनल**: इस रेपो में `npm pack`, फिर `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`।
+- **अनइंस्टॉल**: प्रोफ़ाइल के bundles से `claude-move` पंक्ति हटाएँ और `dsh` पुनः प्रारंभ करें। आयातित सत्र DSH की डेटा निर्देशिका में बने रहते हैं; प्लगइन केवल अपना कैश (`$DSH_HOME/claude-move/`) और `claudecode` workspace फ़ोल्डर लिखता है, और Claude स्रोत डेटा को कभी नहीं छूता।
 
-![dsh-claude-move का टर्मिनल डेमो: dsh-claude-move — install, then /claude-import-all](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/main/docs/assets/dsh-claude-move-demo.png)
-
-![Animated terminal demo of dsh-claude-move](https://raw.githubusercontent.com/PerryLink/dsh-claude-move/main/docs/assets/dsh-claude-move-demo.gif)
-
-*वही रन, एनिमेटेड।*
-
-## रखरखाव स्थिति: 🧊 फ़्रीज़
-
-> **2026-10-05 से फ़्रीज़। कोई नई सुविधा नहीं।** यह पैकेज अभी भी काम करता है और **सेवानिवृत्त नहीं है**, पर अब इसमें नई सुविधाओं का काम नहीं होगा; केवल वास्तविक खराबी ठीक की जाएगी।
-
-रखरखावकर्ताओं का मानना है कि इस क्षमता में **अधिक अपनाए गए विकल्प अब मौजूद हैं**, इसलिए प्रयास अन्यत्र स्थानांतरित किया गया। 2026-10-05 को मापी गई तुलना:
-
-| | पैकेज | साप्ताहिक डाउनलोड |
-|---|---|---|
-| **यह पैकेज** | `dsh-claude-move` | 843 |
-| अधिक अपनाया गया विकल्प | [`dsh-chat-import`](https://github.com/Nwflower/dsh-chat-import) | **5,111** |
-
-👉 **नए काम के लिए dsh-chat-import को प्राथमिकता दें।** मौजूदा इंस्टॉल बिना किसी बदलाव के काम करते रहेंगे।
-
-*पूर्ण प्रमाण: `dsh-plugin-supersession-review-20261005.md`। पूरा पाठ [README.md](README.md) के **Maintenance status: 🧊 FROZEN** अनुभाग में।*
-
-## ⭐ 如果它帮到了你
-
-यह प्लगइन [DSH प्लगइन परिवार](https://github.com/PerryLink) का हिस्सा है (40+ प्लगइन, सभी Apache-2.0)। अगर यह उपयोगी लगे, तो **एक स्टार दें** — इससे कोई सुविधा अनलॉक नहीं होती, पर अगला व्यक्ति इसे खोज में आसानी से पा लेता है।
-
-*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 ## अनुकूलता
 
-| पहलू | स्थिति |
-|---|---|
-| Harness | DeepSeek Harness `dsh-v0.2.1-alpha.1` (dev `0.2.1-alpha.1` लाइन पर पिन — इस रेपो द्वारा उपभोग किए जाने वाले सभी `@deepseek-ai/dsh-*` पैकेज उसी लाइन पर पिन हैं, केवल `@deepseek-ai/dsh-invariants` `0.2.0-rc.2` पर रहता है — और गेट `npm run typecheck`, `npm run check:ci` तथा `npm test` उसी पिन पर चलते हैं; peer शर्त `>=0.2.0-0 <0.3.0` उस `>=0.2.1-0 <0.3.0` खंड को समाहित करती है) |
-| Node | `^22.19.0 \|\| >=24.0.0` |
-
-- `dsh 0.1.7-rc.2` (web profile, वर्तमान लाइन पर सत्र प्रारूप V4) को लक्षित करता है; peer निर्भरताएँ `>=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0` चाहिए। 2026-09-25 को सत्यापित (checkJs प्रकार गेट + 291 असर्शन, 38 सूट)। आयातित लॉग वर्तमान पुनर्स्थापन सीमा को फिर से पूरा करते हैं: `tool/result` V4 के प्रथम-श्रेणी tool रोल संदेश के रूप में लिखा जाता है, और रिज़्यूम हैंडऑफ़ उत्पादक-स्वामित्व वाला संदेश स्रोत kind (`dsh-claude-move`) लेकर चलता है, क्योंकि 0.1.7-alpha.1 ने सामान्य `{ kind: 'plugin', plugin }` स्रोत को प्रकार-परत और टिकाऊ-पंक्ति प्रवेश, दोनों से हटा दिया। जब होस्ट `sessions.open()` नहीं देता, पैनल का "सत्र खोलें" बटन विवरणी title के साथ निष्क्रिय रूप में प्रस्तुत होता है। Node `^22.19 || >=24`।
+- `dsh 0.1.6-alpha.2` (web profile, सत्र प्रारूप V3) को लक्षित करता है; peer निर्भरताएँ `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0` चाहिए। 2026-09-18 को सत्यापित (checkJs प्रकार गेट + 287 असर्शन, 38 सूट)। जब होस्ट `sessions.open()` नहीं देता, पैनल का "सत्र खोलें" बटन अब विवरणी title के साथ निष्क्रिय रूप में प्रस्तुत होता है, गायब नहीं होता। Node `^22.19 || >=24`।
 `0.1.2-rc.1` (2026-09-04 को अनुकूलित): सत्र लिफ़ाफ़ा अपना ignorable फ़ील्ड केवल संग्रहीत-लॉग पठन संगतता के लिए रखता है - Session.append अभी भी इसे स्टैम्प नहीं कर सकता, इसलिए गेट व्यवहार अपरिवर्तित है।
-- 0.4.0 में `sessionPersistence` के लिए दोहरी-बेसलाइन रनटाइम shim शामिल है, जिसे API आकार से पहचाना जाता है (संस्करण से कभी नहीं): लीगेसी API (`create`/`append`/`readFrom`, `list()` हेडर लौटाता है) और हैंडल सीम (`create` एक `SessionHandle` लौटाता है, `list()`/`stat()` स्नैपशॉट लौटाते हैं) दोनों काम करते हैं। हैंडल सीम अब alpha लाइन पर प्रकाशित है (`@deepseek-ai/dsh-session-persistence` / `-jsonl` `0.1.5-rc.2`), इसलिए compat वर्कफ़्लो उसे कवर करता है। हैंडल पथ पर हर append के बाद `flush()` (स्थायित्व अवरोध) और युग्मित `close()` (एकल-लेखक स्वामित्व) होता है; हेडर पर बैकएंड का वर्तमान प्रारूप संस्करण और स्पष्ट `isSeeded` अंकित होता है; अनुपस्थित assistant model स्रोत provider पर गिरते हैं। दोनों लेखन-पथ अपना आकार बैकएंड के स्वयं घोषित प्रारूप संस्करण से लेते हैं: संश्लेषित `assistant/message` ईवेंट प्रारूप 2 से `stream: []` लेकर आते हैं (पुनर्स्थापन सीमा `Array.isArray(data.stream)` माँगती है, इसलिए उसके बिना लॉग लिखा और पढ़ा तो जाता था पर फिर से शुरू नहीं हो सकता था), और `tool/result` प्रारूप 4 से V4 का प्रथम-श्रेणी tool रोल संदेश है, उसके नीचे v3 का `tool-result` आवरण — लॉग कभी ऐसी आकृति में नहीं लिखा जाता जिसे उसका अपना बैकएंड अस्वीकार कर दे। जब किसी सूचीबद्ध तत्व का `header.id` हल नहीं हो पाता तो आयात-स्कैन की सफ़ाई चलने से मना कर देती है, इसलिए `imports.json` कभी चुपचाप खाली नहीं होता।
-- अंतिम बार एक ताज़ा tarball इंस्टॉल के विरुद्ध सत्यापित: वास्तविक स्कैन, वास्तविक बैच आयात (आइडेम्पोटेंट पुनः-आयात), workspace जुड़ाव और पर्सिस्टेंस आर्टिफैक्ट की पुष्टि; macOS/Linux CI मैट्रिक्स द्वारा कवर हैं। आयातित लॉग बैकएंड के वर्तमान सत्र प्रारूप में हैं (`0.1.7-alpha.1` पर V4, `0.1.6` लाइन पर V3, `<= 0.1.2-rc.1` पर v0) और `dsh <= 0.1.2-rc.1` उन्हें पढ़ नहीं सकता (उन्नयन एकतरफ़ा है; विकल्प स्रोत transcript से पुनः आयात है)। निर्यात इनमें से हर आकृति को वापस पढ़ लेता है।
+- 0.4.0 में `sessionPersistence` के लिए दोहरी-बेसलाइन रनटाइम shim शामिल है, जिसे API आकार से पहचाना जाता है (संस्करण से कभी नहीं): लीगेसी API (`create`/`append`/`readFrom`, `list()` हेडर लौटाता है) और हैंडल सीम (`create` एक `SessionHandle` लौटाता है, `list()`/`stat()` स्नैपशॉट लौटाते हैं) दोनों काम करते हैं। हैंडल सीम अब alpha लाइन पर प्रकाशित है (`@deepseek-ai/dsh-session-persistence` / `-jsonl` `0.1.5-rc.2`), इसलिए compat वर्कफ़्लो उसे कवर करता है। हैंडल पथ पर हर append के बाद `flush()` (स्थायित्व अवरोध) और युग्मित `close()` (एकल-लेखक स्वामित्व) होता है; हेडर पर बैकएंड का वर्तमान प्रारूप संस्करण और स्पष्ट `isSeeded` अंकित होता है; अनुपस्थित assistant model स्रोत provider पर गिरते हैं; और 0.4.5 से संश्लेषित `assistant/message` ईवेंट तब `stream: []` लेकर आते हैं जब बैकएंड प्रारूप संस्करण >= 2 हो — V3 का `Session.fromRestore` `Array.isArray(data.stream)` माँगता है, इसलिए उसके बिना लॉग लिखा और पढ़ा तो जाता था पर फिर से शुरू नहीं हो सकता था। जब किसी सूचीबद्ध तत्व का `header.id` हल नहीं हो पाता तो आयात-स्कैन की सफ़ाई चलने से मना कर देती है, इसलिए `imports.json` कभी चुपचाप खाली नहीं होता।
+- अंतिम बार एक ताज़ा tarball इंस्टॉल के विरुद्ध सत्यापित: वास्तविक स्कैन, वास्तविक बैच आयात (आइडेम्पोटेंट पुनः-आयात), workspace जुड़ाव और पर्सिस्टेंस आर्टिफैक्ट की पुष्टि; macOS/Linux CI मैट्रिक्स द्वारा कवर हैं। आयातित लॉग सत्र प्रारूप V3 में हैं और `dsh <= 0.1.2-rc.1` उन्हें पढ़ नहीं सकता (उन्नयन एकतरफ़ा है; विकल्प स्रोत transcript से पुनः आयात है)।
 
 ### अनुकूलता मैट्रिक्स (केवल सार्वजनिक सीम)
 
@@ -110,12 +86,8 @@ move_run           # अनुमोदन गेट के पीछे नि�
 ## त्वरित शुरुआत
 
 ```sh
-dsh plugin --profile web add github:PerryLink/dsh-claude-move
-```
-
-```sh
 # 1. अपने प्रोफ़ाइल में बंडल इंस्टॉल करें
-dsh plugin --profile web add github:PerryLink/dsh-claude-move
+dsh plugin --profile web add "github:PerryLink/dsh-claude-move#master"
 
 # या npm से (प्रकाशित रिलीज़)
 dsh plugin --profile web add dsh-claude-move
@@ -131,13 +103,6 @@ dsh --profile web --dump-config | grep -A4 'id: claude-move'
 ```
 
 आयात के बाद DSH को पुनः प्रारंभ करने की आवश्यकता नहीं है — खुले वेब पेज को एक बार रीफ़्रेश करें और जारी रखने के लिए किसी भी आयातित सत्र पर क्लिक करें।
-
-## इंस्टॉल और अनइंस्टॉल
-
-- **git चैनल** (नवीनतम `master`): `dsh plugin --profile web add github:PerryLink/dsh-claude-move` — शुद्ध ESM, कोई `prepare` या `allowBuilds` चरण नहीं।
-- **npm चैनल** (प्रकाशित रिलीज़): `dsh plugin --profile web add dsh-claude-move`।
-- **tarball चैनल**: इस रेपो में `npm pack`, फिर `dsh plugin --profile web add ./dsh-claude-move-<version>.tgz`।
-- **अनइंस्टॉल**: प्रोफ़ाइल के bundles से `claude-move` पंक्ति हटाएँ और `dsh` पुनः प्रारंभ करें। आयातित सत्र DSH की डेटा निर्देशिका में बने रहते हैं; प्लगइन केवल अपना कैश (`$DSH_HOME/claude-move/`) और `claudecode` workspace फ़ोल्डर लिखता है, और Claude स्रोत डेटा को कभी नहीं छूता।
 
 ## क्या माइग्रेट होता है
 
@@ -302,7 +267,7 @@ claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }
 ## विकास
 
 ```sh
-npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0, @deepseek-ai/cordis, schemastery
+npm install   # peer deps: @deepseek-ai/dsh-tools@>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0, @deepseek-ai/cordis, schemastery
 npm test      # node --test test/*.test.mjs
 ```
 
@@ -318,56 +283,59 @@ CI GitHub Actions ([test.yml](.github/workflows/test.yml)) के माध्�
 - [@OLDnana1](https://github.com/OLDnana1) — बाधित टूल-कॉल भ्रष्टाचार का मूल-कारण विश्लेषण, जिसके कारण आयातित सत्र रिज़्यूम पर स्थायी रूप से HTTP 400 लौटाते थे।
 - [@GooodWei](https://github.com/GooodWei) — पहचाना कि `README.md` (और कोई भी विवरण-रहित `.md`) गलती से कौशल के रूप में पंजीकृत हो जाता था, जिससे DSH का कौशल लोड टूट जाता था।
 
-## PerryLink DSH Plugin Family
+## PerryLink DSH प्लगइन परिवार
 
-यह प्रोजेक्ट [PerryLink](https://github.com/PerryLink) के DeepSeek Harness प्लगइन परिवार का हिस्सा है — **34 सक्रिय रूप से अनुरक्षित**, कुल सूची **42** है जिसमें **5 फ़्रोज़न** और **3 सेवानिवृत्त** हैं; हर एक की पंक्ति नीचे बनी रहती है, कारण “स्थिति” कॉलम में है। अगर यह उपयोगी लगे, तो अन्य भी मददगार होंगे:
+यह प्रोजेक्ट [PerryLink](https://github.com/PerryLink) द्वारा अनुरक्षित [42 DeepSeek Harness प्लगइनों](https://github.com/PerryLink) में से एक है। अगर यह आपकी मदद करता है, तो बाकी भी करेंगे:
 
 | Plugin | एक पंक्ति में | स्थिति |
 |---|---|---|
-| **[dsh-auto-review](https://github.com/PerryLink/dsh-auto-review)** | Second-model auto-review on the approval chain, fail-closed by default | |
+| **[dsh-auto-review](https://github.com/PerryLink/dsh-auto-review)** | अनुमोदन श्रृंखला पर द्वितीय-मॉडल स्वतः-समीक्षा, डिफ़ॉल्ट रूप से विफल-बंद | |
+| **[dsh-background-agents](https://github.com/PerryLink/dsh-background-agents)** | वेब UI साइडबार, संदेश और अवरोधन के साथ टिकाऊ पृष्ठभूमि चाइल्ड एजेंट | |
+| **[dsh-budget](https://github.com/PerryLink/dsh-budget)** | DeepSeek Harness के लिए लागत प्रशासन: बजट, कार्बन और विलंबता एक पैनल में। | |
+| **[dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind)** | Claude Code /rewind-समतुल्य: स्नैपशॉट, सत्र फ़ॉर्क, एक-बार पुनर्स्थापना | |
+| **[dsh-click](https://github.com/PerryLink/dsh-click)** | DeepSeek Harness के लिए क्रॉस-प्लेटफ़ॉर्म नेटिव डेस्कटॉप नियंत्रण — Windows पहले। | |
+| **[dsh-composer-history](https://github.com/PerryLink/dsh-composer-history)** | वेब कंपोज़र के लिए टर्मिनल-शैली इनपुट इतिहास: तीर, Ctrl+R खोज | |
+| **[dsh-data-quality](https://github.com/PerryLink/dsh-data-quality)** | डेटासेट गुणवत्ता जाँच व उद्धरण सत्यापन (यहाँ उपभोग किया गया वैकल्पिक संख्या-सेतु) | |
+| **[dsh-defend](https://github.com/PerryLink/dsh-defend)** | DeepSeek Harness के लिए प्रॉम्प्ट-इंजेक्शन, जेलब्रेक और सीक्रेट-लीक रक्षा। | |
+| **[dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck)** | इंजीनियरिंग-अनुशासन रक्षक: आवश्यकताओं की पूछताछ, परीक्षण द्वार, प्रतिद्वंद्वी समीक्षा | |
+| **[dsh-draw](https://github.com/PerryLink/dsh-draw)** | DeepSeek Harness के लिए एकीकृत स्थैतिक-छवि निर्माण रूटिंग। | |
+| **[dsh-fast](https://github.com/PerryLink/dsh-fast)** | DeepSeek Harness के लिए रीड-ओनली प्रदर्शन डायग्नोस्टिक्स। | |
+| **[dsh-fund-research](https://github.com/PerryLink/dsh-fund-research)** | चीनी सार्वजनिक म्यूचुअल फंड के लिए नियतात्मक अनुसंधान रिपोर्ट | |
+| **[dsh-github](https://github.com/PerryLink/dsh-github)** | DSH के लिए GitHub PR/issues एकीकरण, हर लेखन अनुमोदन-द्वारित | |
+| **[dsh-industry-research](https://github.com/PerryLink/dsh-industry-research)** | उद्योग-अनुसंधान ऑर्केस्ट्रेशन जो इस प्लगिन के `ctx.researchReport.assemble` से डिलीवरेबल सील करता है | |
+| **[dsh-library](https://github.com/PerryLink/dsh-library)** | DeepSeek Harness के लिए स्थानीय दस्तावेज़ ज्ञानकोश। | |
+| **[dsh-local-ai](https://github.com/PerryLink/dsh-local-ai)** | DeepSeek Harness के लिए स्थानीय-मॉडल (Ollama) एकीकरण। | |
+| **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | भाषा सर्वरों पर LSP निदान, फ़ॉर्मेटिंग, पूर्णता, कोड क्रियाएँ और नाम बदलना | |
+| **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII मास्किंग मिडलवेयर: मॉडल सीमा पर अनाम करें, डिस्प्ले लेयर पर पुनर्स्थापित करें | |
+| **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | केवल-पढ़ने वाला MCP रनटाइम पैनल: /mcp कमांड + स्थिति, टूल और त्रुटियों वाला Settings टैब | |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | अनुमोदन-द्वारित क्रॉस-सत्र मेमोरी: ctx.memory सीम + SQLite + मेमोरी टूल | |
+| **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | DeepSeek Harness के लिए OpenTelemetry और Langfuse अवलोकनीयता निर्यातक। | |
+| **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-समतुल्य रनटाइम शैली बदलाव | |
+| **[dsh-reach](https://github.com/PerryLink/dsh-reach)** | मल्टी-चैनल अनुमोदन/प्रश्न ब्रिज: WeChat/Telegram/Feishu, सत्र कंसोल | |
+| **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | ऑडिट के साथ Claude Code-शैली घोषणात्मक allow/deny/ask अनुमति नियम | |
+| **[dsh-personal-directive](https://github.com/PerryLink/dsh-personal-directive)** | शीर्ष-बार टॉगल के साथ व्यक्तिगत निर्देश इंजेक्टर (फ्रेमवर्क संस्करण) | |
+| **[dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)** | माँग पर एजेंट कौशल के रूप में प्लगइन-विकास ज्ञान आधार | |
+| **[dsh-research-report](https://github.com/PerryLink/dsh-research-report)** | सामग्री-पता साक्ष्य और सीलबंद संस्करणों वाला सत्यापन-योग्य अनुसंधान-रिपोर्ट इंजन | |
+| **[dsh-score](https://github.com/PerryLink/dsh-score)** | DeepSeek Harness प्लगिनों की बहु-आयामी गुणवत्ता स्कोरिंग। | |
+| **[dsh-session-pin](https://github.com/PerryLink/dsh-session-pin)** | टिकाऊ क्रम के साथ वेब साइडबार में सत्र पिन करें | |
+| **[dsh-session-sync](https://github.com/PerryLink/dsh-session-sync)** | DeepSeek Harness के लिए क्रॉस-डिवाइस सत्र सिंक — आपके सत्र स्टोर का एक समर्पित git मिरर। | |
+| **[dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security)** | सुरक्षा-ऑडिट कौशल पैक: गुप्त स्कैन, निर्भरता और आपूर्ति-श्रृंखला समीक्षा | |
+| **[dsh-talk](https://github.com/PerryLink/dsh-talk)** | DeepSeek Harness के लिए आवाज़-प्रथम सत्र लूप: बोलें और उत्तर सुनें। | |
+| **[dsh-test-drive](https://github.com/PerryLink/dsh-test-drive)** | DeepSeek Harness प्लगिनों के लिए पृथक इंस्टॉल-एंड-स्मोक टेस्ट ड्राइव। | |
+| **[dsh-ticktick](https://github.com/PerryLink/dsh-ticktick)** | TickTick/Dida365 कार्य ब्रिज: सत्र-हेडर पैनल + 11 टूल | |
+| **[dsh-translate](https://github.com/PerryLink/dsh-translate)** | DeepSeek Harness के लिए वेंडर पैरामीटर अनुवाद और नियतात्मक JSON मरम्मत। | |
+| **[dsh-wechat](https://github.com/pan17/dsh-wechat)** | WeChat ↔ DSH ब्रिज (Tencent iLink bot): टेक्स्ट/इमेज/फ़ाइल/आवाज़, चैट में अनुमोदन | |
 | **[dsh-autotier](https://github.com/PerryLink/dsh-autotier)** | Automatic strong/cheap model-tier routing with deterministic risk guards and a `/tier` command | |
-| **[dsh-background-agents](https://github.com/PerryLink/dsh-background-agents)** | Durable background child agents with a Web UI sidebar, messaging and interrupt | 🚫 **सेवानिवृत्त** — ऊपर देखें |
-| **[dsh-budget](https://github.com/PerryLink/dsh-budget)** | Cost governance for DeepSeek Harness: budgets, carbon, and latency in one panel. | 🧊 फ़्रोज़न — रिपॉज़िटरी README देखें |
 | **[dsh-catalog](https://github.com/PerryLink/dsh-catalog)** | DSH Desktop Market standard catalog source for the PerryLink family | |
 | **[dsh-cert-mcp](https://github.com/PerryLink/dsh-cert-mcp)** | Read-only MCP server exposing the certification registry: grades, snapshots and five-dimension evidence | |
-| **[dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind)** | Claude Code /rewind-equivalent: snapshots, session forks, one-shot restore | |
-| **[dsh-claude-move](https://github.com/PerryLink/dsh-claude-move)** | Migrate Claude Code sessions, memory, skills and CLAUDE.md into DSH | 🧊 फ़्रोज़न — रिपॉज़िटरी README देखें |
-| **[dsh-click](https://github.com/PerryLink/dsh-click)** | Cross-platform native desktop control for DeepSeek Harness — Windows first. | |
-| **[dsh-composer-history](https://github.com/PerryLink/dsh-composer-history)** | Terminal-style input history for the web composer: arrows, Ctrl+R search | |
-| **[dsh-data-quality](https://github.com/PerryLink/dsh-data-quality)** | Dataset quality checks and citation cross-checks (the optional numeric bridge consumed here) | |
-| **[dsh-defend](https://github.com/PerryLink/dsh-defend)** | Prompt-injection, jailbreak, and secret-leak defense for DeepSeek Harness. | 🧊 फ़्रोज़न — रिपॉज़िटरी README देखें |
-| **[dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck)** | Engineering-discipline guard: requirements grill, test gates, adversary review | |
-| **[dsh-draw](https://github.com/PerryLink/dsh-draw)** | Unified static-image generation routing for DeepSeek Harness. | 🧊 फ़्रोज़न — रिपॉज़िटरी README देखें |
-| **[dsh-fast](https://github.com/PerryLink/dsh-fast)** | Read-only performance diagnostics for DeepSeek Harness. | |
-| **[dsh-fund-research](https://github.com/PerryLink/dsh-fund-research)** | Deterministic research reports for Chinese public mutual funds | |
-| **[dsh-github](https://github.com/PerryLink/dsh-github)** | GitHub PR/issues integration for DSH, every write gated by approval | |
-| **[dsh-industry-research](https://github.com/PerryLink/dsh-industry-research)** | Industry research orchestration that seals its deliverables through this plugin's `ctx.researchReport.assemble` | |
-| **[dsh-laya](https://github.com/PerryLink/dsh-laya)** | Laya typed decisions (`noul`/`choice`/`score`) as a first-class Cordis service and model-visible tools | |
-| **[dsh-library](https://github.com/PerryLink/dsh-library)** | Local document knowledge base for DeepSeek Harness. | |
-| **[dsh-local-ai](https://github.com/PerryLink/dsh-local-ai)** | Local-model (Ollama) integration for DeepSeek Harness. | |
-| **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
-| **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
-| **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
-| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | |
-| **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
-| **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
-| **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |
+| **[dsh-kit](https://github.com/PerryLink/dsh-kit)** | One-command starter pack that installs the core family | |
 | **[dsh-plugin-certification](https://github.com/PerryLink/dsh-plugin-certification)** | Community certification registry with repro-checkable grades and badges | |
-| **[dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor)** | Zero-dependency static + sandbox smoke detector for DSH plugins | |
-| **[dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)** | Plugin-development knowledge base as an on-demand agent skill | |
 | **[dsh-plugin-kit](https://github.com/PerryLink/dsh-plugin-kit)** | Shared zero-runtime-dependency toolkit for the PerryLink DSH plugins | |
-| **[dsh-plugin-upgrade](https://github.com/PerryLink/dsh-plugin-upgrade)** | One-package, one-corridor-index plugin upgrade skill: routes a repository to the matching closed corridor card | |
-| **[dsh-reach](https://github.com/PerryLink/dsh-reach)** | Multi-channel approval/question bridge: WeChat/Telegram/Feishu, session console | 🧊 फ़्रोज़न — रिपॉज़िटरी README देखें |
-| **[dsh-research-report](https://github.com/PerryLink/dsh-research-report)** | Verifiable research-report engine: content-addressed evidence ledger and sealed versions | |
-| **[dsh-score](https://github.com/PerryLink/dsh-score)** | Multi-dimensional quality scoring for DeepSeek Harness plugins. | |
-| **[dsh-session-pin](https://github.com/PerryLink/dsh-session-pin)** | Pin sessions in the Web sidebar with durable ordering | 🚫 **सेवानिवृत्त** — ऊपर देखें |
-| **[dsh-session-sync](https://github.com/PerryLink/dsh-session-sync)** | Cross-device session sync for DeepSeek Harness — a dedicated git mirror of your session store. | |
-| **[dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security)** | Security-audit skill pack: secret scan, dependency and supply-chain review | |
-| **[dsh-talk](https://github.com/PerryLink/dsh-talk)** | Voice-first session loop for DeepSeek Harness: talk to it, hear it answer. | |
-| **[dsh-team-rooms](https://github.com/PerryLink/dsh-team-rooms)** | Cross-session team rooms: shared message bus, task board and timeline | 🚫 **सेवानिवृत्त** — ऊपर देखें |
-| **[dsh-test-drive](https://github.com/PerryLink/dsh-test-drive)** | Isolated install-and-smoke test drives for DeepSeek Harness plugins. | |
-| **[dsh-ticktick](https://github.com/PerryLink/dsh-ticktick)** | TickTick/Dida365 task bridge: session-header panel + 11 tools | |
-| **[dsh-translate](https://github.com/PerryLink/dsh-translate)** | Vendor parameter translation and deterministic JSON repair for DeepSeek Harness. | |
+| **[dsh-plugin-portal](https://github.com/PerryLink/dsh-plugin-portal)** | Zero-dependency static portal rendering the whole plugin family as one page | |
+| **[dsh-plugin-upgrade-015](https://github.com/PerryLink/dsh-plugin-upgrade-015)** | Merged `0.1.3-alpha.1` → `0.1.5-rc.1` upgrade corridor card plus a zero-dependency seam scanner | |
+| **[dsh-team-rooms](https://github.com/PerryLink/dsh-team-rooms)** | Cross-session team rooms: shared message bus, task board and timeline | |
+| **[dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor)** | Zero-dependency static + sandbox smoke detector for DSH plugins | |
+| **[dsh-laya](https://github.com/PerryLink/dsh-laya)** | Laya typed decisions (`noul`/`choice`/`score`) as a first-class Cordis service and model-visible tools | |
 
 ### DSH Desktop मार्केट से इंस्टॉल करें
 
