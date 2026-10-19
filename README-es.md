@@ -192,6 +192,22 @@ import_claude
 
 *Observado en `README.md:138 (Usage); test/fixtures/simple.jsonl:1-2; index.mjs:1708 (renderImport)`*
 
+#### Rama de fallo
+
+**Entrada**
+
+~~~text
+resolveImportTarget('', '/home/user/.claude')  // empty path
+~~~
+
+**Salida**
+
+~~~text
+Error: path 必填：单个 .jsonl、目录、"~/.claude/projects" 或 "all"
+~~~
+
+*Observado en `plugins/dsh-claude-move/index.mjs:744-746; plugins/dsh-claude-move/test/import.test.mjs:158-161; plugins/dsh-claude-move/README.md:132-145`*
+
 #### Ejemplos breves
 
 - `import_claude`
