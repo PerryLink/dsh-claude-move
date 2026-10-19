@@ -173,7 +173,25 @@ These are the plugin's real entry points; install once, then call one.
 
 #### Detailed example
 
-- `claude_scan`
+**Command**
+
+~~~sh
+import_claude
+~~~
+
+**Input**
+
+~~~json
+{ "path": "test/fixtures/simple.jsonl" }
+~~~
+
+**Output**
+
+~~~text
+已导入 1 轮对话（2 条消息、0 次工具调用）→ 会话 import-sess-simple-001。
+~~~
+
+*Observed from `README.md:138 (Usage); test/fixtures/simple.jsonl:1-2; index.mjs:1708 (renderImport)`*
 
 #### Brief examples
 

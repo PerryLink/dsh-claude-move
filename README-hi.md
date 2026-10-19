@@ -172,7 +172,25 @@ claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }
 
 #### विस्तृत उदाहरण
 
-- `claude_scan`
+**कमांड**
+
+~~~sh
+import_claude
+~~~
+
+**इनपुट**
+
+~~~json
+{ "path": "test/fixtures/simple.jsonl" }
+~~~
+
+**आउटपुट**
+
+~~~text
+已导入 1 轮对话（2 条消息、0 次工具调用）→ 会话 import-sess-simple-001。
+~~~
+
+*स्रोत `README.md:138 (Usage); test/fixtures/simple.jsonl:1-2; index.mjs:1708 (renderImport)`*
 
 #### संक्षिप्त उदाहरण
 

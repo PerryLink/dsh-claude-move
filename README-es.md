@@ -172,7 +172,25 @@ Son los puntos de entrada reales; instala y llama a uno.
 
 #### Ejemplo detallado
 
-- `claude_scan`
+**Comando**
+
+~~~sh
+import_claude
+~~~
+
+**Entrada**
+
+~~~json
+{ "path": "test/fixtures/simple.jsonl" }
+~~~
+
+**Salida**
+
+~~~text
+已导入 1 轮对话（2 条消息、0 次工具调用）→ 会话 import-sess-simple-001。
+~~~
+
+*Observado en `README.md:138 (Usage); test/fixtures/simple.jsonl:1-2; index.mjs:1708 (renderImport)`*
 
 #### Ejemplos breves
 

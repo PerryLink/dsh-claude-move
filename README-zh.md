@@ -172,7 +172,25 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 
 #### 详细示例
 
-- `claude_scan`
+**命令**
+
+~~~sh
+import_claude
+~~~
+
+**输入**
+
+~~~json
+{ "path": "test/fixtures/simple.jsonl" }
+~~~
+
+**输出**
+
+~~~text
+已导入 1 轮对话（2 条消息、0 次工具调用）→ 会话 import-sess-simple-001。
+~~~
+
+*来源 `README.md:138 (Usage); test/fixtures/simple.jsonl:1-2; index.mjs:1708 (renderImport)`*
 
 #### 简短示例
 
