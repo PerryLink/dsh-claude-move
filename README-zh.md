@@ -283,7 +283,7 @@ CI 通过 GitHub Actions（[test.yml](.github/workflows/test.yml)）在 Linux/ma
 - [@OLDnana1](https://github.com/OLDnana1) —— 对被中断工具调用损坏的根因分析，该损坏曾使导入会话在续聊时永久返回 HTTP 400。
 - [@GooodWei](https://github.com/GooodWei) —— 发现 `README.md`（以及任何无描述的 `.md`）被误注册为技能，从而破坏 DSH 的技能加载。
 
-## PerryLink DSH 插件家族
+## PerryLink DSH Plugin Family
 
 本项目是 [PerryLink](https://github.com/PerryLink) 维护的 DeepSeek Harness 插件家族成员。完整名单默认折叠，避免每个 README 的首屏被长表淹没；点击展开可查看每一行及其状态。
 

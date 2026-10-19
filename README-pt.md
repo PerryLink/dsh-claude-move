@@ -283,7 +283,11 @@ A CI executa a suíte completa no Node 22 em Linux/macOS/Windows via GitHub Acti
 - [@OLDnana1](https://github.com/OLDnana1) — análise de causa raiz da corrupção de chamadas de ferramenta interrompidas que fazia as sessões importadas retornarem permanentemente HTTP 400 ao retomar.
 - [@GooodWei](https://github.com/GooodWei) — identificou que `README.md` (e qualquer `.md` sem descrição) era registrado incorretamente como habilidade, o que quebrava o carregamento de habilidades do DSH.
 
-## Família de plugins DSH da PerryLink
+## Licença
+
+[Apache License 2.0](LICENSE) © 2026 dsh-claude-move contributors
+
+## PerryLink DSH Plugin Family
 
 Este projeto faz parte da família de plugins do DeepSeek Harness da [PerryLink](https://github.com/PerryLink). O registro fica recolhido abaixo para que cada README mantenha uma primeira tela curta; expanda para ver cada linha e seu status.
 

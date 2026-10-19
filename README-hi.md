@@ -283,7 +283,7 @@ CI GitHub Actions ([test.yml](.github/workflows/test.yml)) के माध्�
 - [@OLDnana1](https://github.com/OLDnana1) — बाधित टूल-कॉल भ्रष्टाचार का मूल-कारण विश्लेषण, जिसके कारण आयातित सत्र रिज़्यूम पर स्थायी रूप से HTTP 400 लौटाते थे।
 - [@GooodWei](https://github.com/GooodWei) — पहचाना कि `README.md` (और कोई भी विवरण-रहित `.md`) गलती से कौशल के रूप में पंजीकृत हो जाता था, जिससे DSH का कौशल लोड टूट जाता था।
 
-## PerryLink DSH प्लगइन परिवार
+## PerryLink DSH Plugin Family
 
 यह प्रोजेक्ट [PerryLink](https://github.com/PerryLink) के DeepSeek Harness प्लगइन परिवार का हिस्सा है। पूरी सूची नीचे संक्षिप्त रखी गई है ताकि हर README की पहली स्क्रीन छोटी रहे; हर पंक्ति और उसकी स्थिति देखने के लिए इसे खोलें।
 
