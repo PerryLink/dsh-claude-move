@@ -29,9 +29,10 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ---
 
-![Terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-hero.png)
+![dsh-claude-move कार्यप्रवाह आरेख: कॉल → प्लगइन → परिणाम।](docs/assets/dsh-claude-move-flow.svg)
 
-![Animated terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-demo.gif)
+*कार्यप्रवाह: कॉल → प्लगइन → परिणाम। नीचे के उदाहरण वास्तविक कमांड सतह का उपयोग करते हैं।*
+
 
 ## इंस्टॉल और अनइंस्टॉल
 
@@ -164,6 +165,19 @@ claude_export { sessionId: "...", path: "~/.claude/projects/<slug>/<id>.jsonl" }
 - सर्वर-साइड सूचियाँ (`session.list` / `workspace.list` RPC, CLI, कोई भी नया पृष्ठ लोड) आयातित सत्रों को **`claudecode` workspace** के अंतर्गत तुरंत दिखाती हैं।
 - पैनल पहले से खुले पृष्ठ की सत्र सूची स्वयं रीफ़्रेश करता है और हर आयातित सत्र के लिए **सत्र खोलें** बटन देता है।
 - आयातित सत्र तुरंत खोले, पढ़े और फिर से शुरू किए जा सकते हैं — `/resume-claude`, या सूची में सत्र पर क्लिक करें। कभी भी आयात फिर चलाने पर उन्हीं सत्रों में केवल नए टर्न समन्वयित होते हैं।
+
+### उदाहरण
+
+ये वास्तविक प्रवेश बिंदु हैं; इंस्टॉल के बाद एक चलाएँ।
+
+#### विस्तृत उदाहरण
+
+- `claude_scan`
+
+#### संक्षिप्त उदाहरण
+
+- `import_claude`
+- `claude_export`
 
 ## कॉन्फ़िगरेशन
 

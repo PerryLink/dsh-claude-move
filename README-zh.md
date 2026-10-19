@@ -29,9 +29,10 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ---
 
-![Terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-hero.png)
+![dsh-claude-move 工作流图：调用 → 插件 → 结果。](docs/assets/dsh-claude-move-flow.svg)
 
-![Animated terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-demo.gif)
+*工作流概览：调用 → 插件 → 结果。下面的示例使用实际命令面。*
+
 
 ## 兼容性
 
@@ -164,6 +165,19 @@ Web 面板：一个浮动迁移面板，包含项目/会话树、状态徽章（
 - 服务器端列表（`session.list` / `workspace.list` RPC、CLI、任何新的页面加载）会立即在 **`claudecode` 工作区**下显示导入的会话。
 - 面板会自行刷新已打开页面的会话列表，并为每个导入的会话提供 **打开会话** 按钮。
 - 导入的会话可以立即打开、读取和继续 —— `/resume-claude`，或点击列表中的会话。随时重新运行导入只会把新轮次同步到相同的会话中。
+
+### 示例
+
+以下为插件真实入口；安装后调用一个即可。
+
+#### 详细示例
+
+- `claude_scan`
+
+#### 简短示例
+
+- `import_claude`
+- `claude_export`
 
 ## 配置
 

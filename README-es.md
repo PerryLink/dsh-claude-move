@@ -29,9 +29,10 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ---
 
-![Terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-hero.png)
+![Diagrama de flujo de dsh-claude-move: llamada → plugin → resultado.](docs/assets/dsh-claude-move-flow.svg)
 
-![Animated terminal demo of dsh-claude-move](docs/assets/dsh-claude-move-demo.gif)
+*Resumen del flujo: llamada → plugin → resultado. Los ejemplos siguientes usan la superficie de comandos real.*
+
 
 ## Instalación y desinstalación
 
@@ -164,6 +165,19 @@ Panel web: un panel de migración flotante con el árbol de proyectos/sesiones, 
 - Las listas del lado del servidor (RPCs `session.list` / `workspace.list`, la CLI, cualquier carga de página nueva) muestran las sesiones importadas bajo el workspace **`claudecode`** de inmediato.
 - El panel refresca por sí mismo la lista de sesiones de la página ya abierta y ofrece un botón **Abrir sesión** por cada sesión importada.
 - Las sesiones importadas pueden abrirse, leerse y reanudarse de inmediato — `/resume-claude`, o haz clic en la sesión de la lista. Reejecutar la importación en cualquier momento sincroniza solo los turnos nuevos en las mismas sesiones.
+
+### Ejemplos
+
+Son los puntos de entrada reales; instala y llama a uno.
+
+#### Ejemplo detallado
+
+- `claude_scan`
+
+#### Ejemplos breves
+
+- `import_claude`
+- `claude_export`
 
 ## Configuración
 
