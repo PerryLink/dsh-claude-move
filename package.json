@@ -33,7 +33,9 @@
     "CHANGELOG.md",
     "LICENSE",
     "NOTICE",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "PRIVACY.md",
+    "icon.svg"
   ],
   "dsh": {
     "manifestVersion": 1,
@@ -144,5 +146,6 @@
   "funding": {
     "type": "individual",
     "url": "https://github.com/sponsors/PerryLink"
-  }
+  },
+  "icon": "icon.svg"
 }
