@@ -21,6 +21,9 @@ function configFor(pluginRow, claudeHome, configLines = []) {
   return [
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
+    // 0.2.2 moved raw batch execution behind a pluggable executor: without a
+    // selected executor ToolsService.execute() refuses every call.
+    "- name: '@deepseek-ai/dsh-tool-executor-native'",
     "- name: '@deepseek-ai/dsh-commands'",
     `- name: ${JSON.stringify(pluginRow)}`,
     '  config:',
@@ -86,6 +89,8 @@ test('Loader hot-reload: an enableWebPanel config edit cycles the panel routes c
     "  name: '@deepseek-ai/dsh-system-prompt'",
     "- id: tools",
     "  name: '@deepseek-ai/dsh-tools'",
+    "- id: executor",
+    "  name: '@deepseek-ai/dsh-tool-executor-native'",
     "- id: commands",
     "  name: '@deepseek-ai/dsh-commands'",
     "- id: mock-webserver",

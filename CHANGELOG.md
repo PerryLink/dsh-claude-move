@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Changed
+
+- **Host 0.2.2 line support.** devDependencies move from 0.2.1-alpha.1 to 0.2.2-rc.1, cordis to 4.1.0 / cordis-plugin-include 1.1.0 / cordis-plugin-loader 1.1.0, and schemastery to ~3.19.0 so a single copy resolves against `@deepseek-ai/dsh-llm` 0.2.2. `engines.dsh` appends `>=0.2.2-0 <0.3.0` (append-only) and `engines.node` becomes `^22.19.0 || >=24.9.0`.
+- Add `@deepseek-ai/dsh-package-manifest`: `@deepseek-ai/dsh-llm` 0.2.2's published types import it but its manifest does not declare it.
+- `@deepseek-ai/dsh-invariants` stays at 0.2.0-rc.2: npm has no 0.2.2 release. Its `~4.0.4` cordis peer is the only remaining peer warning and does not affect the suite.
+
+### Fixed
+
+- **Loader composition selects a real executor.** 0.2.2 moved raw batch execution behind a pluggable executor, so `scripts/loader-runner.mjs` now calls `ctx.tools.execute({ calls, signal })` and unwraps `batch.results[0].result`, and the composition rows mount `@deepseek-ai/dsh-tool-executor-native`; without a selected executor `ToolsService.execute()` refuses every call.
+- **Loader composition surfaces row failures again.** cordis 4.1.0 settles a failed row on its fiber instead of rejecting `loader.await()`; the runner awaits every row fiber (also after `Include.refresh()`) so the invalid-config and default-export negations still fail for the real reason.
+
 ## [0.4.18] - 2026-10-18
 
 ### Changed
@@ -26,9 +39,6 @@ All notable changes to this project are documented here. The format is based on 
 ### Changed
 
 - Correct the release date in the previous section, which was stamped with the literal string `undefined` by the release stamper. No content or behaviour change; the version is bumped only because npm will not republish an existing version.
-
-
-## [Unreleased]
 
 ## [0.4.14] - 2026-10-04
 

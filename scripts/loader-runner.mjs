@@ -86,6 +86,15 @@ try {
     config: { path: pathToFileURL(configPath).href },
   })
   await ctx.loader.await()
+  // cordis 4.1.0 no longer rejects loader.await() when a row fails to apply:
+  // the error settles on that row's fiber. Await every row fiber so an invalid
+  // config or a missing inject still fails loud here instead of surfacing as a
+  // missing registry entry. (0.2.2 upgrade fix; verified against loader 1.1.0.)
+  const settleRows = async () => {
+    await ctx.loader.await()
+    for (const entry of ctx.loader.entries()) await entry.fiber
+  }
+  await settleRows()
 
   if (expected === 'reload') {
     const include = ctx.loader.resolve(includeId)?.subtree
@@ -108,14 +117,14 @@ try {
     // Phase 2: enableWebPanel:false — the routes must unload with the fiber.
     writeFileSync(configPath, readFileSync(configPath, 'utf8').replace('enableWebPanel: true', 'enableWebPanel: false'))
     await include.refresh()
-    await ctx.loader.await()
+    await settleRows()
     assertBase()
     if (webServer.list().length !== 0) throw new Error(`reload: expected 0 routes while disabled, got ${webServer.list().length}`)
 
     // Phase 3: re-enable — remount re-registers without a duplicate route.
     writeFileSync(configPath, readFileSync(configPath, 'utf8').replace('enableWebPanel: false', 'enableWebPanel: true'))
     await include.refresh()
-    await ctx.loader.await()
+    await settleRows()
     assertBase()
     if (webServer.list().length !== 5) throw new Error(`reload: expected 5 routes after re-enable, got ${webServer.list().length}`)
 
@@ -163,14 +172,19 @@ try {
   // Dual-ruler call id: host master renamed dsh-llm's `CallId` brand to
   // `ToolCallId`; a local identity keeps the runner green on both rulers.
   const CallId = (id) => id
-  const result = await ctx.tools.execute({
-    callId: CallId('dsh-claude-move-loader-runner'),
-    name: 'claude_scan',
-    arguments: { path: scanDir, refresh: true },
+  // 0.2.2: execute() takes a whole batch and settles one result per call.
+  const batch = await ctx.tools.execute({
+    calls: [{
+      type: 'tool-call',
+      id: CallId('dsh-claude-move-loader-runner'),
+      name: 'claude_scan',
+      arguments: JSON.stringify({ path: scanDir, refresh: true }),
+    }],
     agent,
     signal: new AbortController().signal,
   })
-  if (result.isError !== false || !Array.isArray(/** @type {any} */ (result.value)?.projects)) {
+  const result = batch.results[0]?.result
+  if (result === undefined || result.isError !== false || !Array.isArray(/** @type {any} */ (result.value)?.projects)) {
     throw new Error(`Loader composition: claude_scan returned ${JSON.stringify(result)}`)
   }
 
