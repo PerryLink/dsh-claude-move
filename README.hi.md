@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-dark.svg">
-  <img src="docs/assets/dsh-claude-move-flow-light.svg" width="100%" alt="dsh-claude-move माइग्रेशन प्रवाह: ~/.claude और तीन अन्य स्रोत → claude_scan → import_claude → sessionPersistence → claudecode कार्यस्थान; /move विज़ार्ड move_detect → move_preview → move_run → move.json चलाता है; claude_export JSONL वापस लिखता है">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-hero-en-dark.webp">
+  <img src="docs/assets/dsh-claude-move-hero-en-light.webp" width="100%" alt="dsh-claude-move का Claude Code माइग्रेशन पैनल: प्रोजेक्ट/सत्र ट्री, स्टेटस बैज, कीवर्ड फ़िल्टर और बल्क इम्पोर्ट प्रगति">
 </picture>
 
 # dsh-claude-move
@@ -37,6 +37,11 @@ dsh plugin --profile <name> add dsh-claude-move
 ## यह क्या है
 
 Claude Code का लंबा इस्तेमाल करने पर पूरा इतिहास `~/.claude` में जमा हो जाता है: सत्र transcript, memory, skills, `CLAUDE.md` और `settings.json`। `dsh-claude-move` इन्हें पढ़कर DeepSeek Harness में ऐसे सत्र और संदर्भ बनाता है जिन्हें खोला और फिर से जारी रखा जा सके — स्रोत डायरेक्टरी हमेशा केवल-पठन रहती है, और DSH पक्ष केवल `create` + `append` करता है, इसलिए किसी भी पक्ष को हटाया, बदला या मिटाया नहीं जाता। Claude Code के अलावा Codex, OpenCode और Hermes भी उसी `/move` विज़ार्ड से माइग्रेट होते हैं।
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-claude-move-flow-v5-light.svg" width="100%" alt="dsh-claude-move संरचना: चार केवल-पढ़ने वाले स्रोत → move_detect / plan / move_preview → approval gate (केवल allowed-once, बाकी कुछ नहीं लिखता) → DSH लेखन सतहें; move.json लेजर इडेम्पोटेंट री-रन के लिए प्रीव्यू को फ़ीड करता है">
+</picture>
 
 ## तीन चरणों में शुरुआत
 

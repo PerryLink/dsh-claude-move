@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-dark.svg">
-  <img src="docs/assets/dsh-claude-move-flow-light.svg" width="100%" alt="dsh-claude-move 迁移数据流：~/.claude 等四源 → claude_scan → import_claude → sessionPersistence → claudecode 工作区；/move 向导 move_detect → move_preview → move_run → move.json；claude_export 回写 JSONL">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-hero-zh-dark.webp">
+  <img src="docs/assets/dsh-claude-move-hero-zh-light.webp" width="100%" alt="dsh-claude-move 的 Claude Code 迁移浮动面板：项目与会话树、状态徽章、关键字过滤、批量导入进度">
 </picture>
 
 # dsh-claude-move
@@ -37,6 +37,11 @@ dsh plugin --profile <name> add dsh-claude-move
 ## 它是什么
 
 Claude Code 用久了，历史都沉在 `~/.claude` 里：会话 transcript、memory、技能、`CLAUDE.md` 和 `settings.json`。`dsh-claude-move` 把这些读出来，转换成 DeepSeek Harness 里能打开、能续聊的会话与上下文——源目录全程只读，DSH 这边只 `create` + `append`，两侧都不会被移动、改写或删除。除 Claude Code 之外，Codex、OpenCode、Hermes 也能通过同一个 `/move` 向导迁移。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-claude-move-flow-v5-light.svg" width="100%" alt="dsh-claude-move 结构：四源只读 → move_detect / plan / move_preview → 审批门（allowed-once，其余零写入）→ DSH 写入面；move.json 台账回流保证幂等">
+</picture>
 
 ## 三步上手
 

@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-dark.svg">
-  <img src="docs/assets/dsh-claude-move-flow-light.svg" width="100%" alt="Fluxo de migração do dsh-claude-move: ~/.claude e outras três fontes → claude_scan → import_claude → sessionPersistence → espaço de trabalho claudecode; o assistente /move executa move_detect → move_preview → move_run → move.json; claude_export grava JSONL de volta">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-hero-en-dark.webp">
+  <img src="docs/assets/dsh-claude-move-hero-en-light.webp" width="100%" alt="o painel flutuante de migração do Claude Code do dsh-claude-move: árvore de projetos e sessões, badges de status, filtro por palavra-chave e progresso da importação em massa">
 </picture>
 
 # dsh-claude-move
@@ -37,6 +37,11 @@ dsh plugin --profile <name> add dsh-claude-move
 ## O que é
 
 Depois de um tempo com o Claude Code, o histórico fica todo em `~/.claude`: transcrições de sessão, memórias, habilidades, `CLAUDE.md` e `settings.json`. O `dsh-claude-move` lê tudo isso e converte em sessões e contexto do DeepSeek Harness que você pode abrir e retomar — o diretório de origem fica somente leitura o tempo todo, e o lado DSH só faz `create` + `append`, então nenhum lado é movido, reescrito ou apagado. Além do Claude Code, Codex, OpenCode e Hermes migram pelo mesmo assistente `/move`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-claude-move-flow-v5-light.svg" width="100%" alt="estrutura do dsh-claude-move: quatro fontes somente leitura → move_detect / plan / move_preview → portão de aprovação (apenas allowed-once; o resto não escreve nada) → superfícies de escrita do DSH; o registro move.json alimenta a pré-visualização para reexecuções idempotentes">
+</picture>
 
 ## Instalação em três passos
 
