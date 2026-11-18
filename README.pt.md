@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ## O que é
 
-Depois de um tempo com o Claude Code, o histórico fica todo em `~/.claude`: transcrições de sessão, memórias, habilidades, `CLAUDE.md` e `settings.json`. O `dsh-claude-move` lê tudo isso e converte em sessões e contexto do DeepSeek Harness que você pode abrir e retomar — o diretório de origem fica somente leitura o tempo todo, e o lado DSH só faz `create` + `append`, então nenhum lado é movido, reescrito ou apagado. Além do Claude Code, Codex, OpenCode e Hermes migram pelo mesmo assistente `/move`.
+Depois de um tempo com o Claude Code, o histórico fica todo em `dsh-v0.2.2-rc.4`（2026-11-18）；`~/.claude`: transcrições de sessão, memórias, habilidades, `CLAUDE.md` e `settings.json`. O `dsh-claude-move` lê tudo isso e converte em sessões e contexto do DeepSeek Harness que você pode abrir e retomar — o diretório de origem fica somente leitura o tempo todo, e o lado DSH só faz `create` + `append`, então nenhum lado é movido, reescrito ou apagado. Além do Claude Code, Codex, OpenCode e Hermes migram pelo mesmo assistente `/move`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">
