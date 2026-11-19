@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [0.4.21] - 2026-11-18
+
+### Changed
+
+- Align the devDependencies with the 0.2.2-rc.4 host line and declare the rc.4 transitive host packages dsh-error and dsh-scope.
+
 ## [0.4.19] - 2026-11-05
 
 ### Changed
