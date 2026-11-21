@@ -33,6 +33,7 @@
     "CHANGELOG.md",
     "LICENSE",
     "NOTICE",
+    "docs/assets/*",
     "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
