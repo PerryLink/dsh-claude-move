@@ -45,6 +45,11 @@ Claude Code का लंबा इस्तेमाल करने पर प
   <img src="docs/assets/dsh-claude-move-flow-v5-light.svg" width="100%" alt="dsh-claude-move संरचना: चार केवल-पढ़ने वाले स्रोत → move_detect / plan / move_preview → approval gate (केवल allowed-once, बाकी कुछ नहीं लिखता) → DSH लेखन सतहें; move.json लेजर इडेम्पोटेंट री-रन के लिए प्रीव्यू को फ़ीड करता है">
 </picture>
 
+![dsh-claude-move का असली टर्मिनल रन](docs/assets/dsh-claude-move-demo.gif)
+
+*इस रिपॉज़िटरी में दर्ज असली रन का एनिमेटेड रीप्ले।*
+
+
 ## तीन चरणों में शुरुआत
 
 1. **इंस्टॉल करें** (एक चैनल चुनें):

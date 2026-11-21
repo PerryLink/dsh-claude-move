@@ -136,6 +136,10 @@ move_run           # execute behind the approval gate; conflict resolution:
 
 ## Usage
 
+![dsh-claude-move: real terminal run](docs/assets/dsh-claude-move-demo.gif)
+
+*Animated replay of a real run recorded in this repository.*
+
 Call the tools in any session with the plugin mounted:
 
 ```text

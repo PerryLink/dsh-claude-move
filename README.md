@@ -38,6 +38,10 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ## 它是什么
 
+![dsh-claude-move 真实终端运行](docs/assets/dsh-claude-move-demo.gif)
+
+*本仓库一次真实运行的动图回放。*
+
 Claude Code 用久了，历史都沉在 `dsh-v0.2.2-rc.4`（2026-11-18）；`~/.claude` 里：会话 transcript、memory、技能、`CLAUDE.md` 和 `settings.json`。`dsh-claude-move` 把这些读出来，转换成 DeepSeek Harness 里能打开、能续聊的会话与上下文——源目录全程只读，DSH 这边只 `create` + `append`，两侧都不会被移动、改写或删除。除 Claude Code 之外，Codex、OpenCode、Hermes 也能通过同一个 `/move` 向导迁移。
 
 <picture>

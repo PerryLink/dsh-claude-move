@@ -45,6 +45,11 @@ Tras un tiempo con Claude Code, el historial está todo en `dsh-v0.2.2-rc.4`（2
   <img src="docs/assets/dsh-claude-move-flow-v5-light.svg" width="100%" alt="estructura de dsh-claude-move: cuatro fuentes de solo lectura → move_detect / plan / move_preview → puerta de aprobación (solo allowed-once; lo demás no escribe nada) → superficies de escritura de DSH; el registro move.json realimenta la vista previa para reintentos idempotentes">
 </picture>
 
+![dsh-claude-move: ejecución real de terminal](docs/assets/dsh-claude-move-demo.gif)
+
+*Repetición animada de una ejecución real registrada en este repositorio.*
+
+
 ## Instalación en tres pasos
 
 1. **Instala** (elige un canal):
