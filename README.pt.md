@@ -1,5 +1,3 @@
-> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **Leve seu histórico do Claude Code, Codex, OpenCode e Hermes para o DeepSeek Harness — as sessões continuam retomáveis, as memórias vêm junto, habilidades e comandos seguem funcionando.**
 
 Um assistente de migração de quatro fontes mais um importador de sessões: só cópia, nada é movido ou apagado, e toda escrita passa antes por aprovação; instale uma vez e continue o contexto do projeto antigo.
+
+Última verificação: DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
 
 [Instalar](#instalação-em-três-passos) · [Configuração](#configuração) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ## O que é
 
-Depois de um tempo com o Claude Code, o histórico fica todo em `dsh-v0.2.2-rc.4`（2026-11-18）；`~/.claude`: transcrições de sessão, memórias, habilidades, `CLAUDE.md` e `settings.json`. O `dsh-claude-move` lê tudo isso e converte em sessões e contexto do DeepSeek Harness que você pode abrir e retomar — o diretório de origem fica somente leitura o tempo todo, e o lado DSH só faz `create` + `append`, então nenhum lado é movido, reescrito ou apagado. Além do Claude Code, Codex, OpenCode e Hermes migram pelo mesmo assistente `/move`.
+Depois de um tempo com o Claude Code, o histórico fica todo em, `~/.claude`: transcrições de sessão, memórias, habilidades, `CLAUDE.md` e `settings.json`. O `dsh-claude-move` lê tudo isso e converte em sessões e contexto do DeepSeek Harness que você pode abrir e retomar — o diretório de origem fica somente leitura o tempo todo, e o lado DSH só faz `create` + `append`, então nenhum lado é movido, reescrito ou apagado. Além do Claude Code, Codex, OpenCode e Hermes migram pelo mesmo assistente `/move`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">
@@ -48,7 +48,6 @@ Depois de um tempo com o Claude Code, o histórico fica todo em `dsh-v0.2.2-rc.4
 ![dsh-claude-move: execução real de terminal](docs/assets/dsh-claude-move-demo.gif)
 
 *Repetição animada de uma execução real registrada neste repositório.*
-
 
 ## Instalação em três passos
 

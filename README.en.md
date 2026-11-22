@@ -1,5 +1,3 @@
-> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **Move your Claude Code, Codex, OpenCode and Hermes history into DeepSeek Harness — sessions stay resumable, memories come along, skills and commands keep working.**
 
 A four-source migration wizard plus a session importer: copy-only, nothing moved or deleted, approval-gated before any write; install once and keep the old project's context going.
+
+Last verified on DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
 
 [Install](#three-step-setup) · [Configuration](#configuration) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ## What it is
 
-After a while with Claude Code, the history is all in `dsh-v0.2.2-rc.4`（2026-11-18）；`~/.claude`: session transcripts, memories, skills, `CLAUDE.md` and `settings.json`. `dsh-claude-move` reads them and turns them into DeepSeek Harness sessions and context you can open and resume — the source directory is read-only the whole time, and the DSH side only ever does `create` + `append`, so neither side is moved, rewritten or deleted. Beyond Claude Code, Codex, OpenCode and Hermes migrate through the same `/move` wizard.
+After a while with Claude Code, the history is all in, `~/.claude`: session transcripts, memories, skills, `CLAUDE.md` and `settings.json`. `dsh-claude-move` reads them and turns them into DeepSeek Harness sessions and context you can open and resume — the source directory is read-only the whole time, and the DSH side only ever does `create` + `append`, so neither side is moved, rewritten or deleted. Beyond Claude Code, Codex, OpenCode and Hermes migrate through the same `/move` wizard.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">

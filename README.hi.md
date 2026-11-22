@@ -1,5 +1,3 @@
-> Host compatibility: DeepSeek Harness `dsh-v0.2.2-rc.4` (verified 2026-11-18).
-
 <div align="center">
 
 <picture>
@@ -12,6 +10,8 @@
 **अपना Claude Code, Codex, OpenCode और Hermes इतिहास DeepSeek Harness में ले जाएँ — सत्र फिर से जारी करने योग्य रहते हैं, यादें साथ आती हैं, skills और कमांड काम करते रहते हैं।**
 
 चार-स्रोत माइग्रेशन विज़ार्ड और सत्र आयातक: केवल प्रतिलिपि, कुछ भी हटाया या बदला नहीं जाता, हर लेखन से पहले स्वीकृति; एक बार इंस्टॉल करें और पुराने प्रोजेक्ट का संदर्भ आगे बढ़ाएँ।
+
+अंतिम सत्यापन: DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
 
 [इंस्टॉल](#तीन-चरणों-में-शुरुआत) · [कॉन्फ़िगरेशन](#कॉन्फ़िगरेशन) · [FAQ](#faq) · [简体中文](README.md) · [English](README.en.md) · [Español](README.es.md) · [Português](README.pt.md) · [हिन्दी](README.hi.md)
 
@@ -38,7 +38,7 @@ dsh plugin --profile <name> add dsh-claude-move
 
 ## यह क्या है
 
-Claude Code का लंबा इस्तेमाल करने पर पूरा इतिहास `dsh-v0.2.2-rc.4`（2026-11-18）；`~/.claude` में जमा हो जाता है: सत्र transcript, memory, skills, `CLAUDE.md` और `settings.json`। `dsh-claude-move` इन्हें पढ़कर DeepSeek Harness में ऐसे सत्र और संदर्भ बनाता है जिन्हें खोला और फिर से जारी रखा जा सके — स्रोत डायरेक्टरी हमेशा केवल-पठन रहती है, और DSH पक्ष केवल `create` + `append` करता है, इसलिए किसी भी पक्ष को हटाया, बदला या मिटाया नहीं जाता। Claude Code के अलावा Codex, OpenCode और Hermes भी उसी `/move` विज़ार्ड से माइग्रेट होते हैं।
+Claude Code का लंबा इस्तेमाल करने पर पूरा इतिहास, `~/.claude` में जमा हो जाता है: सत्र transcript, memory, skills, `CLAUDE.md` और `settings.json`। `dsh-claude-move` इन्हें पढ़कर DeepSeek Harness में ऐसे सत्र और संदर्भ बनाता है जिन्हें खोला और फिर से जारी रखा जा सके — स्रोत डायरेक्टरी हमेशा केवल-पठन रहती है, और DSH पक्ष केवल `create` + `append` करता है, इसलिए किसी भी पक्ष को हटाया, बदला या मिटाया नहीं जाता। Claude Code के अलावा Codex, OpenCode और Hermes भी उसी `/move` विज़ार्ड से माइग्रेट होते हैं।
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-claude-move-flow-v5-dark.svg">
@@ -48,7 +48,6 @@ Claude Code का लंबा इस्तेमाल करने पर प
 ![dsh-claude-move का असली टर्मिनल रन](docs/assets/dsh-claude-move-demo.gif)
 
 *इस रिपॉज़िटरी में दर्ज असली रन का एनिमेटेड रीप्ले।*
-
 
 ## तीन चरणों में शुरुआत
 
